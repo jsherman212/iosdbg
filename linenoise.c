@@ -235,7 +235,13 @@ static int enableRawMode(int fd) {
     raw.c_cflag |= (CS8);
     /* local modes - choing off, canonical off, no extended functions,
      * no signal chars (^Z,^C) */
-    raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+    
+
+    // Justin: 9/2/18: uhhh yeah I need them sorry about that thanks for the 30 mins wasted trying to figure out why my handler wasn't being called.
+    // Other than that amazing readline alternative
+     raw.c_lflag &= ~(ECHO | ICANON | IEXTEN/* | ISIG*/);
+    
+
     /* control chars - set return condition: min number of bytes and timer.
      * We want read to return every single byte, without timeout. */
     raw.c_cc[VMIN] = 1; raw.c_cc[VTIME] = 0; /* 1 byte, no timer */
