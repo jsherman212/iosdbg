@@ -8,4 +8,4 @@ After compiling, be sure to sign it with the task-for-pid entitlement.
 
 I'm new to Github so ignore all the commits that seem to be the result of me trying things until they work.
 
-iosdbg uses limenoise from https://github.com/antirez/linenoise as a readline alternative.
+iosdbg uses linenoise from https://github.com/antirez/linenoise as a readline alternative.
