@@ -39,14 +39,14 @@ int resume(){
 	kern_return_t err = task_resume(debuggee->task);
 
 	if(err){
-		warn("Couldn't continue: %s\n", mach_error_string(err));
+		warn("resume: couldn't continue: %s\n", mach_error_string(err));
 		return -1;
 	}
 
 	int result = resume_threads();
 
 	if(result != 0){
-		warn("Couldn't resume threads\n");
+		warn("resume: couldn't resume threads\n");
 		return -1;
 	}
 
@@ -62,7 +62,7 @@ int detach(){
 		int result = resume();
 
 		if(result != 0){
-			warn("Couldn't resume execution before we detach?\n");
+			warn("detach: couldn't resume execution before we detach?\n");
 			return -1;
 		}
 	}
@@ -108,9 +108,6 @@ int suspend_threads(){
 		return -1;
 	}
 
-	//for(int i=0; i<thread_count; i++)
-	//	printf("thread %d: %x\n", i, threads[i]);
-
 	for(int i=0; i<thread_count; i++)
 		thread_suspend(threads[i]);
 
@@ -123,21 +120,21 @@ int attach(pid_t pid){
 	kern_return_t err = task_for_pid(mach_task_self(), pid, &debuggee->task);
 
 	if(err){
-		warn("Couldn't get task port for pid %d: %s\n", pid, mach_error_string(err));
+		warn("attach: couldn't get task port for pid %d: %s\n", pid, mach_error_string(err));
 		return -1;
 	}
 
 	err = task_suspend(debuggee->task);
 
 	if(err){
-		warn("task_suspend call failed: %s\n", mach_error_string(err));
+		warn("attach: task_suspend call failed: %s\n", mach_error_string(err));
 		return -1;
 	}
 
 	int result = suspend_threads();
 
 	if(result != 0){
-		warn("couldn't suspend threads for %d while attaching\n", debuggee->pid);
+		warn("attach: couldn't suspend threads for %d while attaching, detaching...\n", debuggee->pid);
 
 		detach();
 
@@ -171,7 +168,7 @@ void interrupt(int x1){
 	int result = suspend_threads();
 
 	if(result != 0){
-		warn("couldn't suspend threads for %d while attaching\n", debuggee->pid);
+		warn("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
 		debuggee->interrupted = 0;
 
 		return;
