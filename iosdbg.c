@@ -5,11 +5,38 @@ Don't expect this to ever be as sophisticated as GDB or LLDB.
 
 #include "iosdbg.h"
 
-#include <pthread/pthread.h>
-
-#include "mach_exc.h"
-
-int resume_threads();
+const char *get_exception_code(exception_type_t exception){
+	switch(exception){
+	case EXC_BAD_ACCESS:
+		return "EXC_BAD_ACCESS";
+	case EXC_BAD_INSTRUCTION:
+		return "EXC_BAD_INSTRUCTION";
+	case EXC_ARITHMETIC:
+		return "EXC_ARITHMETIC";
+	case EXC_EMULATION:
+		return "EXC_EMULATION";
+	case EXC_SOFTWARE:
+		return "EXC_SOFTWARE";
+	case EXC_BREAKPOINT:
+		return "EXC_BREAKPOINT";
+	case EXC_SYSCALL:
+		return "EXC_SYSCALL";
+	case EXC_MACH_SYSCALL:
+		return "EXC_MACH_SYSCALL";
+	case EXC_RPC_ALERT:
+		return "EXC_RPC_ALERT";
+	case EXC_CRASH:
+		return "EXC_CRASH";
+	case EXC_RESOURCE:
+		return "EXC_RESOURCE";
+	case EXC_GUARD:
+		return "EXC_GUARD";
+	case EXC_CORPSE_NOTIFY:
+		return "EXC_CORPSE_NOTIFY";
+	default:
+		return "<Unknown Exception>";
+	}
+}
 
 // print every command with a description
 void help(){
@@ -60,6 +87,14 @@ int resume(){
 // try and detach from the debuggee
 // Returns: 0 on success, -1 on fail
 int detach(){
+	// restore original exception ports
+	for(mach_msg_type_number_t i=0; i<debuggee->original_exception_ports.count; i++){
+		kern_return_t err = task_set_exception_ports(debuggee->task, debuggee->original_exception_ports.masks[i], debuggee->original_exception_ports.ports[i], debuggee->original_exception_ports.behaviors[i], debuggee->original_exception_ports.flavors[i]);
+		
+		if(err)
+			warn("detach: task_set_exception_ports: %s, %d\n", mach_error_string(err), i);
+	}
+
 	if(debuggee->interrupted){
 		int result = resume();
 
@@ -219,23 +254,32 @@ int show_neon_registers(){
 	return 0;
 }
 
-extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
-
+// Exceptions are caught here
 kern_return_t catch_mach_exception_raise(
 		mach_port_t exception_port,
 		mach_port_t thread,
 		mach_port_t task,
-		exception_type_t type,
+		exception_type_t exception,
 		exception_data_t code,
 		mach_msg_type_number_t code_count){
-	printf("\r\ncatch_mach_exception_raise\r\n");
+	/*int result = suspend_threads();
 
-	return KERN_FAILURE;
+	if(result != 0){
+		warn("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
+		debuggee->interrupted = 0;
+
+		return KERN_FAILURE;
+	}*/
+
+	interrupt(0);
+
+	//debuggee->interrupted = 1;
+
+	printf("\r\nThread %x received signal %d, %s.\r\n", thread, exception, get_exception_code(exception));
+	printf("\r\r(iosdbg) ");
+
+	return KERN_SUCCESS;
 }
-
-/* Both unused. */
-kern_return_t catch_mach_exception_raise_state(mach_port_t exception_port, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
-kern_return_t catch_mach_exception_raise_state_identity(mach_port_t exception_port, mach_port_t thread, mach_port_t task, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
 
 void *exception_server(void *arg){
 	while(1){
@@ -248,8 +292,7 @@ void *exception_server(void *arg){
 	return NULL;
 }
 
-// setup our exception related stuff for breakpoints
-// TODO: restore original exception ports on detach
+// setup our exception related stuff
 void setup_exception_handling(){
 	// make an exception port for the debuggee
 	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
@@ -264,6 +307,14 @@ void setup_exception_handling(){
 
 	if(err){
 		warn("setup_exception_handling: mach_port_insert_right failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	// save the old exception ports
+	err = task_get_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->original_exception_ports.masks, &debuggee->original_exception_ports.count, debuggee->original_exception_ports.ports, debuggee->original_exception_ports.behaviors, debuggee->original_exception_ports.flavors);
+
+	if(err){
+		warn("setup_exception_handling: task_get_exception_ports failed: %s\n", mach_error_string(err));
 		return;
 	}
 
