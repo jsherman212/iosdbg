@@ -255,19 +255,15 @@ void *exception_server(void *arg){
 	while(1){
 		kern_return_t err;
 
-		printf("\r\nexception_server\r\n");
-
 		if((err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0)) != KERN_SUCCESS)
 			printf("\r\nmach_msg_server_once: error: %s\r\n", mach_error_string(err));
-
-		printf("\r\nerr: %s\r\n", mach_error_string(err));
 	}
 
 	return NULL;
 }
 
-/* debuggee's task is now task_t instead of mach_port_t */
 void setup_exception_handling(){
+	// make an exception port for the debuggee
 	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
 
 	if(err){
@@ -275,6 +271,7 @@ void setup_exception_handling(){
 		return;
 	}
 
+	// be able to send messages on that exception port
 	err = mach_port_insert_right(mach_task_self(), debuggee->exception_port, debuggee->exception_port, MACH_MSG_TYPE_MAKE_SEND);
 
 	if(err){
@@ -282,23 +279,9 @@ void setup_exception_handling(){
 		return;
 	}
 
-	mach_port_t port_set;
-
-	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &port_set);
-
-	if(err){
-		warn("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	err = mach_port_move_member(mach_task_self(), debuggee->exception_port, port_set);
-
-	if(err){
-		warn("setup_exception_handling: mach_port_move_member failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	err = task_set_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->exception_port, EXCEPTION_DEFAULT, THREAD_STATE_NONE);
+	// add the ability to get exceptions on the debuggee exception port
+	// OR EXCEPTION_DEFAULT with MACH_EXCEPTION_CODES so 64-bit safe exception messages will be provided 
+	err = task_set_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->exception_port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, THREAD_STATE_NONE);
 
 	if(err){
 		warn("setup_exception_handling: task_set_exception_ports failed: %s\n", mach_error_string(err));
