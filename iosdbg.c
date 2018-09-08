@@ -222,34 +222,20 @@ int show_neon_registers(){
 extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
 
 kern_return_t catch_mach_exception_raise(
-	mach_port_t exception_port, mach_port_t thread, mach_port_t task,
-	exception_type_t type, exception_data_t code,
-	mach_msg_type_number_t code_count) {
+		mach_port_t exception_port,
+		mach_port_t thread,
+		mach_port_t task,
+		exception_type_t type,
+		exception_data_t code,
+		mach_msg_type_number_t code_count){
 	printf("\r\ncatch_mach_exception_raise\r\n");
 
 	return KERN_FAILURE;
 }
 
-kern_return_t catch_mach_exception_raise_state(
-    mach_port_t exception_port, exception_type_t exception,
-    exception_data_t code, mach_msg_type_number_t code_count, int *flavor,
-    thread_state_t in_state, mach_msg_type_number_t in_state_count,
-    thread_state_t out_state, mach_msg_type_number_t *out_state_count) {
-	printf("\r\ncatch_mach_exception_raise_state\r\n");
-
-    return KERN_FAILURE;
-}
-
-kern_return_t catch_mach_exception_raise_state_identity(
-    mach_port_t exception_port, mach_port_t thread, mach_port_t task,
-    exception_type_t exception, exception_data_t code,
-    mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state,
-    mach_msg_type_number_t in_state_count, thread_state_t out_state,
-    mach_msg_type_number_t *out_state_count){
-    printf("\r\ncatch_mach_exception_raise_state_identity\r\n");
-    
-    return KERN_FAILURE;
-}
+/* Both unused. */
+kern_return_t catch_mach_exception_raise_state(mach_port_t exception_port, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
+kern_return_t catch_mach_exception_raise_state_identity(mach_port_t exception_port, mach_port_t thread, mach_port_t task, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
 
 void *exception_server(void *arg){
 	while(1){
@@ -262,6 +248,8 @@ void *exception_server(void *arg){
 	return NULL;
 }
 
+// setup our exception related stuff for breakpoints
+// TODO: restore original exception ports on detach
 void setup_exception_handling(){
 	// make an exception port for the debuggee
 	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
@@ -288,6 +276,7 @@ void setup_exception_handling(){
 		return;
 	}
 
+	// start the exception server
 	pthread_t exception_server_thread;
 	pthread_create(&exception_server_thread, NULL, exception_server, NULL);
 }
