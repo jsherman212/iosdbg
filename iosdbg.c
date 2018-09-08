@@ -257,9 +257,8 @@ void *exception_server(void *arg){
 
 		printf("\r\nexception_server\r\n");
 
-		if((err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0)) != KERN_SUCCESS){
+		if((err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0)) != KERN_SUCCESS)
 			printf("\r\nmach_msg_server_once: error: %s\r\n", mach_error_string(err));
-		}
 
 		printf("\r\nerr: %s\r\n", mach_error_string(err));
 	}
