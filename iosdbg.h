@@ -46,9 +46,12 @@ void milestone(const char *message, ...){
 }
 
 struct debuggee {
-	mach_port_t task;
+	task_t task;
 	pid_t pid;
 	int interrupted;
+	thread_act_port_array_t threads;
+	mach_msg_type_number_t thread_count;
+	mach_port_t exception_port;
 };
 
 struct debuggee *debuggee;

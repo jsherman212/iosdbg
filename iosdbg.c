@@ -3,9 +3,11 @@ An iOS debugger I'm making for fun and to learn.
 Don't expect this to ever be as sophisticated as GDB or LLDB.
 */
 
-// TODO: add a threads field in the debuggee struct and update it every time the client executes a new command
-
 #include "iosdbg.h"
+
+#include <pthread/pthread.h>
+
+#include "mach_exc.h"
 
 int resume_threads();
 
@@ -13,13 +15,13 @@ int resume_threads();
 void help(){
 	printf("attach 						attach to a program with its PID\n");
 	printf("aslr						show the ASLR slide (TODO)\n");
+	printf("break <addr>				set a breakpoint at addr (TODO)\n");
 	printf("clear						clear screen\n");
 	printf("continue					resume debuggee execution\n");
 	printf("detach						detach from the current program\n");
 	printf("help						show this message\n");
 	printf("quit						quit iosdbg\n");
 	printf("regs <gen, float>			show registers (float: TODO)\n");
-
 }
 
 void setup_initial_debuggee(){
@@ -72,25 +74,18 @@ int detach(){
 	printf("detached from %d\n", debuggee->pid);
 
 	debuggee->pid = -1;
+	//debuggee->threads = NULL;
+	//debuggee->thread_count = -1;
 
 	return 0;
 }
 
 // try and resume every thread in the debuggee
 // Return: 0 on success, -1 on fail
+// TODO: now that this function is cleaned up, how can I check for failure?
 int resume_threads(){
-	thread_act_port_array_t threads;
-	mach_msg_type_number_t thread_count;
-
-	kern_return_t err = task_threads(debuggee->task, &threads, &thread_count);
-
-	if(err){
-		warn("resume_threads: couldn't get the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
-		return -1;
-	}
-
-	for(int i=0; i<thread_count; i++)
-		thread_resume(threads[i]);
+	for(int i=0; i<debuggee->thread_count; i++)
+		thread_resume(debuggee->threads[i]);
 
 	return 0;
 }
@@ -98,18 +93,15 @@ int resume_threads(){
 // try and suspend every thread in the debuggee
 // Return: 0 on success, -1 on fail
 int suspend_threads(){
-	thread_act_port_array_t threads;
-	mach_msg_type_number_t thread_count;
-
-	kern_return_t err = task_threads(debuggee->task, &threads, &thread_count);
+	kern_return_t err = task_threads(debuggee->task, &debuggee->threads, &debuggee->thread_count);
 
 	if(err){
 		warn("suspend_threads: couldn't get the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
 		return -1;
 	}
 
-	for(int i=0; i<thread_count; i++)
-		thread_suspend(threads[i]);
+	for(int i=0; i<debuggee->thread_count; i++)
+		thread_suspend(debuggee->threads[i]);
 
 	return 0;
 }
@@ -180,22 +172,10 @@ void interrupt(int x1){
 // show general registers of thread 0
 // Return: 0 on success, -1 on fail
 int show_general_registers(){
-	// check if debuggee is interrupted?
-
-	thread_act_port_array_t threads;
-	mach_msg_type_number_t thread_count;
-
-	kern_return_t err = task_threads(debuggee->task, &threads, &thread_count);
-
-	if(err){
-		warn("show_general_registers: couldn't get the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
-		return -1;
-	}
-
 	arm_thread_state64_t thread_state;
 	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 
-	err = thread_get_state(threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
 	if(err){
 		warn("show_general_registers: thread_get_state failed: %s\n", mach_error_string(err));
@@ -204,16 +184,130 @@ int show_general_registers(){
 
 	// print general purpose registers
 	for(int i=0; i<29; i++)
-		printf("X%d 					0x%llx\n", i, thread_state.__x[i]);
+		printf("X%d 				0x%llx\n", i, thread_state.__x[i]);
 
 	// print the other ones
-	printf("FP 					0x%llx\n", thread_state.__fp);
-	printf("LR 					0x%llx\n", thread_state.__lr);
-	printf("SP 					0x%llx\n", thread_state.__sp);
-	printf("PC 					0x%llx\n", thread_state.__pc);
-	printf("CPSR 					0x%x\n", thread_state.__cpsr);
+	printf("FP 				0x%llx\n", thread_state.__fp);
+	printf("LR 				0x%llx\n", thread_state.__lr);
+	printf("SP 				0x%llx\n", thread_state.__sp);
+	printf("PC 				0x%llx\n", thread_state.__pc);
+	printf("CPSR 				0x%x\n", thread_state.__cpsr);
 
 	return 0;
+}
+
+// show floating point registers of thread 0
+// Return: 0 on success, -1 on fail
+int show_neon_registers(){
+	arm_neon_state64_t neon_state;
+	mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
+
+	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_NEON_STATE64, (thread_state_t)&neon_state, &count);
+
+	if(err){
+		warn("show_neon_registers: thread_get_state failed: %s\n", mach_error_string(err));
+		return -1;
+	}
+
+	// print floating point registers
+	for(int i=0; i<32; i++){
+		uint64_t lower_bits = neon_state.__v[i];
+		//printf("%lx\n", sizeof(neon_state.__v[i]));
+		printf("V%d 				%llx\n", i, (uint64_t)(neon_state.__v[i] >> 32));
+	}
+
+	return 0;
+}
+
+extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
+
+kern_return_t catch_mach_exception_raise(
+	mach_port_t exception_port, mach_port_t thread, mach_port_t task,
+	exception_type_t type, exception_data_t code,
+	mach_msg_type_number_t code_count) {
+	printf("\r\ncatch_mach_exception_raise\r\n");
+
+	return KERN_FAILURE;
+}
+
+kern_return_t catch_mach_exception_raise_state(
+    mach_port_t exception_port, exception_type_t exception,
+    exception_data_t code, mach_msg_type_number_t code_count, int *flavor,
+    thread_state_t in_state, mach_msg_type_number_t in_state_count,
+    thread_state_t out_state, mach_msg_type_number_t *out_state_count) {
+	printf("\r\ncatch_mach_exception_raise_state\r\n");
+
+    return KERN_FAILURE;
+}
+
+kern_return_t catch_mach_exception_raise_state_identity(
+    mach_port_t exception_port, mach_port_t thread, mach_port_t task,
+    exception_type_t exception, exception_data_t code,
+    mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state,
+    mach_msg_type_number_t in_state_count, thread_state_t out_state,
+    mach_msg_type_number_t *out_state_count){
+    printf("\r\ncatch_mach_exception_raise_state_identity\r\n");
+    
+    return KERN_FAILURE;
+}
+
+void *exception_server(void *arg){
+	while(1){
+		kern_return_t err;
+
+		printf("\r\nexception_server\r\n");
+
+		if((err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0)) != KERN_SUCCESS){
+			printf("\r\nmach_msg_server_once: error: %s\r\n", mach_error_string(err));
+		}
+
+		printf("\r\nerr: %s\r\n", mach_error_string(err));
+	}
+
+	return NULL;
+}
+
+/* debuggee's task is now task_t instead of mach_port_t */
+void setup_exception_handling(){
+	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
+
+	if(err){
+		warn("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	err = mach_port_insert_right(mach_task_self(), debuggee->exception_port, debuggee->exception_port, MACH_MSG_TYPE_MAKE_SEND);
+
+	if(err){
+		warn("setup_exception_handling: mach_port_insert_right failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	mach_port_t port_set;
+
+	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &port_set);
+
+	if(err){
+		warn("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	err = mach_port_move_member(mach_task_self(), debuggee->exception_port, port_set);
+
+	if(err){
+		warn("setup_exception_handling: mach_port_move_member failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	err = task_set_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->exception_port, EXCEPTION_DEFAULT, THREAD_STATE_NONE);
+
+	if(err){
+		warn("setup_exception_handling: task_set_exception_ports failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	pthread_t exception_server_thread;
+	pthread_create(&exception_server_thread, NULL, exception_server, NULL);
 }
 
 int main(int argc, char **argv, const char **envp){
@@ -226,6 +320,16 @@ int main(int argc, char **argv, const char **envp){
 	while((line = linenoise("(iosdbg) ")) != NULL){
 		// add the command to history
 		linenoiseHistoryAdd(line);
+
+		// update the debuggee's list of threads
+		if(debuggee->pid != -1){
+			kern_return_t err = task_threads(debuggee->task, &debuggee->threads, &debuggee->thread_count);
+
+			if(err){
+				warn("we couldn't update the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
+				continue;
+			}
+		}
 
 		if(strcmp(line, "quit") == 0){
 			if(debuggee->pid != -1)
@@ -265,9 +369,11 @@ int main(int argc, char **argv, const char **envp){
 
 				if(result != 0)
 					warn("Couldn't attach to %d\n", potential_target_pid);
+				else
+					setup_exception_handling();
 			}
 		}
-		else if(strstr(line, "regs")){
+		else if(strstr(line, "regs") && debuggee->pid != -1){
 			char *reg_type = malloc(1024);
 			char *tok = strtok(line, " ");
 
@@ -282,11 +388,8 @@ int main(int argc, char **argv, const char **envp){
 				continue;
 			}
 
-			if(strcmp(reg_type, "float") == 0){
-				warn("TODO\n");
-				free(reg_type);
-				continue;
-			}
+			if(strcmp(reg_type, "float") == 0)
+				show_neon_registers();
 			else
 				show_general_registers();
 
