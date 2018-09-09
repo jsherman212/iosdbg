@@ -2,22 +2,21 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
-#include <getopt.h>
-#include <mach/mach.h>
 #include <errno.h>
 #include <pthread/pthread.h>
-
 #include "linenoise.h"
 #include "mach_exc.h"
-
 #include "linkedlist.h"
+#include "breakpoint.h"
+#include "memutils.h"
+#include "defs.h"
 
 #define RESET "\033[0m"
 #define GREEN "\033[0;32m"
 #define YELLOW "\033[0;33m"
 #define RED "\033[0;31m"
 
-// implemented in iosdbg.c
+// Implemented in iosdbg.c
 void help();
 void setup_initial_debuggee();
 int resume();
@@ -67,58 +66,3 @@ void milestone(const char *message, ...){
 
 	va_end(args);
 }
-
-const char *get_exception_code(exception_type_t exception){
-	switch(exception){
-	case EXC_BAD_ACCESS:
-		return "EXC_BAD_ACCESS";
-	case EXC_BAD_INSTRUCTION:
-		return "EXC_BAD_INSTRUCTION";
-	case EXC_ARITHMETIC:
-		return "EXC_ARITHMETIC";
-	case EXC_EMULATION:
-		return "EXC_EMULATION";
-	case EXC_SOFTWARE:
-		return "EXC_SOFTWARE";
-	case EXC_BREAKPOINT:
-		return "EXC_BREAKPOINT";
-	case EXC_SYSCALL:
-		return "EXC_SYSCALL";
-	case EXC_MACH_SYSCALL:
-		return "EXC_MACH_SYSCALL";
-	case EXC_RPC_ALERT:
-		return "EXC_RPC_ALERT";
-	case EXC_CRASH:
-		return "EXC_CRASH";
-	case EXC_RESOURCE:
-		return "EXC_RESOURCE";
-	case EXC_GUARD:
-		return "EXC_GUARD";
-	case EXC_CORPSE_NOTIFY:
-		return "EXC_CORPSE_NOTIFY";
-	default:
-		return "<Unknown Exception>";
-	}
-}
-
-#define MAX_EXCEPTION_PORTS 16
-
-struct original_exception_ports_t {
-	mach_msg_type_number_t count;
-	exception_mask_t masks[MAX_EXCEPTION_PORTS];
-	exception_handler_t ports[MAX_EXCEPTION_PORTS];
-	exception_behavior_t behaviors[MAX_EXCEPTION_PORTS];
-	thread_state_flavor_t flavors[MAX_EXCEPTION_PORTS];
-};
-
-struct debuggee {
-	mach_port_t task;
-	pid_t pid;
-	int interrupted;
-	thread_act_port_array_t threads;
-	mach_msg_type_number_t thread_count;
-	mach_port_t exception_port;
-	struct original_exception_ports_t original_exception_ports;
-};
-
-struct debuggee *debuggee;

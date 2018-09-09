@@ -1,5 +1,5 @@
 /*
-A basic implementation for a linked list.
+Implementation for a singly linked list.
 */
 
 #include "linkedlist.h"

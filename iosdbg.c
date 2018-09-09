@@ -18,7 +18,41 @@ void help(){
 	printf("regs <gen, float>			show registers (float: TODO)\n");
 }
 
+const char *get_exception_code(exception_type_t exception){
+	switch(exception){
+	case EXC_BAD_ACCESS:
+		return "EXC_BAD_ACCESS";
+	case EXC_BAD_INSTRUCTION:
+		return "EXC_BAD_INSTRUCTION";
+	case EXC_ARITHMETIC:
+		return "EXC_ARITHMETIC";
+	case EXC_EMULATION:
+		return "EXC_EMULATION";
+	case EXC_SOFTWARE:
+		return "EXC_SOFTWARE";
+	case EXC_BREAKPOINT:
+		return "EXC_BREAKPOINT";
+	case EXC_SYSCALL:
+		return "EXC_SYSCALL";
+	case EXC_MACH_SYSCALL:
+		return "EXC_MACH_SYSCALL";
+	case EXC_RPC_ALERT:
+		return "EXC_RPC_ALERT";
+	case EXC_CRASH:
+		return "EXC_CRASH";
+	case EXC_RESOURCE:
+		return "EXC_RESOURCE";
+	case EXC_GUARD:
+		return "EXC_GUARD";
+	case EXC_CORPSE_NOTIFY:
+		return "EXC_CORPSE_NOTIFY";
+	default:
+		return "<Unknown Exception>";
+	}
+}
+
 // Exceptions are caught here
+// Breakpoints are handled here
 kern_return_t catch_mach_exception_raise(
 		mach_port_t exception_port,
 		mach_port_t thread,
@@ -26,21 +60,12 @@ kern_return_t catch_mach_exception_raise(
 		exception_type_t exception,
 		exception_data_t code,
 		mach_msg_type_number_t code_count){
-	/*int result = suspend_threads();
-
-	if(result != 0){
-		warn("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
-		debuggee->interrupted = 0;
-
-		return KERN_FAILURE;
-	}*/
 
 	// check PC to see if we are at an address we breakpointed at
 	// keep a linked list of breakpoints?
 
+	// interrupt debuggee so it doesn't crash
 	interrupt(0);
-
-	//debuggee->interrupted = 1;
 
 	printf("\r\nThread %x received signal %d, %s.\r\n", thread, exception, get_exception_code(exception));
 	printf("\r\r(iosdbg) ");
@@ -137,9 +162,10 @@ void setup_initial_debuggee(){
 	// if we aren't attached to anything, debuggee's pid is -1
 	debuggee->pid = -1;
 	debuggee->interrupted = 0;
+	debuggee->breakpoints = linkedlist_new();
 }
 
-// try and attach to the debuggee
+// try and attach to the debuggee, and get its ASLR slide
 // Returns: 0 on success, -1 on fail
 int attach(pid_t pid){
 	kern_return_t err = task_for_pid(mach_task_self(), pid, &debuggee->task);
@@ -169,7 +195,17 @@ int attach(pid_t pid){
 	debuggee->pid = pid;
 	debuggee->interrupted = 1;
 
-	printf("attached to %d\n", debuggee->pid);
+	vm_region_basic_info_data_64_t info;
+	vm_address_t address = 0;
+	vm_size_t size;
+	mach_port_t object_name;
+	mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
+	
+	vm_region_64(debuggee->task, &address, &size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
+
+	debuggee->aslr_slide = address - 0x100000000;
+
+	printf("Attached to %d, ASLR slide is %llx. Do not worry about adding ASLR to addresses, it is already accounted for.\n", debuggee->pid, debuggee->aslr_slide);
 
 	return 0;
 }
@@ -187,12 +223,7 @@ int resume(){
 		return -1;
 	}
 
-	/*int result = */resume_threads();
-
-	/*if(result != 0){
-		warn("resume: couldn't resume threads\n");
-		return -1;
-	}*/
+	resume_threads();
 
 	debuggee->interrupted = 0;
 
@@ -248,6 +279,7 @@ int show_general_registers(){
 	return 0;
 }
 
+// Work in progress
 // show floating point registers of thread 0
 // Return: 0 on success, -1 on fail
 int show_neon_registers(){
@@ -296,6 +328,9 @@ int detach(){
 	printf("detached from %d\n", debuggee->pid);
 
 	debuggee->pid = -1;
+
+	linkedlist_free(debuggee->breakpoints);
+	debuggee->breakpoints = NULL;
 
 	return 0;
 }
