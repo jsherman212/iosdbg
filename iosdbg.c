@@ -159,6 +159,9 @@ void interrupt(int x1){
 void setup_initial_debuggee(){
 	debuggee = malloc(sizeof(struct debuggee));
 
+	if(!debuggee)
+		fatal("setup_initial_debuggee: malloc returned NULL\n")
+
 	// if we aren't attached to anything, debuggee's pid is -1
 	debuggee->pid = -1;
 	debuggee->interrupted = 0;

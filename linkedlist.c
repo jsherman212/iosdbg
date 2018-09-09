@@ -6,6 +6,10 @@ Implementation for a singly linked list.
 
 struct linkedlist *linkedlist_new(){
 	struct linkedlist *list = malloc(sizeof(struct linkedlist));
+
+	if(!list)
+		return NULL;
+	
 	list->front = NULL;
 
 	return list;

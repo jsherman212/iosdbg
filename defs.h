@@ -44,4 +44,4 @@ struct debuggee {
 	unsigned long long aslr_slide;
 };
 
-struct debuggee *debuggee;
+struct debuggee *debuggee = NULL;
