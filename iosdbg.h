@@ -10,12 +10,25 @@
 #include "linenoise.h"
 #include "mach_exc.h"
 
+#include "linkedlist.h"
+
 #define RESET "\033[0m"
 #define GREEN "\033[0;32m"
 #define YELLOW "\033[0;33m"
 #define RED "\033[0;31m"
 
-int resume_threads();
+// implemented in iosdbg.c
+void help();
+void setup_initial_debuggee();
+int resume();
+int detach();
+void resume_threads();
+int suspend_threads();
+int attach(pid_t);
+void interrupt(int);
+int show_general_registers();
+int show_neon_registers();
+void setup_exception_handling();
 
 extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
 
@@ -53,6 +66,39 @@ void milestone(const char *message, ...){
 	vprintf(message, args);
 
 	va_end(args);
+}
+
+const char *get_exception_code(exception_type_t exception){
+	switch(exception){
+	case EXC_BAD_ACCESS:
+		return "EXC_BAD_ACCESS";
+	case EXC_BAD_INSTRUCTION:
+		return "EXC_BAD_INSTRUCTION";
+	case EXC_ARITHMETIC:
+		return "EXC_ARITHMETIC";
+	case EXC_EMULATION:
+		return "EXC_EMULATION";
+	case EXC_SOFTWARE:
+		return "EXC_SOFTWARE";
+	case EXC_BREAKPOINT:
+		return "EXC_BREAKPOINT";
+	case EXC_SYSCALL:
+		return "EXC_SYSCALL";
+	case EXC_MACH_SYSCALL:
+		return "EXC_MACH_SYSCALL";
+	case EXC_RPC_ALERT:
+		return "EXC_RPC_ALERT";
+	case EXC_CRASH:
+		return "EXC_CRASH";
+	case EXC_RESOURCE:
+		return "EXC_RESOURCE";
+	case EXC_GUARD:
+		return "EXC_GUARD";
+	case EXC_CORPSE_NOTIFY:
+		return "EXC_CORPSE_NOTIFY";
+	default:
+		return "<Unknown Exception>";
+	}
 }
 
 #define MAX_EXCEPTION_PORTS 16

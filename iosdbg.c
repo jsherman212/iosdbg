@@ -5,39 +5,6 @@ Don't expect this to ever be as sophisticated as GDB or LLDB.
 
 #include "iosdbg.h"
 
-const char *get_exception_code(exception_type_t exception){
-	switch(exception){
-	case EXC_BAD_ACCESS:
-		return "EXC_BAD_ACCESS";
-	case EXC_BAD_INSTRUCTION:
-		return "EXC_BAD_INSTRUCTION";
-	case EXC_ARITHMETIC:
-		return "EXC_ARITHMETIC";
-	case EXC_EMULATION:
-		return "EXC_EMULATION";
-	case EXC_SOFTWARE:
-		return "EXC_SOFTWARE";
-	case EXC_BREAKPOINT:
-		return "EXC_BREAKPOINT";
-	case EXC_SYSCALL:
-		return "EXC_SYSCALL";
-	case EXC_MACH_SYSCALL:
-		return "EXC_MACH_SYSCALL";
-	case EXC_RPC_ALERT:
-		return "EXC_RPC_ALERT";
-	case EXC_CRASH:
-		return "EXC_CRASH";
-	case EXC_RESOURCE:
-		return "EXC_RESOURCE";
-	case EXC_GUARD:
-		return "EXC_GUARD";
-	case EXC_CORPSE_NOTIFY:
-		return "EXC_CORPSE_NOTIFY";
-	default:
-		return "<Unknown Exception>";
-	}
-}
-
 // print every command with a description
 void help(){
 	printf("attach 						attach to a program with its PID\n");
@@ -51,94 +18,125 @@ void help(){
 	printf("regs <gen, float>			show registers (float: TODO)\n");
 }
 
+// Exceptions are caught here
+kern_return_t catch_mach_exception_raise(
+		mach_port_t exception_port,
+		mach_port_t thread,
+		mach_port_t task,
+		exception_type_t exception,
+		exception_data_t code,
+		mach_msg_type_number_t code_count){
+	/*int result = suspend_threads();
+
+	if(result != 0){
+		warn("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
+		debuggee->interrupted = 0;
+
+		return KERN_FAILURE;
+	}*/
+
+	// check PC to see if we are at an address we breakpointed at
+	// keep a linked list of breakpoints?
+
+	interrupt(0);
+
+	//debuggee->interrupted = 1;
+
+	printf("\r\nThread %x received signal %d, %s.\r\n", thread, exception, get_exception_code(exception));
+	printf("\r\r(iosdbg) ");
+
+	return KERN_SUCCESS;
+}
+
+void *exception_server(void *arg){
+	while(1){
+		// shut down this thread once we detach
+		if(debuggee->pid == -1)
+			pthread_exit(NULL);
+
+		kern_return_t err;
+
+		if((err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0)) != KERN_SUCCESS)
+			printf("\r\nmach_msg_server_once: error: %s\r\n", mach_error_string(err));
+	}
+
+	return NULL;
+}
+
+// setup our exception related stuff
+void setup_exception_handling(){
+	// make an exception port for the debuggee
+	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
+
+	if(err){
+		warn("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	// be able to send messages on that exception port
+	err = mach_port_insert_right(mach_task_self(), debuggee->exception_port, debuggee->exception_port, MACH_MSG_TYPE_MAKE_SEND);
+
+	if(err){
+		warn("setup_exception_handling: mach_port_insert_right failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	// save the old exception ports
+	err = task_get_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->original_exception_ports.masks, &debuggee->original_exception_ports.count, debuggee->original_exception_ports.ports, debuggee->original_exception_ports.behaviors, debuggee->original_exception_ports.flavors);
+
+	if(err){
+		warn("setup_exception_handling: task_get_exception_ports failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	// add the ability to get exceptions on the debuggee exception port
+	// OR EXCEPTION_DEFAULT with MACH_EXCEPTION_CODES so 64-bit safe exception messages will be provided 
+	err = task_set_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->exception_port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, THREAD_STATE_NONE);
+
+	if(err){
+		warn("setup_exception_handling: task_set_exception_ports failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	// start the exception server
+	pthread_t exception_server_thread;
+	pthread_create(&exception_server_thread, NULL, exception_server, NULL);
+}
+
+// SIGINT handler
+void interrupt(int x1){
+	if(debuggee->interrupted)
+		return;
+
+	// TODO: Provide a nice way of showing the client they interrupted the debuggee that doesn't screw up the limenoise prompt
+
+	kern_return_t err = task_suspend(debuggee->task);
+
+	if(err){
+		warn("cannot interrupt: %s\n", mach_error_string(err));
+		debuggee->interrupted = 0;
+
+		return;
+	}
+
+	int result = suspend_threads();
+
+	if(result != 0){
+		warn("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
+		debuggee->interrupted = 0;
+
+		return;
+	}
+
+	debuggee->interrupted = 1;
+}
+
 void setup_initial_debuggee(){
 	debuggee = malloc(sizeof(struct debuggee));
 
 	// if we aren't attached to anything, debuggee's pid is -1
 	debuggee->pid = -1;
 	debuggee->interrupted = 0;
-}
-
-// resume the debuggee's execution
-// Returns: 0 on success, -1 on fail
-int resume(){
-	if(!debuggee->interrupted)
-		return -1;
-
-	kern_return_t err = task_resume(debuggee->task);
-
-	if(err){
-		warn("resume: couldn't continue: %s\n", mach_error_string(err));
-		return -1;
-	}
-
-	int result = resume_threads();
-
-	if(result != 0){
-		warn("resume: couldn't resume threads\n");
-		return -1;
-	}
-
-	debuggee->interrupted = 0;
-
-	return 0;
-}
-
-// try and detach from the debuggee
-// Returns: 0 on success, -1 on fail
-int detach(){
-	// restore original exception ports
-	for(mach_msg_type_number_t i=0; i<debuggee->original_exception_ports.count; i++){
-		kern_return_t err = task_set_exception_ports(debuggee->task, debuggee->original_exception_ports.masks[i], debuggee->original_exception_ports.ports[i], debuggee->original_exception_ports.behaviors[i], debuggee->original_exception_ports.flavors[i]);
-		
-		if(err)
-			warn("detach: task_set_exception_ports: %s, %d\n", mach_error_string(err), i);
-	}
-
-	if(debuggee->interrupted){
-		int result = resume();
-
-		if(result != 0){
-			warn("detach: couldn't resume execution before we detach?\n");
-			return -1;
-		}
-	}
-
-	debuggee->interrupted = 0;
-
-	printf("detached from %d\n", debuggee->pid);
-
-	debuggee->pid = -1;
-	//debuggee->threads = NULL;
-	//debuggee->thread_count = -1;
-
-	return 0;
-}
-
-// try and resume every thread in the debuggee
-// Return: 0 on success, -1 on fail
-// TODO: now that this function is cleaned up, how can I check for failure?
-int resume_threads(){
-	for(int i=0; i<debuggee->thread_count; i++)
-		thread_resume(debuggee->threads[i]);
-
-	return 0;
-}
-
-// try and suspend every thread in the debuggee
-// Return: 0 on success, -1 on fail
-int suspend_threads(){
-	kern_return_t err = task_threads(debuggee->task, &debuggee->threads, &debuggee->thread_count);
-
-	if(err){
-		warn("suspend_threads: couldn't get the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
-		return -1;
-	}
-
-	for(int i=0; i<debuggee->thread_count; i++)
-		thread_suspend(debuggee->threads[i]);
-
-	return 0;
 }
 
 // try and attach to the debuggee
@@ -176,32 +174,51 @@ int attach(pid_t pid){
 	return 0;
 }
 
-// SIGINT handler
-void interrupt(int x1){
-	if(debuggee->interrupted)
-		return;
+// resume the debuggee's execution
+// Returns: 0 on success, -1 on fail
+int resume(){
+	if(!debuggee->interrupted)
+		return -1;
 
-	// TODO: Provide a nice way of showing the client they interrupted the debuggee that doesn't screw up the limenoise prompt
-
-	kern_return_t err = task_suspend(debuggee->task);
+	kern_return_t err = task_resume(debuggee->task);
 
 	if(err){
-		warn("cannot interrupt: %s\n", mach_error_string(err));
-		debuggee->interrupted = 0;
-
-		return;
+		warn("resume: couldn't continue: %s\n", mach_error_string(err));
+		return -1;
 	}
 
-	int result = suspend_threads();
+	/*int result = */resume_threads();
 
-	if(result != 0){
-		warn("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
-		debuggee->interrupted = 0;
+	/*if(result != 0){
+		warn("resume: couldn't resume threads\n");
+		return -1;
+	}*/
 
-		return;
+	debuggee->interrupted = 0;
+
+	return 0;
+}
+
+// try and resume every thread in the debuggee
+void resume_threads(){
+	for(int i=0; i<debuggee->thread_count; i++)
+		thread_resume(debuggee->threads[i]);
+}
+
+// try and suspend every thread in the debuggee
+// Return: 0 on success, -1 on fail
+int suspend_threads(){
+	kern_return_t err = task_threads(debuggee->task, &debuggee->threads, &debuggee->thread_count);
+
+	if(err){
+		warn("suspend_threads: couldn't get the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
+		return -1;
 	}
 
-	debuggee->interrupted = 1;
+	for(int i=0; i<debuggee->thread_count; i++)
+		thread_suspend(debuggee->threads[i]);
+
+	return 0;
 }
 
 // show general registers of thread 0
@@ -254,82 +271,33 @@ int show_neon_registers(){
 	return 0;
 }
 
-// Exceptions are caught here
-kern_return_t catch_mach_exception_raise(
-		mach_port_t exception_port,
-		mach_port_t thread,
-		mach_port_t task,
-		exception_type_t exception,
-		exception_data_t code,
-		mach_msg_type_number_t code_count){
-	/*int result = suspend_threads();
-
-	if(result != 0){
-		warn("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
-		debuggee->interrupted = 0;
-
-		return KERN_FAILURE;
-	}*/
-
-	interrupt(0);
-
-	//debuggee->interrupted = 1;
-
-	printf("\r\nThread %x received signal %d, %s.\r\n", thread, exception, get_exception_code(exception));
-	printf("\r\r(iosdbg) ");
-
-	return KERN_SUCCESS;
-}
-
-void *exception_server(void *arg){
-	while(1){
-		kern_return_t err;
-
-		if((err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0)) != KERN_SUCCESS)
-			printf("\r\nmach_msg_server_once: error: %s\r\n", mach_error_string(err));
+// try and detach from the debuggee
+// Returns: 0 on success, -1 on fail
+int detach(){
+	// restore original exception ports
+	for(mach_msg_type_number_t i=0; i<debuggee->original_exception_ports.count; i++){
+		kern_return_t err = task_set_exception_ports(debuggee->task, debuggee->original_exception_ports.masks[i], debuggee->original_exception_ports.ports[i], debuggee->original_exception_ports.behaviors[i], debuggee->original_exception_ports.flavors[i]);
+		
+		if(err)
+			warn("detach: task_set_exception_ports: %s, %d\n", mach_error_string(err), i);
 	}
 
-	return NULL;
-}
+	if(debuggee->interrupted){
+		int result = resume();
 
-// setup our exception related stuff
-void setup_exception_handling(){
-	// make an exception port for the debuggee
-	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
-
-	if(err){
-		warn("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
-		return;
+		if(result != 0){
+			warn("detach: couldn't resume execution before we detach?\n");
+			return -1;
+		}
 	}
 
-	// be able to send messages on that exception port
-	err = mach_port_insert_right(mach_task_self(), debuggee->exception_port, debuggee->exception_port, MACH_MSG_TYPE_MAKE_SEND);
+	debuggee->interrupted = 0;
 
-	if(err){
-		warn("setup_exception_handling: mach_port_insert_right failed: %s\n", mach_error_string(err));
-		return;
-	}
+	printf("detached from %d\n", debuggee->pid);
 
-	// save the old exception ports
-	err = task_get_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->original_exception_ports.masks, &debuggee->original_exception_ports.count, debuggee->original_exception_ports.ports, debuggee->original_exception_ports.behaviors, debuggee->original_exception_ports.flavors);
+	debuggee->pid = -1;
 
-	if(err){
-		warn("setup_exception_handling: task_get_exception_ports failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	// add the ability to get exceptions on the debuggee exception port
-	// OR EXCEPTION_DEFAULT with MACH_EXCEPTION_CODES so 64-bit safe exception messages will be provided 
-	err = task_set_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->exception_port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, THREAD_STATE_NONE);
-
-	if(err){
-		warn("setup_exception_handling: task_set_exception_ports failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	// start the exception server
-	pthread_t exception_server_thread;
-	pthread_create(&exception_server_thread, NULL, exception_server, NULL);
+	return 0;
 }
 
 int main(int argc, char **argv, const char **envp){
