@@ -7,7 +7,7 @@
 unsigned int CFSwapInt32(unsigned int);
 unsigned long long CFSwapInt64(unsigned long long);
 
-kern_return_t memutils_read_memory_at_location_with_aslr(unsigned long long, unsigned char *, vm_size_t);
-kern_return_t memutils_write_memory_at_location_with_aslr(long long, long long);
+kern_return_t memutils_read_memory_at_location(unsigned long long, unsigned char *, vm_size_t);
+kern_return_t memutils_write_memory_to_location(long long, long long);
 
-unsigned long long memutils_buffer_to_number(char *);
+unsigned long long memutils_buffer_to_number(char *, int);

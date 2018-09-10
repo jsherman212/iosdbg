@@ -7,15 +7,17 @@ Don't expect this to ever be as sophisticated as GDB or LLDB.
 
 // print every command with a description
 void help(){
-	printf("attach 						attach to a program with its PID\n");
-	printf("aslr						show the ASLR slide (TODO)\n");
-	printf("break <addr>				set a breakpoint at addr (TODO)\n");
-	printf("clear						clear screen\n");
-	printf("continue					resume debuggee execution\n");
-	printf("detach						detach from the current program\n");
-	printf("help						show this message\n");
-	printf("quit						quit iosdbg\n");
-	printf("regs <gen, float>			show registers (float: TODO)\n");
+	printf("attach 								attach to a program with its PID\n");
+	printf("aslr								show the ASLR slide (TODO)\n");
+	printf("break <addr>						set a breakpoint at addr (TODO)\n");
+	printf("clear								clear screen\n");
+	printf("continue							resume debuggee execution\n");
+	printf("delete <breakpoint id>				delete breakpoint with <breakpoint id>\n");
+	printf("detach								detach from the current program\n");
+	printf("help								show this message\n");
+	printf("quit								quit iosdbg\n");
+	printf("regs <gen, float>					show registers (float: TODO)\n");
+	printf("set <gen, float> reg <register>		set value for given register (TODO)");
 }
 
 const char *get_exception_code(exception_type_t exception){
@@ -61,13 +63,42 @@ kern_return_t catch_mach_exception_raise(
 		exception_data_t code,
 		mach_msg_type_number_t code_count){
 
-	// check PC to see if we are at an address we breakpointed at
-	// keep a linked list of breakpoints?
-
-	// interrupt debuggee so it doesn't crash
+	// interrupt debuggee
 	interrupt(0);
 
-	printf("\r\nThread %x received signal %d, %s.\r\n", thread, exception, get_exception_code(exception));
+	// get PC to check if we're at a breakpointed address later
+	arm_thread_state64_t thread_state;
+	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+
+	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+
+	// what to print out to the client when an exception is hit
+	char *exception_string = malloc(1024);
+
+	if(debuggee->breakpoints->front){
+		struct node_t *current = debuggee->breakpoints->front;
+
+		while(current){
+			unsigned long long location = ((struct breakpoint *)current->data)->location;
+
+			if(location == thread_state.__pc){
+				struct breakpoint *hit = (struct breakpoint *)current->data;
+
+				breakpoint_hit(hit);
+
+				sprintf(exception_string, "\r\n * Thread %x: breakpoint %d at 0x%llx hit %d time(s). 0x%llx in debuggee.\r\n", thread, hit->id, hit->location, hit->hit_count, thread_state.__pc);
+				printf("%s", exception_string);
+				printf("\r\r(iosdbg) ");
+
+				return KERN_SUCCESS;
+			}
+
+			current = current->next;
+		}
+	}
+
+	sprintf(exception_string, "\r\n * Thread %x received signal %d, %s. 0x%llx in debuggee.\r\n", thread, exception, get_exception_code(exception), thread_state.__pc);
+	printf("%s", exception_string);
 	printf("\r\r(iosdbg) ");
 
 	return KERN_SUCCESS;
@@ -157,15 +188,20 @@ void interrupt(int x1){
 }
 
 void setup_initial_debuggee(){
+	debuggee = NULL;
+
 	debuggee = malloc(sizeof(struct debuggee));
 
 	if(!debuggee)
-		fatal("setup_initial_debuggee: malloc returned NULL\n")
+		fatal("setup_initial_debuggee: malloc returned NULL\n");
 
 	// if we aren't attached to anything, debuggee's pid is -1
 	debuggee->pid = -1;
 	debuggee->interrupted = 0;
 	debuggee->breakpoints = linkedlist_new();
+
+	if(!debuggee->breakpoints)
+		fatal("setup_initial_debuggee: couldn't allocate memory for breakpoint linked list\n");
 }
 
 // try and attach to the debuggee, and get its ASLR slide
@@ -306,6 +342,19 @@ int show_neon_registers(){
 	return 0;
 }
 
+int set_breakpoint(unsigned long long location){
+	int result = breakpoint_at_address(location);
+
+	if(result != 0)
+		return 1;
+
+	return 0;
+}
+
+int delete_breakpoint(int breakpoint_id){
+	return breakpoint_delete(breakpoint_id);
+}
+
 // try and detach from the debuggee
 // Returns: 0 on success, -1 on fail
 int detach(){
@@ -422,6 +471,34 @@ int main(int argc, char **argv, const char **envp){
 				show_general_registers();
 
 			free(reg_type);
+		}
+		else if(strstr(line, "break") && debuggee->pid != -1){
+			char *tok = strtok(line, " ");
+			unsigned long long potential_breakpoint_location = 0x0;
+
+			while(tok){
+				potential_breakpoint_location = strtoul(tok, NULL, 16);
+				tok = strtok(NULL, " ");
+			}
+
+			int result = set_breakpoint(potential_breakpoint_location);
+
+			if(result != 0)
+				warn("couldn't set breakpoint at %llx\n", potential_breakpoint_location);
+		}
+		else if(strstr(line, "delete") && debuggee->pid != -1){
+			char *tok = strtok(line, " ");
+			int breakpoint_to_delete_id = -1;
+
+			while(tok){
+				breakpoint_to_delete_id = atoi(tok);
+				tok = strtok(NULL, " ");
+			}
+
+			int result = delete_breakpoint(breakpoint_to_delete_id);
+
+			if(result != 0)
+				warn("couldn't delete breakpoint %d\n", breakpoint_to_delete_id);
 		}
 		else
 			printf("Invalid command.\n");

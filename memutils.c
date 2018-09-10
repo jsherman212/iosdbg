@@ -1,7 +1,5 @@
 /*
 Various utility functions to read and write memory from and to the debuggee. Keep it complicated here so it can be concise everywhere else.
-
-These functions account for ASLR, so no need to add to the address being passed in.
 */
 
 #include "memutils.h"
@@ -25,17 +23,14 @@ unsigned long long CFSwapInt64(unsigned long long arg){
 }
 
 // This function reads memory from an address and places the data into buffer.
-// Then, the buffer is formatted to big endian so it is easier for me to understand.
-kern_return_t memutils_read_memory_at_location_with_aslr(unsigned long long location, unsigned char *buffer, vm_size_t length){
-	return vm_read_overwrite(debuggee->task, location + debuggee->aslr_slide, length, (vm_address_t)buffer, &length);
+kern_return_t memutils_read_memory_at_location(unsigned long long location, unsigned char *buffer, vm_size_t length){
+	return vm_read_overwrite(debuggee->task, location, length, (vm_address_t)buffer, &length);
 }
 
 // This function writes data to location.
 // Data is automatically put into little endian before writing to location.
-kern_return_t memutils_write_memory_at_location_with_aslr(long long location, long long data){
+kern_return_t memutils_write_memory_to_location(long long location, long long data){
 	kern_return_t ret;
-
-	location += debuggee->aslr_slide;
 
 	// put instruction hex into little endian for the machine to understand
 	data = CFSwapInt32(data);
@@ -48,14 +43,24 @@ kern_return_t memutils_write_memory_at_location_with_aslr(long long location, lo
 }
 
 // This function takes a buffer of data and converts it to an unsigned long long.
-unsigned long long memutils_buffer_to_number(char *buffer){
+unsigned long long memutils_buffer_to_number(char *buffer, int length){
 	// create a string for strtoul
 	char *buf = malloc(strlen(buffer));
-	strcpy(buf, "0x");
 
-	for(int i=0; i<strlen(buffer)-2; i+=2){
-		char *current_byte = malloc(2);
-		sprintf(current_byte, "%x%x", (unsigned char)buffer[i], (unsigned char)buffer[i+1]);
+	if(!strstr(buffer, "0x"))
+		strcpy(buf, "0x");
+
+	for(int i=0; i<length; i++){
+		char *current_byte = malloc(1);
+
+		sprintf(current_byte, "%x", (unsigned char)buffer[i]);
+
+		// if we have a single digit hex, we need to put a zero in front of it
+		if(strtoul(current_byte, NULL, 16) < 0x10){
+			memset(current_byte, 0, 1);
+			sprintf(current_byte, "0%x", (unsigned char)buffer[i]);
+		}
+		
 		strcat(buf, current_byte);
 		free(current_byte);
 	}
