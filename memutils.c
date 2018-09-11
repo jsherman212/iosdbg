@@ -36,7 +36,7 @@ kern_return_t memutils_write_memory_to_location(long long location, long long da
 	data = CFSwapInt32(data);
 
 	vm_protect(debuggee->task, location, sizeof(data), 0, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
-	ret = vm_write(debuggee->task, location, (vm_offset_t)&data, sizeof(data));
+	ret = vm_write(debuggee->task, location, (vm_offset_t)&data, 0x4);
 	vm_protect(debuggee->task, location, sizeof(data), 0, VM_PROT_READ | VM_PROT_EXECUTE);
 
 	return ret;
@@ -60,7 +60,7 @@ unsigned long long memutils_buffer_to_number(char *buffer, int length){
 			memset(current_byte, 0, 1);
 			sprintf(current_byte, "0%x", (unsigned char)buffer[i]);
 		}
-		
+
 		strcat(buf, current_byte);
 		free(current_byte);
 	}
