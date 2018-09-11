@@ -1,5 +1,7 @@
 # iosdbg
 
+![alt text](https://raw.githubusercontent.com/jsherman212/iosdbg/master/iosdbg.png)
+
 An iOS debugger I'm making for my own sake of learning more about these devices. I don't know if this supports your device but you're welcome to try and compile it.
 
 Clone this repository to your iOS device and run `make`.
