@@ -40,8 +40,11 @@ void linkedlist_add(struct linkedlist *list, void *data_to_add){
 	while(current->next)
 		current = current->next;
 
-	current->next = malloc(sizeof(struct node_t));
-	current->next->data = data_to_add;
+	struct node_t *add = malloc(sizeof(struct node_t));
+	add->data = data_to_add;
+	add->next = NULL;
+
+	current->next = add;
 }
 
 void linkedlist_delete(struct linkedlist *list, void *data_to_remove){
@@ -49,15 +52,14 @@ void linkedlist_delete(struct linkedlist *list, void *data_to_remove){
 	if(!list->front)
 		return;
 
-	// only one element
-	if(list->front->data == data_to_remove){
-		free(list->front);
-		list->front = NULL;
-		return;
-	}
-
 	if(!data_to_remove)
 		return;
+
+	// removing front
+	if(list->front->data == data_to_remove){
+		list->front = list->front->next;
+		return;
+	}
 
 	struct node_t *current = list->front;
 	struct node_t *previous = NULL;
