@@ -7,17 +7,18 @@ Don't expect this to ever be as sophisticated as GDB or LLDB.
 
 // print every command with a description
 void help(){
-	printf("attach 								attach to a program with its PID\n");
-	printf("aslr								show the ASLR slide (TODO)\n");
-	printf("break <addr>						set a breakpoint at addr (TODO)\n");
-	printf("clear								clear screen\n");
-	printf("continue							resume debuggee execution\n");
-	printf("delete <breakpoint id>				delete breakpoint with <breakpoint id>\n");
-	printf("detach								detach from the current program\n");
-	printf("help								show this message\n");
-	printf("quit								quit iosdbg\n");
-	printf("regs <gen, float>					show registers (float: TODO)\n");
-	printf("set <gen, float> reg <register>		set value for given register (TODO)");
+	printf("attach 										attach to a program with its PID\n");
+	printf("aslr										show the ASLR slide\n");
+	printf("break <addr>								set a breakpoint at addr\n");
+	printf("clear										clear screen\n");
+	printf("continue									resume debuggee execution\n");
+	printf("delete <breakpoint id>						delete breakpoint with <breakpoint id>\n");
+	printf("detach										detach from the current program\n");
+	printf("help										show this message\n");
+	printf("kill										kill the debuggee\n");
+	printf("quit										quit iosdbg\n");
+	printf("regs <gen, float> <optional register>		show registers or specific register (float: TODO)\n");
+	printf("set <gen, float> reg <register>	<value>		set value for given register (TODO)\n");
 }
 
 const char *get_exception_code(exception_type_t exception){
@@ -90,6 +91,8 @@ kern_return_t catch_mach_exception_raise(
 				printf("%s", exception_string);
 				printf("\r\r(iosdbg) ");
 
+				free(exception_string);
+
 				return KERN_SUCCESS;
 			}
 
@@ -100,6 +103,8 @@ kern_return_t catch_mach_exception_raise(
 	sprintf(exception_string, "\r\n * Thread %x received signal %d, %s. 0x%llx in debuggee.\r\n", thread, exception, get_exception_code(exception), thread_state.__pc);
 	printf("%s", exception_string);
 	printf("\r\r(iosdbg) ");
+
+	free(exception_string);
 
 	return KERN_SUCCESS;
 }
@@ -244,7 +249,7 @@ int attach(pid_t pid){
 
 	debuggee->aslr_slide = address - 0x100000000;
 
-	printf("Attached to %d, ASLR slide is %llx. Do not worry about adding ASLR to addresses, it is already accounted for.\n", debuggee->pid, debuggee->aslr_slide);
+	printf("Attached to %d, ASLR slide is 0x%llx. Do not worry about adding ASLR to addresses, it is already accounted for.\n", debuggee->pid, debuggee->aslr_slide);
 
 	return 0;
 }
@@ -293,7 +298,12 @@ int suspend_threads(){
 
 // show general registers of thread 0
 // Return: 0 on success, -1 on fail
-int show_general_registers(){
+int show_general_registers(int specific_register){
+	if(specific_register < -1){
+		warn("Bad register number %d\n", specific_register);
+		return -1;
+	}
+
 	arm_thread_state64_t thread_state;
 	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 
@@ -302,6 +312,11 @@ int show_general_registers(){
 	if(err){
 		warn("show_general_registers: thread_get_state failed: %s\n", mach_error_string(err));
 		return -1;
+	}
+
+	if(specific_register != -1){
+		printf("X%d 				0x%llx\n", specific_register, thread_state.__x[specific_register]);
+		return 0;
 	}
 
 	// print general purpose registers
@@ -331,6 +346,10 @@ int show_neon_registers(){
 		warn("show_neon_registers: thread_get_state failed: %s\n", mach_error_string(err));
 		return -1;
 	}
+
+	// S[0-31]
+	// D[0-31]
+	// V[0-31]
 
 	// print floating point registers
 	for(int i=0; i<32; i++){
@@ -377,7 +396,7 @@ int detach(){
 
 	debuggee->interrupted = 0;
 
-	printf("detached from %d\n", debuggee->pid);
+	printf("Detached from %d\n", debuggee->pid);
 
 	debuggee->pid = -1;
 
@@ -415,12 +434,18 @@ int main(int argc, char **argv, const char **envp){
 			free(debuggee);
 			exit(0);
 		}
+		else if(strcmp(line, "aslr") == 0 && debuggee->pid != -1)
+			printf("Debuggee ASLR slide: 0x%llx\n", debuggee->aslr_slide);
 		else if(strcmp(line, "continue") == 0)
 			resume();
 		else if(strcmp(line, "clear") == 0)
 			linenoiseClearScreen();
 		else if(strcmp(line, "help") == 0)
 			help();
+		else if(strcmp(line, "kill") == 0 && debuggee->pid != -1){
+			detach();
+			kill(debuggee->pid, SIGKILL);
+		}
 		else if(strcmp(line, "detach") == 0)
 			detach();
 		else if(strstr(line, "attach")){
@@ -454,10 +479,8 @@ int main(int argc, char **argv, const char **envp){
 			char *reg_type = malloc(1024);
 			char *tok = strtok(line, " ");
 
-			while(tok){
-				strcpy(reg_type, tok);
-				tok = strtok(NULL, " ");
-			}
+			tok = strtok(NULL, " ");
+			strcpy(reg_type, tok);
 
 			if(strcmp(reg_type, "gen") != 0 && strcmp(reg_type, "float") != 0){
 				warn("Bad argument. try `gen` or `float`\n");
@@ -467,8 +490,20 @@ int main(int argc, char **argv, const char **envp){
 
 			if(strcmp(reg_type, "float") == 0)
 				show_neon_registers();
-			else
-				show_general_registers();
+			else{
+				// check to see if the client wants a specific register
+				char *specific_register = tok = strtok(NULL, " ");
+
+				if(specific_register){
+					// parse register string for register number
+					// register number should be right after the "register letter" for lack of a better term
+					specific_register++;
+
+					show_general_registers(atoi(specific_register));
+				}
+				else
+					show_general_registers(-1);
+			}
 
 			free(reg_type);
 		}
@@ -484,7 +519,7 @@ int main(int argc, char **argv, const char **envp){
 			int result = set_breakpoint(potential_breakpoint_location);
 
 			if(result != 0)
-				warn("couldn't set breakpoint at %llx\n", potential_breakpoint_location);
+				warn("couldn't set breakpoint at 0x%llx\n", potential_breakpoint_location);
 		}
 		else if(strstr(line, "delete") && debuggee->pid != -1){
 			char *tok = strtok(line, " ");

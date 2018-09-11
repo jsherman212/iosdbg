@@ -27,7 +27,7 @@ void resume_threads();
 int suspend_threads();
 int attach(pid_t);
 void interrupt(int);
-int show_general_registers();
+int show_general_registers(int);
 int show_neon_registers();
 void setup_exception_handling();
 int set_breakpoint(unsigned long long);
