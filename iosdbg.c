@@ -54,6 +54,12 @@ const char *get_exception_code(exception_type_t exception){
 	}
 }
 
+extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
+
+/* Both unused. */
+kern_return_t catch_mach_exception_raise_state(mach_port_t exception_port, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
+kern_return_t catch_mach_exception_raise_state_identity(mach_port_t exception_port, mach_port_t thread, mach_port_t task, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
+
 // Exceptions are caught here
 // Breakpoints are handled here
 kern_return_t catch_mach_exception_raise(
@@ -67,7 +73,7 @@ kern_return_t catch_mach_exception_raise(
 	// interrupt debuggee
 	interrupt(0);
 
-	// get PC to check if we're at a breakpointed address later
+	// get PC to check if we're at a breakpointed address
 	arm_thread_state64_t thread_state;
 	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 
@@ -130,7 +136,7 @@ void setup_exception_handling(){
 	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
 
 	if(err){
-		warn("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
+		printf("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
 		return;
 	}
 
@@ -138,7 +144,7 @@ void setup_exception_handling(){
 	err = mach_port_insert_right(mach_task_self(), debuggee->exception_port, debuggee->exception_port, MACH_MSG_TYPE_MAKE_SEND);
 
 	if(err){
-		warn("setup_exception_handling: mach_port_insert_right failed: %s\n", mach_error_string(err));
+		printf("setup_exception_handling: mach_port_insert_right failed: %s\n", mach_error_string(err));
 		return;
 	}
 
@@ -146,7 +152,7 @@ void setup_exception_handling(){
 	err = task_get_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->original_exception_ports.masks, &debuggee->original_exception_ports.count, debuggee->original_exception_ports.ports, debuggee->original_exception_ports.behaviors, debuggee->original_exception_ports.flavors);
 
 	if(err){
-		warn("setup_exception_handling: task_get_exception_ports failed: %s\n", mach_error_string(err));
+		printf("setup_exception_handling: task_get_exception_ports failed: %s\n", mach_error_string(err));
 		return;
 	}
 
@@ -155,7 +161,7 @@ void setup_exception_handling(){
 	err = task_set_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->exception_port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, THREAD_STATE_NONE);
 
 	if(err){
-		warn("setup_exception_handling: task_set_exception_ports failed: %s\n", mach_error_string(err));
+		printf("setup_exception_handling: task_set_exception_ports failed: %s\n", mach_error_string(err));
 		return;
 	}
 
@@ -174,7 +180,7 @@ void interrupt(int x1){
 	kern_return_t err = task_suspend(debuggee->task);
 
 	if(err){
-		warn("cannot interrupt: %s\n", mach_error_string(err));
+		printf("cannot interrupt: %s\n", mach_error_string(err));
 		debuggee->interrupted = 0;
 
 		return;
@@ -183,7 +189,7 @@ void interrupt(int x1){
 	int result = suspend_threads();
 
 	if(result != 0){
-		warn("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
+		printf("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
 		debuggee->interrupted = 0;
 
 		return;
@@ -197,16 +203,20 @@ void setup_initial_debuggee(){
 
 	debuggee = malloc(sizeof(struct debuggee));
 
-	if(!debuggee)
-		fatal("setup_initial_debuggee: malloc returned NULL\n");
+	if(!debuggee){
+		printf("setup_initial_debuggee: malloc returned NULL, please restart iosdbg.\n");
+		exit(1);
+	}
 
 	// if we aren't attached to anything, debuggee's pid is -1
 	debuggee->pid = -1;
 	debuggee->interrupted = 0;
 	debuggee->breakpoints = linkedlist_new();
 
-	if(!debuggee->breakpoints)
-		fatal("setup_initial_debuggee: couldn't allocate memory for breakpoint linked list\n");
+	if(!debuggee->breakpoints){
+		printf("setup_initial_debuggee: couldn't allocate memory for breakpoint linked list.\n");
+		exit(1);
+	}
 }
 
 // try and attach to the debuggee, and get its ASLR slide
@@ -215,21 +225,21 @@ int attach(pid_t pid){
 	kern_return_t err = task_for_pid(mach_task_self(), pid, &debuggee->task);
 
 	if(err){
-		warn("attach: couldn't get task port for pid %d: %s\n", pid, mach_error_string(err));
+		printf("attach: couldn't get task port for pid %d: %s\n", pid, mach_error_string(err));
 		return -1;
 	}
 
 	err = task_suspend(debuggee->task);
 
 	if(err){
-		warn("attach: task_suspend call failed: %s\n", mach_error_string(err));
+		printf("attach: task_suspend call failed: %s\n", mach_error_string(err));
 		return -1;
 	}
 
 	int result = suspend_threads();
 
 	if(result != 0){
-		warn("attach: couldn't suspend threads for %d while attaching, detaching...\n", debuggee->pid);
+		printf("attach: couldn't suspend threads for %d while attaching, detaching...\n", debuggee->pid);
 
 		detach();
 
@@ -263,7 +273,7 @@ int resume(){
 	kern_return_t err = task_resume(debuggee->task);
 
 	if(err){
-		warn("resume: couldn't continue: %s\n", mach_error_string(err));
+		printf("resume: couldn't continue: %s\n", mach_error_string(err));
 		return -1;
 	}
 
@@ -286,7 +296,7 @@ int suspend_threads(){
 	kern_return_t err = task_threads(debuggee->task, &debuggee->threads, &debuggee->thread_count);
 
 	if(err){
-		warn("suspend_threads: couldn't get the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
+		printf("suspend_threads: couldn't get the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
 		return -1;
 	}
 
@@ -300,7 +310,7 @@ int suspend_threads(){
 // Return: 0 on success, -1 on fail
 int show_general_registers(int specific_register){
 	if(specific_register < -1){
-		warn("Bad register number %d\n", specific_register);
+		printf("Bad register number %d\n", specific_register);
 		return -1;
 	}
 
@@ -310,7 +320,7 @@ int show_general_registers(int specific_register){
 	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
 	if(err){
-		warn("show_general_registers: thread_get_state failed: %s\n", mach_error_string(err));
+		printf("show_general_registers: thread_get_state failed: %s\n", mach_error_string(err));
 		return -1;
 	}
 
@@ -343,7 +353,7 @@ int show_neon_registers(){
 	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_NEON_STATE64, (thread_state_t)&neon_state, &count);
 
 	if(err){
-		warn("show_neon_registers: thread_get_state failed: %s\n", mach_error_string(err));
+		printf("show_neon_registers: thread_get_state failed: %s\n", mach_error_string(err));
 		return -1;
 	}
 
@@ -382,14 +392,14 @@ int detach(){
 		kern_return_t err = task_set_exception_ports(debuggee->task, debuggee->original_exception_ports.masks[i], debuggee->original_exception_ports.ports[i], debuggee->original_exception_ports.behaviors[i], debuggee->original_exception_ports.flavors[i]);
 		
 		if(err)
-			warn("detach: task_set_exception_ports: %s, %d\n", mach_error_string(err), i);
+			printf("detach: task_set_exception_ports: %s, %d\n", mach_error_string(err), i);
 	}
 
 	if(debuggee->interrupted){
 		int result = resume();
 
 		if(result != 0){
-			warn("detach: couldn't resume execution before we detach?\n");
+			printf("detach: couldn't resume execution before we detach?\n");
 			return -1;
 		}
 	}
@@ -422,7 +432,7 @@ int main(int argc, char **argv, const char **envp){
 			kern_return_t err = task_threads(debuggee->task, &debuggee->threads, &debuggee->thread_count);
 
 			if(err){
-				warn("we couldn't update the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
+				printf("we couldn't update the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
 				continue;
 			}
 		}
@@ -450,7 +460,7 @@ int main(int argc, char **argv, const char **envp){
 			detach();
 		else if(strstr(line, "attach")){
 			if(debuggee->pid != -1){
-				warn("Already attached to %d\n", debuggee->pid);
+				printf("Already attached to %d\n", debuggee->pid);
 				continue;
 			}
 
@@ -463,14 +473,14 @@ int main(int argc, char **argv, const char **envp){
 			}
 
 			if(potential_target_pid == 0)
-				warn("we cannot attach to the kernel!\n");
+				printf("we cannot attach to the kernel!\n");
 			else if(potential_target_pid == getpid())
-				warn("do not try and debug me!\n");
+				printf("do not try and debug me!\n");
 			else{
 				int result = attach(potential_target_pid);
 
 				if(result != 0)
-					warn("Couldn't attach to %d\n", potential_target_pid);
+					printf("Couldn't attach to %d\n", potential_target_pid);
 				else
 					setup_exception_handling();
 			}
@@ -483,7 +493,7 @@ int main(int argc, char **argv, const char **envp){
 			strcpy(reg_type, tok);
 
 			if(strcmp(reg_type, "gen") != 0 && strcmp(reg_type, "float") != 0){
-				warn("Bad argument. try `gen` or `float`\n");
+				printf("Bad argument. try `gen` or `float`\n");
 				free(reg_type);
 				continue;
 			}
@@ -519,7 +529,7 @@ int main(int argc, char **argv, const char **envp){
 			int result = set_breakpoint(potential_breakpoint_location);
 
 			if(result != 0)
-				warn("couldn't set breakpoint at 0x%llx\n", potential_breakpoint_location);
+				printf("couldn't set breakpoint at 0x%llx\n", potential_breakpoint_location);
 		}
 		else if(strstr(line, "delete") && debuggee->pid != -1){
 			char *tok = strtok(line, " ");
@@ -533,7 +543,7 @@ int main(int argc, char **argv, const char **envp){
 			int result = delete_breakpoint(breakpoint_to_delete_id);
 
 			if(result != 0)
-				warn("couldn't delete breakpoint %d\n", breakpoint_to_delete_id);
+				printf("Couldn't delete breakpoint %d\n", breakpoint_to_delete_id);
 		}
 		else
 			printf("Invalid command.\n");
