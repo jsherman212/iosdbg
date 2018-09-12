@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
+#include <ctype.h>
 #include <pthread/pthread.h>
 #include "linenoise.h"
 #include "mach_exc.h"
@@ -22,7 +23,7 @@ int suspend_threads();
 int attach(pid_t);
 void interrupt(int);
 int show_general_registers(int);
-int show_neon_registers();
+int show_neon_register(char, int);
 void setup_exception_handling();
 int set_breakpoint(unsigned long long);
 int delete_breakpoint(int);

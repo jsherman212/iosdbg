@@ -351,13 +351,10 @@ int show_general_registers(int specific_register){
 	return 0;
 }
 
-// take a char parameter specifing what register type they want
-// take an int parameter in specifing which register they want to see
-
-// Work in progress
-// show floating point registers of thread 0
+// show a floating point register from thread 0
+// Parameters: reg_type is the type of floating point register, reg_num is the register to show
 // Return: 0 on success, -1 on fail
-int show_neon_registers(){
+int show_neon_register(char reg_type, int reg_num){
 	arm_neon_state64_t neon_state;
 	mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
 
@@ -368,41 +365,29 @@ int show_neon_registers(){
 		return -1;
 	}
 
-	// S[0-31]
-	// D[0-31]
-	// V[0-31]
-
 	union intfloat {
 		int i;
 		float f;
-	};
+	} IF;
 
-	// D registers, bottom 64 bits of each Q register
-	union intfloat d;
-
-	// S registers, bottom 32 bits of each Q register
-	union intfloat s;
-
-	// print floating point registers
-	for(int i=0; i<32; i++){
-		uint64_t lower_bits = neon_state.__v[i];
-		//printf("%lx\n", sizeof(neon_state.__v[i]));
-
-		d.i = neon_state.__v[i] & 0xFFFF;
-		s.i = neon_state.__v[i] & 0xFFFFFFFF;
-		printf("V%d 				%llx, %f\n", i, (uint64_t)(neon_state.__v[i] >> 32), IF.f);
+	if(reg_type == 'd'){
+		// D registers, bottom 64 bits of each Q register
+		IF.i = neon_state.__v[reg_num] & 0xFFFF;
+		printf("D%d 				%f\n", reg_num, IF.f);
 	}
+	else if(reg_type == 's'){
+		// S registers, bottom 32 bits of each Q register
+		IF.i = neon_state.__v[reg_num] & 0xFFFFFFFF;
+		printf("S%d 				%f\n", reg_num, IF.f);
+	}
+	else
+		printf("Support for %c registers will be added soon\n", reg_type);
 
 	return 0;
 }
 
 int set_breakpoint(unsigned long long location){
-	int result = breakpoint_at_address(location);
-
-	if(result != 0)
-		return 1;
-
-	return 0;
+	return breakpoint_at_address(location);
 }
 
 int delete_breakpoint(int breakpoint_id){
@@ -517,33 +502,44 @@ int main(int argc, char **argv, const char **envp){
 			tok = strtok(NULL, " ");
 			strcpy(reg_type, tok);
 
-			/*if(strcmp(reg_type, "gen") != 0 && strcmp(reg_type, "float") != 0){
-				printf("Bad argument. try `gen` or `float`\n");
-				free(reg_type);
-				continue;
-			}*/
+			if(strcmp(reg_type, "float") == 0){
+				char *specific_register = strtok(NULL, " ");
 
-			if(strcmp(reg_type, "float") == 0)
-				show_neon_registers();
+				if(specific_register){
+					char reg_type = *specific_register;
+					specific_register++;
+					int reg_num = atoi(specific_register);
+
+					if(reg_num < 0 || reg_num > 31){
+						printf("Bad register number %d\n", reg_num);
+						continue;
+					}
+
+					show_neon_register(tolower(reg_type), reg_num);
+				}
+				else
+					printf("Need a register\n");
+			}
 			else if(strcmp(reg_type, "gen") == 0){
 				// check to see if the client wants a specific register
-				char *specific_register = tok = strtok(NULL, " ");
+				char *specific_register = strtok(NULL, " ");
 
 				if(specific_register){
 					// parse register string for register number
 					// register number should be right after the "register letter" for lack of a better term
 					specific_register++;
 
-					int regnum = atoi(specific_register);
+					int reg_num = atoi(specific_register);
 
-					if(regnum < 0){
-						printf("Bad register number %d\n", regnum);
+					if(reg_num < 0 || reg_num > 34){
+						printf("Bad register number %d\n", reg_num);
 						continue;
 					}
 
-					show_general_registers(regnum);
+					show_general_registers(reg_num);
 				}
 				else
+					// show every register
 					show_general_registers(-1);
 			}
 			else{
