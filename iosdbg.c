@@ -255,7 +255,15 @@ int attach(pid_t pid){
 	mach_port_t object_name;
 	mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
 	
-	vm_region_64(debuggee->task, &address, &size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
+	err = vm_region_64(debuggee->task, &address, &size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
+
+	if(err){
+		printf("attach: vm_region_64: %s\n", mach_error_string(err));
+
+		detach();
+
+		return -1;
+	}
 
 	debuggee->aslr_slide = address - 0x100000000;
 
@@ -343,6 +351,9 @@ int show_general_registers(int specific_register){
 	return 0;
 }
 
+// take a char parameter specifing what register type they want
+// take an int parameter in specifing which register they want to see
+
 // Work in progress
 // show floating point registers of thread 0
 // Return: 0 on success, -1 on fail
@@ -361,11 +372,25 @@ int show_neon_registers(){
 	// D[0-31]
 	// V[0-31]
 
+	union intfloat {
+		int i;
+		float f;
+	};
+
+	// D registers, bottom 64 bits of each Q register
+	union intfloat d;
+
+	// S registers, bottom 32 bits of each Q register
+	union intfloat s;
+
 	// print floating point registers
 	for(int i=0; i<32; i++){
 		uint64_t lower_bits = neon_state.__v[i];
 		//printf("%lx\n", sizeof(neon_state.__v[i]));
-		printf("V%d 				%llx\n", i, (uint64_t)(neon_state.__v[i] >> 32));
+
+		d.i = neon_state.__v[i] & 0xFFFF;
+		s.i = neon_state.__v[i] & 0xFFFFFFFF;
+		printf("V%d 				%llx, %f\n", i, (uint64_t)(neon_state.__v[i] >> 32), IF.f);
 	}
 
 	return 0;
@@ -446,7 +471,7 @@ int main(int argc, char **argv, const char **envp){
 		}
 		else if(strcmp(line, "aslr") == 0 && debuggee->pid != -1)
 			printf("Debuggee ASLR slide: 0x%llx\n", debuggee->aslr_slide);
-		else if(strcmp(line, "continue") == 0)
+		else if(strcmp(line, "continue") == 0 || strcmp(line, "c") == 0)
 			resume();
 		else if(strcmp(line, "clear") == 0)
 			linenoiseClearScreen();
@@ -473,9 +498,9 @@ int main(int argc, char **argv, const char **envp){
 			}
 
 			if(potential_target_pid == 0)
-				printf("we cannot attach to the kernel!\n");
+				printf("We cannot attach to the kernel!\n");
 			else if(potential_target_pid == getpid())
-				printf("do not try and debug me!\n");
+				printf("Do not try and debug me!\n");
 			else{
 				int result = attach(potential_target_pid);
 
@@ -492,15 +517,15 @@ int main(int argc, char **argv, const char **envp){
 			tok = strtok(NULL, " ");
 			strcpy(reg_type, tok);
 
-			if(strcmp(reg_type, "gen") != 0 && strcmp(reg_type, "float") != 0){
+			/*if(strcmp(reg_type, "gen") != 0 && strcmp(reg_type, "float") != 0){
 				printf("Bad argument. try `gen` or `float`\n");
 				free(reg_type);
 				continue;
-			}
+			}*/
 
 			if(strcmp(reg_type, "float") == 0)
 				show_neon_registers();
-			else{
+			else if(strcmp(reg_type, "gen") == 0){
 				// check to see if the client wants a specific register
 				char *specific_register = tok = strtok(NULL, " ");
 
@@ -509,10 +534,22 @@ int main(int argc, char **argv, const char **envp){
 					// register number should be right after the "register letter" for lack of a better term
 					specific_register++;
 
-					show_general_registers(atoi(specific_register));
+					int regnum = atoi(specific_register);
+
+					if(regnum < 0){
+						printf("Bad register number %d\n", regnum);
+						continue;
+					}
+
+					show_general_registers(regnum);
 				}
 				else
 					show_general_registers(-1);
+			}
+			else{
+				printf("Bad argument. try `gen` or `float`\n");
+				free(reg_type);
+				continue;
 			}
 
 			free(reg_type);
