@@ -29,15 +29,15 @@ kern_return_t memutils_read_memory_at_location(unsigned long long location, unsi
 
 // This function writes data to location.
 // Data is automatically put into little endian before writing to location.
-kern_return_t memutils_write_memory_to_location(long long location, long long data){
+kern_return_t memutils_write_memory_to_location(unsigned long long location, unsigned long long data, vm_size_t size){
 	kern_return_t ret;
 
 	// put instruction hex into little endian for the machine to understand
 	data = CFSwapInt32(data);
 
-	vm_protect(debuggee->task, location, sizeof(data), 0, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
-	ret = vm_write(debuggee->task, location, (vm_offset_t)&data, 0x4);
-	vm_protect(debuggee->task, location, sizeof(data), 0, VM_PROT_READ | VM_PROT_EXECUTE);
+	vm_protect(debuggee->task, location, size, 0, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
+	ret = vm_write(debuggee->task, location, (vm_offset_t)&data, size);
+	vm_protect(debuggee->task, location, size, 0, VM_PROT_READ | VM_PROT_EXECUTE);
 
 	return ret;
 }
