@@ -393,7 +393,7 @@ int show_neon_register(char reg_type, int reg_num){
 	else if(reg_type == 's'){
 		// S registers, bottom 32 bits of each Q register
 		IF.i = neon_state.__v[reg_num] & 0xFFFFFFFF;
-		printf("S%d 				%f\n", reg_num, IF.f);
+		printf("S%d 				%f 	(%d)\n", reg_num, IF.f, IF.d);
 	}
 	else
 		printf("Support for %c registers will be added soon\n", reg_type);
@@ -461,6 +461,7 @@ pid_t pid_of_program(char *progname){
 		// given a name of a binary, print the PID(s) in a string separated by commas
 		fprintf(mypidof, "#!/bin/sh\nps axc | awk \"{if (\\$5==\\\"%s\\\") print \\$1\\\",\\\"}\"|tr '\n' ' '", progname);
 		fflush(mypidof);
+		fclose(mypidof);
 
 		system("chmod +x temppidof");
 
