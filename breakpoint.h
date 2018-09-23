@@ -21,9 +21,11 @@ struct breakpoint {
 
 static int current_breakpoint_id = 1;
 
-static long long BRK = 0x200020D4;
+// BRK #1
+static unsigned long long BRK = 0x200020D4;
 
 struct breakpoint *breakpoint_new(unsigned long long);
 int breakpoint_at_address(unsigned long long);
 void breakpoint_hit(struct breakpoint *);
 int breakpoint_delete(int);
+void breakpoint_delete_all();

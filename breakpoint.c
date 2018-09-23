@@ -79,3 +79,19 @@ int breakpoint_delete(int breakpoint_id){
 
 	return 1;
 }
+
+// Delete every breakpoint
+void breakpoint_delete_all(){
+	if(!debuggee->breakpoints->front)
+		return;
+
+	struct node_t *current = debuggee->breakpoints->front;
+
+	while(current){
+		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
+
+		breakpoint_delete(current_breakpoint->id);
+
+		current = current->next;
+	}
+}
