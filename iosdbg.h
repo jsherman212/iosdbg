@@ -27,3 +27,4 @@ int show_neon_register(char, int);
 void setup_exception_handling();
 int set_breakpoint(unsigned long long);
 int delete_breakpoint(int);
+pid_t pid_of_program(char *);

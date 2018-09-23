@@ -7,7 +7,7 @@ Don't expect this to ever be as sophisticated as GDB or LLDB.
 
 // print every command with a description
 void help(){
-	printf("attach 										attach to a program with its PID\n");
+	printf("attach 										attach to a program with its PID or executable name\n");
 	printf("aslr										show the ASLR slide\n");
 	printf("break <addr>								set a breakpoint at addr\n");
 	printf("clear										clear screen\n");
@@ -121,9 +121,9 @@ void *exception_server(void *arg){
 		if(debuggee->pid == -1)
 			pthread_exit(NULL);
 
-		kern_return_t err;
+		kern_return_t err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0);
 
-		if((err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0)) != KERN_SUCCESS)
+		if(err)
 			printf("\r\nmach_msg_server_once: error: %s\r\n", mach_error_string(err));
 	}
 
@@ -269,6 +269,8 @@ int attach(pid_t pid){
 
 	printf("Attached to %d, ASLR slide is 0x%llx. Do not worry about adding ASLR to addresses, it is already accounted for.\n", debuggee->pid, debuggee->aslr_slide);
 
+	debuggee->breakpoints = linkedlist_new();
+
 	return 0;
 }
 
@@ -288,6 +290,8 @@ int resume(){
 	resume_threads();
 
 	debuggee->interrupted = 0;
+
+	printf("Continuing.\n");
 
 	return 0;
 }
@@ -370,9 +374,20 @@ int show_neon_register(char reg_type, int reg_num){
 		float f;
 	} IF;
 
+	if(reg_type == 'v'){
+		// TODO figure this out...
+		// print each byte in this 128 bit integer (16)
+		void *v = neon_state.__v[reg_num];
+
+		printf("{ ");
+		for(int i=0; i<16; i++)
+			printf("0x%x ", *(unsigned char *)(v + i));
+
+		printf("}\n");
+	}
 	if(reg_type == 'd'){
 		// D registers, bottom 64 bits of each Q register
-		IF.i = neon_state.__v[reg_num] & 0xFFFF;
+		IF.i = neon_state.__v[reg_num]/* & 0xFFFF*/;
 		printf("D%d 				%f\n", reg_num, IF.f);
 	}
 	else if(reg_type == 's'){
@@ -391,12 +406,21 @@ int set_breakpoint(unsigned long long location){
 }
 
 int delete_breakpoint(int breakpoint_id){
+	if(breakpoint_id == 0){
+		printf("We need a breakpoint ID\n");
+		return -1;
+	}
+
 	return breakpoint_delete(breakpoint_id);
 }
 
 // try and detach from the debuggee
 // Returns: 0 on success, -1 on fail
 int detach(){
+	// delete all breakpoints on detach so the original instruction is written back to prevent a crash
+	// TODO: instead of deleting them, maybe disable all of them and if we are attached to the same thing again re-enable them?
+	breakpoint_delete_all();
+
 	// restore original exception ports
 	for(mach_msg_type_number_t i=0; i<debuggee->original_exception_ports.count; i++){
 		kern_return_t err = task_set_exception_ports(debuggee->task, debuggee->original_exception_ports.masks[i], debuggee->original_exception_ports.ports[i], debuggee->original_exception_ports.behaviors[i], debuggee->original_exception_ports.flavors[i]);
@@ -416,14 +440,80 @@ int detach(){
 
 	debuggee->interrupted = 0;
 
+	linkedlist_free(debuggee->breakpoints);
+	debuggee->breakpoints = NULL;
+
 	printf("Detached from %d\n", debuggee->pid);
 
 	debuggee->pid = -1;
 
-	linkedlist_free(debuggee->breakpoints);
-	debuggee->breakpoints = NULL;
-
 	return 0;
+}
+
+// pidof implementation
+// Get the pid of a program based on the program name provided
+// Return: pid on success, -1 on error
+pid_t pid_of_program(char *progname){
+	FILE *mypidof = fopen("temppidof", "w");
+
+	if(mypidof){
+		// dump a bash script to get the pid of what we want to attach to in the file
+		// given a name of a binary, print the PID(s) in a string separated by commas
+		fprintf(mypidof, "#!/bin/sh\nps axc | awk \"{if (\\$5==\\\"%s\\\") print \\$1\\\",\\\"}\"|tr '\n' ' '", progname);
+		fflush(mypidof);
+
+		system("chmod +x temppidof");
+
+		FILE *pidofreader = popen("./temppidof 2>&1", "r");
+
+		if(pidofreader){
+			char program_pid[256];
+			fgets(program_pid, sizeof(program_pid), pidofreader);
+
+			pclose(pidofreader);
+
+			// we don't need this anymore
+			remove("./temppidof");
+
+			char *finalpid = malloc(1024);
+
+			// count the number of commas
+			// if there's more than one comma, we have two instances of the same process
+			int num_commas = 0;
+
+			for(int i=0; i<strlen(program_pid); i++){
+				if(program_pid[i] == ',')
+					num_commas++;
+				else if(num_commas == 0)
+					// at the same time we can start to construct the PID string without the comma
+					sprintf(finalpid, "%s%c", finalpid, program_pid[i]);
+			}
+
+			pid_t pid;
+
+			if(num_commas == 1){
+				pid = atoi(finalpid);
+				free(finalpid);
+				return pid;
+			}
+			else if(num_commas > 1){
+				printf("There is more than one instance of %s. Aborting. PIDs: %s\n", progname, program_pid);
+				free(finalpid);
+				return -1;
+			}
+			else if(num_commas == 0){
+				printf("%s not found\n", progname);
+				free(finalpid);
+				return -1;
+			}
+		}
+		else
+			return -1;
+	}
+	else
+		return -1;
+
+	return -1;
 }
 
 int main(int argc, char **argv, const char **envp){
@@ -447,7 +537,7 @@ int main(int argc, char **argv, const char **envp){
 			}
 		}
 
-		if(strcmp(line, "quit") == 0){
+		if(strcmp(line, "quit") == 0 || strcmp(line, "q") == 0){
 			if(debuggee->pid != -1)
 				detach();
 
@@ -462,6 +552,7 @@ int main(int argc, char **argv, const char **envp){
 			linenoiseClearScreen();
 		else if(strcmp(line, "help") == 0)
 			help();
+		// TODO: THIS CRASHES SPRINGBOARD????
 		else if(strcmp(line, "kill") == 0 && debuggee->pid != -1){
 			detach();
 			kill(debuggee->pid, SIGKILL);
@@ -475,15 +566,31 @@ int main(int argc, char **argv, const char **envp){
 			}
 
 			char *tok = strtok(line, " ");
-			pid_t potential_target_pid;
-			
+			char *potential_target_pid_string = malloc(1024);
+
 			while(tok){
-				potential_target_pid = atoi(tok);
+				strcpy(potential_target_pid_string, tok);
 				tok = strtok(NULL, " ");
 			}
 
-			if(potential_target_pid == 0)
-				printf("We cannot attach to the kernel!\n");
+			// if it is 0, we got a binary name to attach to
+			pid_t potential_target_pid = atoi(potential_target_pid_string);
+
+			if(potential_target_pid == 0){
+				pid_t prog_pid = pid_of_program(potential_target_pid_string);
+
+				// pid_of_program failed
+				if(prog_pid == -1)
+					printf("Couldn't attach to %s\n", potential_target_pid_string);
+				else{
+					int result = attach(prog_pid);
+
+					if(result != 0)
+						printf("Couldn't attach to %d\n", potential_target_pid);
+					else
+						setup_exception_handling();
+				}
+			}
 			else if(potential_target_pid == getpid())
 				printf("Do not try and debug me!\n");
 			else{
@@ -525,6 +632,12 @@ int main(int argc, char **argv, const char **envp){
 				char *specific_register = strtok(NULL, " ");
 
 				if(specific_register){
+					// check if the client actually requested a general purpose register
+					if(tolower(specific_register[0]) != 'x'){
+						printf("That is not a general purpose register\n");
+						continue;
+					}
+
 					// parse register string for register number
 					// register number should be right after the "register letter" for lack of a better term
 					specific_register++;
