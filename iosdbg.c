@@ -1,8 +1,3 @@
-/*
-An iOS debugger I'm making for fun and to learn.
-Don't expect this to ever be as sophisticated as GDB or LLDB.
-*/
-
 #include "iosdbg.h"
 
 // print every command with a description
@@ -10,7 +5,7 @@ void help(){
 	printf("attach 										attach to a program with its PID or executable name\n");
 	printf("aslr										show the ASLR slide\n");
 	printf("break <addr>								set a breakpoint at addr\n");
-	printf("clear										clear screen\n");
+	//printf("clear										clear screen\n");
 	printf("continue									resume debuggee execution\n");
 	printf("delete <breakpoint id>						delete breakpoint with <breakpoint id>\n");
 	printf("detach										detach from the current program\n");
@@ -393,7 +388,7 @@ int show_neon_register(char reg_type, int reg_num){
 	else if(reg_type == 's'){
 		// S registers, bottom 32 bits of each Q register
 		IF.i = neon_state.__v[reg_num] & 0xFFFFFFFF;
-		printf("S%d 				%f 	(%d)\n", reg_num, IF.f, IF.d);
+		printf("S%d 				%f (0x%x)\n", reg_num, IF.f, IF.i);
 	}
 	else
 		printf("Support for %c registers will be added soon\n", reg_type);
@@ -401,17 +396,23 @@ int show_neon_register(char reg_type, int reg_num){
 	return 0;
 }
 
+// Set a breakpoint at a given address.
+// Returns: 0 on success, 1 on error
 int set_breakpoint(unsigned long long location){
 	return breakpoint_at_address(location);
 }
 
+// Delete a breakpoint.
+// Returns: 0 on success, 1 on error
 int delete_breakpoint(int breakpoint_id){
-	if(breakpoint_id == 0){
+	int error = breakpoint_delete(breakpoint_id);
+
+	if(error){
 		printf("We need a breakpoint ID\n");
-		return -1;
+		return 1;
 	}
 
-	return breakpoint_delete(breakpoint_id);
+	return error;
 }
 
 // try and detach from the debuggee
@@ -481,8 +482,9 @@ pid_t pid_of_program(char *progname){
 			// count the number of commas
 			// if there's more than one comma, we have two instances of the same process
 			int num_commas = 0;
+			int len = strlen(program_pid);
 
-			for(int i=0; i<strlen(program_pid); i++){
+			for(int i=0; i<len; i++){
 				if(program_pid[i] == ',')
 					num_commas++;
 				else if(num_commas == 0)
@@ -538,53 +540,77 @@ int main(int argc, char **argv, const char **envp){
 			}
 		}
 
-		if(strcmp(line, "quit") == 0 || strcmp(line, "q") == 0){
-			if(debuggee->pid != -1)
+		// try and match what the user typed with a possible command
+		// make a copy of what the user typed to prevent modifing what they typed
+		char *linecopy = malloc(strlen(line) + 1);
+		strcpy(linecopy, line);
+		struct matchcmd_result *result = matchcmd(linecopy);
+
+		// regex was not able to be compiled
+		if(!result){
+			printf("Couldn't compile regex\n");
+			continue;
+		}
+
+		if(result->correctcmd){
+			char *user_command = result->correctcmd;
+
+			if(strcmp(user_command, "quit") == 0){
+				if(debuggee->pid != -1)
+					detach();
+
+				free(debuggee);
+				return 0;
+			}
+			else if(strcmp(user_command, "aslr") == 0 && debuggee->pid != -1)
+				printf("Debuggee ASLR slide: 0x%llx\n", debuggee->aslr_slide);
+			else if(strcmp(user_command, "continue") == 0)
+				resume();
+			else if(strcmp(user_command, "help") == 0)
+				help();
+			// TODO: THIS CRASHES SPRINGBOARD????
+			else if(strcmp(user_command, "kill") == 0 && debuggee->pid != -1){
 				detach();
-
-			free(debuggee);
-			exit(0);
-		}
-		else if(strcmp(line, "aslr") == 0 && debuggee->pid != -1)
-			printf("Debuggee ASLR slide: 0x%llx\n", debuggee->aslr_slide);
-		else if(strcmp(line, "continue") == 0 || strcmp(line, "c") == 0)
-			resume();
-		else if(strcmp(line, "clear") == 0)
-			linenoiseClearScreen();
-		else if(strcmp(line, "help") == 0)
-			help();
-		// TODO: THIS CRASHES SPRINGBOARD????
-		else if(strcmp(line, "kill") == 0 && debuggee->pid != -1){
-			detach();
-			kill(debuggee->pid, SIGKILL);
-		}
-		else if(strcmp(line, "detach") == 0)
-			detach();
-		else if(strstr(line, "attach")){
-			if(debuggee->pid != -1){
-				printf("Already attached to %d\n", debuggee->pid);
-				continue;
+				kill(debuggee->pid, SIGKILL);
 			}
+			else if(strcmp(user_command, "detach") == 0)
+				detach();
+			else if(strcmp(user_command, "attach") == 0){
+				if(debuggee->pid != -1){
+					printf("Already attached to %d\n", debuggee->pid);
+					continue;
+				}
 
-			char *tok = strtok(line, " ");
-			char *potential_target_pid_string = malloc(1024);
+				char *tok = strtok(line, " ");
+				char *potential_target_pid_string = malloc(1024);
 
-			while(tok){
-				strcpy(potential_target_pid_string, tok);
-				tok = strtok(NULL, " ");
-			}
+				while(tok){
+					strcpy(potential_target_pid_string, tok);
+					tok = strtok(NULL, " ");
+				}
 
-			// if it is 0, we got a binary name to attach to
-			pid_t potential_target_pid = atoi(potential_target_pid_string);
+				// if it is 0, we got a binary name as an argument to attach to
+				pid_t potential_target_pid = atoi(potential_target_pid_string);
 
-			if(potential_target_pid == 0){
-				pid_t prog_pid = pid_of_program(potential_target_pid_string);
+				if(potential_target_pid == 0){
+					pid_t prog_pid = pid_of_program(potential_target_pid_string);
 
-				// pid_of_program failed
-				if(prog_pid == -1)
-					printf("Couldn't attach to %s\n", potential_target_pid_string);
+					// pid_of_program failed
+					if(prog_pid == -1)
+						printf("Couldn't attach to %s\n", potential_target_pid_string);
+					else{
+						int result = attach(prog_pid);
+
+						if(result != 0)
+							printf("Couldn't attach to %d\n", potential_target_pid);
+						else
+							setup_exception_handling();
+					}
+				}
+				else if(potential_target_pid == getpid())
+					printf("Do not try and debug me!\n");
 				else{
-					int result = attach(prog_pid);
+					int result = attach(potential_target_pid);
 
 					if(result != 0)
 						printf("Couldn't attach to %d\n", potential_target_pid);
@@ -592,110 +618,104 @@ int main(int argc, char **argv, const char **envp){
 						setup_exception_handling();
 				}
 			}
-			else if(potential_target_pid == getpid())
-				printf("Do not try and debug me!\n");
-			else{
-				int result = attach(potential_target_pid);
+			else if((strcmp(user_command, "regs gen") == 0 || strcmp(user_command, "regs float") == 0) && debuggee->pid != -1){
+				char *reg_type = malloc(1024);
+
+				char *tok = strtok(line, " ");
+				tok = strtok(NULL, " ");
+				strcpy(reg_type, tok);
+
+				if(strstr(reg_type, "f")){
+					char *specific_register = strtok(NULL, " ");
+
+					if(specific_register){
+						char reg_type = *specific_register;
+						specific_register++;
+						int reg_num = atoi(specific_register);
+
+						if(reg_num < 0 || reg_num > 31){
+							printf("Bad register number %d\n", reg_num);
+							continue;
+						}
+
+						show_neon_register(tolower(reg_type), reg_num);
+					}
+					else
+						printf("Need a register\n");
+				}
+				else if(strstr(reg_type, "g")){
+					// check to see if the client wants a specific register
+					char *specific_register = strtok(NULL, " ");
+
+					if(specific_register){
+						// check if the client actually requested a general purpose register
+						if(tolower(specific_register[0]) != 'x'){
+							printf("That is not a general purpose register\n");
+							continue;
+						}
+
+						// parse register string for register number
+						// register number should be right after the "register letter" for lack of a better term
+						specific_register++;
+
+						int reg_num = atoi(specific_register);
+
+						if(reg_num < 0 || reg_num > 34){
+							printf("Bad register number %d\n", reg_num);
+							continue;
+						}
+
+						show_general_registers(reg_num);
+					}
+					else
+						// show every register
+						show_general_registers(-1);
+				}
+				else{
+					printf("Bad argument. Try `gen` or `float`\n");
+					free(reg_type);
+					continue;
+				}
+
+				free(reg_type);
+			}
+			else if(strcmp(user_command, "break") == 0 && debuggee->pid != -1){
+				char *tok = strtok(line, " ");
+				unsigned long long potential_breakpoint_location = 0x0;
+
+				while(tok){
+					potential_breakpoint_location = strtoul(tok, NULL, 16);
+					tok = strtok(NULL, " ");
+				}
+
+				int result = set_breakpoint(potential_breakpoint_location);
 
 				if(result != 0)
-					printf("Couldn't attach to %d\n", potential_target_pid);
-				else
-					setup_exception_handling();
+					printf("couldn't set breakpoint at 0x%llx\n", potential_breakpoint_location);
 			}
-		}
-		else if(strstr(line, "regs") && debuggee->pid != -1){
-			char *reg_type = malloc(1024);
-			char *tok = strtok(line, " ");
+			else if(strcmp(user_command, "delete") == 0 && debuggee->pid != -1){
+				char *tok = strtok(line, " ");
+				int breakpoint_to_delete_id = -1;
 
-			tok = strtok(NULL, " ");
-			strcpy(reg_type, tok);
-
-			if(strcmp(reg_type, "float") == 0){
-				char *specific_register = strtok(NULL, " ");
-
-				if(specific_register){
-					char reg_type = *specific_register;
-					specific_register++;
-					int reg_num = atoi(specific_register);
-
-					if(reg_num < 0 || reg_num > 31){
-						printf("Bad register number %d\n", reg_num);
-						continue;
-					}
-
-					show_neon_register(tolower(reg_type), reg_num);
+				while(tok){
+					breakpoint_to_delete_id = atoi(tok);
+					tok = strtok(NULL, " ");
 				}
-				else
-					printf("Need a register\n");
+
+				int result = delete_breakpoint(breakpoint_to_delete_id);
+
+				if(result != 0)
+					printf("Couldn't delete breakpoint %d\n", breakpoint_to_delete_id);
 			}
-			else if(strcmp(reg_type, "gen") == 0){
-				// check to see if the client wants a specific register
-				char *specific_register = strtok(NULL, " ");
-
-				if(specific_register){
-					// check if the client actually requested a general purpose register
-					if(tolower(specific_register[0]) != 'x'){
-						printf("That is not a general purpose register\n");
-						continue;
-					}
-
-					// parse register string for register number
-					// register number should be right after the "register letter" for lack of a better term
-					specific_register++;
-
-					int reg_num = atoi(specific_register);
-
-					if(reg_num < 0 || reg_num > 34){
-						printf("Bad register number %d\n", reg_num);
-						continue;
-					}
-
-					show_general_registers(reg_num);
-				}
-				else
-					// show every register
-					show_general_registers(-1);
-			}
-			else{
-				printf("Bad argument. try `gen` or `float`\n");
-				free(reg_type);
-				continue;
-			}
-
-			free(reg_type);
 		}
-		else if(strstr(line, "break") && debuggee->pid != -1){
-			char *tok = strtok(line, " ");
-			unsigned long long potential_breakpoint_location = 0x0;
-
-			while(tok){
-				potential_breakpoint_location = strtoul(tok, NULL, 16);
-				tok = strtok(NULL, " ");
-			}
-
-			int result = set_breakpoint(potential_breakpoint_location);
-
-			if(result != 0)
-				printf("couldn't set breakpoint at 0x%llx\n", potential_breakpoint_location);
-		}
-		else if(strstr(line, "delete") && debuggee->pid != -1){
-			char *tok = strtok(line, " ");
-			int breakpoint_to_delete_id = -1;
-
-			while(tok){
-				breakpoint_to_delete_id = atoi(tok);
-				tok = strtok(NULL, " ");
-			}
-
-			int result = delete_breakpoint(breakpoint_to_delete_id);
-
-			if(result != 0)
-				printf("Couldn't delete breakpoint %d\n", breakpoint_to_delete_id);
-		}
-		else
-			printf("Invalid command.\n");
+		else if(result->matchingcmds)
+			printf("Ambiguous command %s: %s\n", linecopy, result->matchingcmds);
+		else if(!result->correctcmd)
+			printf("Unknown command %s\n", line);
 
 		free(line);
+		free(linecopy);
+		matchcmd_result_free(result);
 	}
 
 	return 0;
