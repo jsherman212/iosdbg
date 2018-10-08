@@ -5,11 +5,14 @@
 #include <errno.h>
 #include <ctype.h>
 #include <pthread/pthread.h>
-#include "linenoise.h"
+#include <readline/readline.h>
+#include <readline/history.h>
+//#include "linenoise.h"
 #include "mach_exc.h"
 #include "linkedlist.h"
 #include "breakpoint.h"
 #include "memutils.h"
+#include "matchcmd.h"
 #include "defs.h"
 
 // Implemented in iosdbg.c

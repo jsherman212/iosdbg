@@ -5,7 +5,6 @@ void help(){
 	printf("attach 										attach to a program with its PID or executable name\n");
 	printf("aslr										show the ASLR slide\n");
 	printf("break <addr>								set a breakpoint at addr\n");
-	//printf("clear										clear screen\n");
 	printf("continue									resume debuggee execution\n");
 	printf("delete <breakpoint id>						delete breakpoint with <breakpoint id>\n");
 	printf("detach										detach from the current program\n");
@@ -88,9 +87,10 @@ kern_return_t catch_mach_exception_raise(
 
 				breakpoint_hit(hit);
 
-				sprintf(exception_string, "\r\n * Thread %x: breakpoint %d at 0x%llx hit %d time(s). 0x%llx in debuggee.\r\n", thread, hit->id, hit->location, hit->hit_count, thread_state.__pc);
-				printf("%s", exception_string);
-				printf("\r\r(iosdbg) ");
+				sprintf(exception_string, "\n * Thread %x: breakpoint %d at 0x%llx hit %d time(s). 0x%llx in debuggee.", thread, hit->id, hit->location, hit->hit_count, thread_state.__pc);
+				printf("%s\n", exception_string);
+
+				rl_forced_update_display();
 
 				free(exception_string);
 
@@ -101,9 +101,10 @@ kern_return_t catch_mach_exception_raise(
 		}
 	}
 
-	sprintf(exception_string, "\r\n * Thread %x received signal %d, %s. 0x%llx in debuggee.\r\n", thread, exception, get_exception_code(exception), thread_state.__pc);
-	printf("%s", exception_string);
-	printf("\r\r(iosdbg) ");
+	sprintf(exception_string, "\n * Thread %x received signal %d, %s. 0x%llx in debuggee.", thread, exception, get_exception_code(exception), thread_state.__pc);
+	printf("%s\n", exception_string);
+
+	rl_forced_update_display();
 
 	free(exception_string);
 
@@ -119,10 +120,29 @@ void *exception_server(void *arg){
 		kern_return_t err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0);
 
 		if(err)
-			printf("\r\nmach_msg_server_once: error: %s\r\n", mach_error_string(err));
+			printf("\nmach_msg_server_once: error: %s\n", mach_error_string(err));
 	}
 
 	return NULL;
+}
+
+void *death_server(void *arg){
+	while(1){
+		if(debuggee->pid != -1){
+			mach_port_type_t type;
+			kern_return_t err = mach_port_type(mach_task_self(), debuggee->task, &type);
+
+			if(err)
+				printf("death_server: mach_port_type failed: %s\n", mach_error_string(err));
+
+			if(type == MACH_PORT_TYPE_DEAD_NAME){
+				printf("\n %d dead? Detaching...\n", debuggee->pid);
+				detach(1);
+			}
+		}
+
+		sleep(1);
+	}
 }
 
 // setup our exception related stuff
@@ -143,6 +163,46 @@ void setup_exception_handling(){
 		return;
 	}
 
+	mach_port_t port_set;
+
+	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &port_set);
+
+	if(err){
+		printf("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	err = mach_port_move_member(mach_task_self(), debuggee->exception_port, port_set);
+
+	if(err){
+		printf("setup_exception_handling: mach_port_move_member failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+	// allocate port to notify us of termination
+	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->death_port);
+
+	if(err){
+		printf("setup_exception_handling: mach_port_allocate failed allocating termination notification port: %s\n", mach_error_string(err));
+		return;
+	}
+
+	err = mach_port_move_member(mach_task_self(), debuggee->death_port, port_set);
+
+	if(err){
+		printf("setup_exception_handling: mach_port_move_member failed: %s\n", mach_error_string(err));
+		return;
+	}
+	
+	mach_port_t p;
+	err = mach_port_request_notification(mach_task_self(), debuggee->task, MACH_NOTIFY_DEAD_NAME, 0, debuggee->death_port, MACH_MSG_TYPE_MAKE_SEND_ONCE, &p);
+
+	if(err){
+		printf("setup_exception_handling: mach_port_request_notification failed: %s\n", mach_error_string(err));
+		return;
+	}
+
+
 	// save the old exception ports
 	err = task_get_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->original_exception_ports.masks, &debuggee->original_exception_ports.count, debuggee->original_exception_ports.ports, debuggee->original_exception_ports.behaviors, debuggee->original_exception_ports.flavors);
 
@@ -160,6 +220,8 @@ void setup_exception_handling(){
 		return;
 	}
 
+	
+
 	// start the exception server
 	pthread_t exception_server_thread;
 	pthread_create(&exception_server_thread, NULL, exception_server, NULL);
@@ -167,11 +229,13 @@ void setup_exception_handling(){
 
 // SIGINT handler
 void interrupt(int x1){
+	if(debuggee->pid == -1)
+		return;
+
 	if(debuggee->interrupted)
 		return;
 
 	// TODO: Provide a nice way of showing the client they interrupted the debuggee that doesn't screw up the limenoise prompt
-
 	kern_return_t err = task_suspend(debuggee->task);
 
 	if(err){
@@ -236,7 +300,7 @@ int attach(pid_t pid){
 	if(result != 0){
 		printf("attach: couldn't suspend threads for %d while attaching, detaching...\n", debuggee->pid);
 
-		detach();
+		detach(0);
 
 		return -1;
 	}
@@ -253,9 +317,9 @@ int attach(pid_t pid){
 	err = vm_region_64(debuggee->task, &address, &size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
 
 	if(err){
-		printf("attach: vm_region_64: %s\n", mach_error_string(err));
+		printf("attach: vm_region_64: %s, detaching\n", mach_error_string(err));
 
-		detach();
+		detach(0);
 
 		return -1;
 	}
@@ -265,6 +329,8 @@ int attach(pid_t pid){
 	printf("Attached to %d, ASLR slide is 0x%llx. Do not worry about adding ASLR to addresses, it is already accounted for.\n", debuggee->pid, debuggee->aslr_slide);
 
 	debuggee->breakpoints = linkedlist_new();
+
+	// TODO maybe add a cool little thing like 0x000000018078cfd8 in debuggee
 
 	return 0;
 }
@@ -287,6 +353,7 @@ int resume(){
 	debuggee->interrupted = 0;
 
 	printf("Continuing.\n");
+	//rl_reset_line_state();
 
 	return 0;
 }
@@ -417,25 +484,27 @@ int delete_breakpoint(int breakpoint_id){
 
 // try and detach from the debuggee
 // Returns: 0 on success, -1 on fail
-int detach(){
+int detach(int from_death){
 	// delete all breakpoints on detach so the original instruction is written back to prevent a crash
 	// TODO: instead of deleting them, maybe disable all of them and if we are attached to the same thing again re-enable them?
 	breakpoint_delete_all();
 
-	// restore original exception ports
-	for(mach_msg_type_number_t i=0; i<debuggee->original_exception_ports.count; i++){
-		kern_return_t err = task_set_exception_ports(debuggee->task, debuggee->original_exception_ports.masks[i], debuggee->original_exception_ports.ports[i], debuggee->original_exception_ports.behaviors[i], debuggee->original_exception_ports.flavors[i]);
-		
-		if(err)
-			printf("detach: task_set_exception_ports: %s, %d\n", mach_error_string(err), i);
-	}
+	if(!from_death){
+		// restore original exception ports
+		for(mach_msg_type_number_t i=0; i<debuggee->original_exception_ports.count; i++){
+			kern_return_t err = task_set_exception_ports(debuggee->task, debuggee->original_exception_ports.masks[i], debuggee->original_exception_ports.ports[i], debuggee->original_exception_ports.behaviors[i], debuggee->original_exception_ports.flavors[i]);
+			
+			if(err)
+				printf("detach: task_set_exception_ports: %s, %d\n", mach_error_string(err), i);
+		}
 
-	if(debuggee->interrupted){
-		int result = resume();
+		if(debuggee->interrupted){
+			int result = resume();
 
-		if(result != 0){
-			printf("detach: couldn't resume execution before we detach?\n");
-			return -1;
+			if(result != 0){
+				printf("detach: couldn't resume execution before we detach?\n");
+				return -1;
+			}
 		}
 	}
 
@@ -521,14 +590,20 @@ pid_t pid_of_program(char *progname){
 
 int main(int argc, char **argv, const char **envp){
 	setup_initial_debuggee();
+	rl_catch_signals = 0;
 
 	signal(SIGINT, interrupt);
 
 	char *line = NULL;
 
-	while((line = linenoise("(iosdbg) ")) != NULL){
+	// Until I can figure out how to correctly implement mach notifications, this will work fine.
+	// Spawn a thread to check for the termination of the debuggee.
+	pthread_t dt;
+	pthread_create(&dt, NULL, death_server, NULL);
+
+	while((line = readline("(iosdbg) ")) != NULL){
 		// add the command to history
-		linenoiseHistoryAdd(line);
+		add_history(line);
 
 		// update the debuggee's list of threads
 		if(debuggee->pid != -1){
@@ -557,24 +632,34 @@ int main(int argc, char **argv, const char **envp){
 
 			if(strcmp(user_command, "quit") == 0){
 				if(debuggee->pid != -1)
-					detach();
+					detach(0);
 
 				free(debuggee);
 				return 0;
 			}
 			else if(strcmp(user_command, "aslr") == 0 && debuggee->pid != -1)
 				printf("Debuggee ASLR slide: 0x%llx\n", debuggee->aslr_slide);
-			else if(strcmp(user_command, "continue") == 0)
+			else if(strcmp(user_command, "continue") == 0){
 				resume();
+				//rl_tty_set_echoing(0);
+				// wait for a Ctrl-C
+				//rl_pending_input = 0x03;
+				//rl_already_prompted = 1;
+				//rl_crlf();
+				//rl_on_new_line_with_prompt();
+				//rl_reset_line_state();
+				//rl_message("Continuing.\n");
+				//rl_on_new_line();
+			}
 			else if(strcmp(user_command, "help") == 0)
 				help();
 			// TODO: THIS CRASHES SPRINGBOARD????
 			else if(strcmp(user_command, "kill") == 0 && debuggee->pid != -1){
-				detach();
+				detach(0);
 				kill(debuggee->pid, SIGKILL);
 			}
 			else if(strcmp(user_command, "detach") == 0)
-				detach();
+				detach(0);
 			else if(strcmp(user_command, "attach") == 0){
 				if(debuggee->pid != -1){
 					printf("Already attached to %d\n", debuggee->pid);
@@ -582,12 +667,15 @@ int main(int argc, char **argv, const char **envp){
 				}
 
 				char *tok = strtok(line, " ");
-				char *potential_target_pid_string = malloc(1024);
+				tok = strtok(NULL, " ");
 
-				while(tok){
-					strcpy(potential_target_pid_string, tok);
-					tok = strtok(NULL, " ");
+				if(!tok){
+					printf("We need something to attach to\n");
+					continue;
 				}
+
+				char *potential_target_pid_string = malloc(1024);
+				strcpy(potential_target_pid_string, tok);
 
 				// if it is 0, we got a binary name as an argument to attach to
 				pid_t potential_target_pid = atoi(potential_target_pid_string);
@@ -683,10 +771,14 @@ int main(int argc, char **argv, const char **envp){
 				char *tok = strtok(line, " ");
 				unsigned long long potential_breakpoint_location = 0x0;
 
-				while(tok){
-					potential_breakpoint_location = strtoul(tok, NULL, 16);
-					tok = strtok(NULL, " ");
+				tok = strtok(NULL, " ");
+
+				if(!tok){
+					printf("Location?\n");
+					continue;
 				}
+
+				potential_breakpoint_location = strtoul(tok, NULL, 16);
 
 				int result = set_breakpoint(potential_breakpoint_location);
 
