@@ -44,19 +44,21 @@ kern_return_t memutils_write_memory_to_location(unsigned long long location, uns
 
 // This function takes a buffer of data and converts it to an unsigned long long.
 unsigned long long memutils_buffer_to_number(char *buffer, int length){
-	// create a string for strtoul
+	// create a string for strtoull
 	char *buf = malloc(strlen(buffer));
 
+	// append 0x for strtoull
 	if(!strstr(buffer, "0x"))
 		strcpy(buf, "0x");
 
 	for(int i=0; i<length; i++){
+		// TODO don't malloc a byte allocate it on the stack
 		char *current_byte = malloc(1);
 
 		sprintf(current_byte, "%x", (unsigned char)buffer[i]);
 
 		// if we have a single digit hex, we need to put a zero in front of it
-		if(strtoul(current_byte, NULL, 16) < 0x10){
+		if(strtoull(current_byte, NULL, 16) < 0x10){
 			memset(current_byte, 0, 1);
 			sprintf(current_byte, "0%x", (unsigned char)buffer[i]);
 		}
@@ -65,7 +67,7 @@ unsigned long long memutils_buffer_to_number(char *buffer, int length){
 		free(current_byte);
 	}
 
-	unsigned long long val = strtoul(buf, NULL, 16);
+	unsigned long long val = strtoull(buf, NULL, 16);
 
 	free(buf);
 
