@@ -8,15 +8,15 @@
 #include <readline/readline.h>
 #include <mach/mach.h>
 #include "breakpoint.h"
-#include "dbgutils.h" // For pid_of_program, suspend_threads
-#include "defs.h" // For debuggee
+#include "dbgutils.h"
+#include "defs.h"
 
 extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
 
 typedef int cmd_error_t;
 
-#define CMD_SUCCESS (cmd_error_t)0;
-#define CMD_FAILURE (cmd_error_t)1;
+#define CMD_SUCCESS (cmd_error_t)0
+#define CMD_FAILURE (cmd_error_t)1
 
 struct cmd_match_result_t {
 	int num_matches;
@@ -63,8 +63,5 @@ static struct dbg_cmd_t COMMANDS[] = {
 };
 
 cmd_error_t execute_command(char *);
-
-// For visibility in iosdbg.c
-void interrupt(int);
 
 #endif

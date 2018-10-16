@@ -12,3 +12,4 @@ void *death_server(void *);
 const char *get_exception_code(exception_type_t);
 void setup_exception_handling(void);
 void setup_initial_debuggee(void);
+void interrupt(int);

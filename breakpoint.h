@@ -26,8 +26,8 @@ struct breakpoint {
 
 typedef int bp_error_t;
 
-#define BP_SUCCESS (bp_error_t)0;
-#define BP_FAILURE (bp_error_t)1;
+#define BP_SUCCESS (bp_error_t)0
+#define BP_FAILURE (bp_error_t)1
 
 static int current_breakpoint_id = 1;
 

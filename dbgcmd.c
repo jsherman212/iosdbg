@@ -1,3 +1,7 @@
+/*
+Implementation for every command.
+*/
+
 #include "dbgcmd.h"
 
 cmd_error_t cmdfunc_attach(const char *args, int arg1){
@@ -5,6 +9,9 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 		return CMD_FAILURE;
 
 	pid_t pid = pid_of_program((char *)args);
+
+	if(pid == -1)
+		return CMD_FAILURE;
 
 	kern_return_t err = task_for_pid(mach_task_self(), pid, &debuggee->task);
 
@@ -132,9 +139,9 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 		}
 
 		if(debuggee->interrupted){
-			int result = cmdfunc_continue(NULL, 0);
+			cmd_error_t result = cmdfunc_continue(NULL, 0);
 
-			if(result != 0){
+			if(result != CMD_SUCCESS){
 				printf("detach: couldn't resume execution before we detach?\n");
 				return CMD_FAILURE;
 			}
@@ -163,6 +170,9 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 		tok++;
 		int reg_num = atoi(tok);
 
+		if(reg_num < 0 || reg_num > 31)
+			continue;
+
 		arm_neon_state64_t neon_state;
 		mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
 
@@ -181,17 +191,18 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 		if(reg_type == 'v'){
 			// TODO figure this out...
 			// print each byte in this 128 bit integer (16)
-			void *v = neon_state.__v[reg_num];
+		
+			unsigned long long upper = neon_state.__v[reg_num] << 64;
+			unsigned long long lower  = neon_state.__v[reg_num];
+			
+			
 
-			printf("{ ");
-			for(int i=0; i<16; i++)
-				printf("0x%x ", *(unsigned char *)(v + i));
+			printf("%llx %llx\n", upper, lower);
 
-			printf("}\n");
 		}
-		if(reg_type == 'd'){
+		else if(reg_type == 'd'){
 			// D registers, bottom 64 bits of each Q register
-			IF.i = neon_state.__v[reg_num];
+			IF.i = neon_state.__v[reg_num] >> 32;
 			printf("D%d 				%f\n", reg_num, IF.f);
 		}
 		else if(reg_type == 's'){
@@ -207,7 +218,53 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
-	printf("\ncmdfunc_regsgen, args = %s\n", args);
+	arm_thread_state64_t thread_state;
+	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+
+	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+
+	if(err){
+		printf("show_general_registers: thread_get_state failed: %s\n", mach_error_string(err));
+		return CMD_FAILURE;
+	}
+	
+	// if there were no arguments, print every register
+	if(!args){
+		for(int i=0; i<29; i++)
+			printf("X%d                 0x%llx\n", i, thread_state.__x[i]);
+		
+		printf("FP 				0x%llx\n", thread_state.__fp);
+		printf("LR 				0x%llx\n", thread_state.__lr);
+		printf("SP 				0x%llx\n", thread_state.__sp);
+		printf("PC 				0x%llx\n", thread_state.__pc);
+		printf("CPSR 				0x%x\n", thread_state.__cpsr);
+
+		return CMD_SUCCESS;
+	}
+
+	// otherwise, print every register they asked for
+	char *tok = strtok((char *)args, " ");
+
+	while(tok){
+		if(tok[0] != 'x'){
+			tok = strtok(NULL, " ");
+			continue;
+		}
+
+		// move up one byte to get to the "register number"
+		tok++;
+		int reg_num = atoi(tok);
+		
+		if(reg_num < 0 || reg_num > 29){
+			tok = strtok(NULL, " ");
+			continue;
+		}
+
+		printf("X%d                 0x%llx\n", reg_num, thread_state.__x[reg_num]);
+
+		tok = strtok(NULL, " ");
+	}
+	
 	return CMD_SUCCESS;
 }
 
@@ -218,8 +275,25 @@ cmd_error_t cmdfunc_kill(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_help(const char *args, int arg1){
-	printf("\ncmdfunc_help, args = %s\n", args);
-	return CMD_SUCCESS;
+	// it does not make sense for the command to be autocompleted here
+	// so just search through the command table until we find the argument
+	int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
+	int cur_cmd_idx = 0;
+
+	while(cur_cmd_idx < num_cmds){
+		struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
+	
+		// must not be an ambigious command
+		if(strcmp(cmd->name, args) == 0 && cmd->function){
+			printf("	%s\n", cmd->desc);
+			return CMD_SUCCESS;
+		}
+
+		cur_cmd_idx++;
+	}
+	
+	// not found
+	return CMD_FAILURE;
 }
 
 cmd_error_t cmdfunc_quit(const char *args, int arg1){
@@ -235,6 +309,8 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 	return CMD_SUCCESS;
 }
 
+// Given user input, autocomplete their command and find the arguments.
+// If the command is valid, call the function pointer from the correct command struct.
 cmd_error_t execute_command(char *user_command){
 	int num_commands = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
 
@@ -244,7 +320,7 @@ cmd_error_t execute_command(char *user_command){
 
 	char *token = strtok(user_command_copy, " ");
 	if(!token)
-		return -1;
+		return CMD_FAILURE;
 
 	// this string will hold all the arguments for the command passed in
 	char *cmd_args = malloc(1024);
