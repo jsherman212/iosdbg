@@ -23,16 +23,17 @@ struct breakpoint *breakpoint_new(unsigned long long location){
 
 	bp->old_instruction = memutils_buffer_to_number((char *)orig_instruction, 0x4);
 	bp->hit_count = 0;
+	bp->disabled = 0;
 
 	return bp;
 }
 
 // Set a breakpoint at address.
-int breakpoint_at_address(unsigned long long address){
+bp_error_t breakpoint_at_address(unsigned long long address){
 	struct breakpoint *bp = breakpoint_new(address);
 
 	if(!bp)
-		return 1;
+		return BP_FAILURE;
 
 	// write BRK #1 to the address we're breakpointing at
 	memutils_write_memory_to_location(bp->location, BRK, 0x4);
@@ -42,7 +43,7 @@ int breakpoint_at_address(unsigned long long address){
 
 	printf("Breakpoint %d at 0x%llx\n", bp->id, bp->location);
 
-	return 0;
+	return BP_SUCCESS;
 }
 
 // I call this function when a breakpoint is hit.
@@ -55,10 +56,13 @@ void breakpoint_hit(struct breakpoint *bp){
 }
 
 // Deleting a breakpoint means restoring the original instruction.
-// Return: 0 if the breakpoint was found and deleted, 1 otherwise.
-int breakpoint_delete(int breakpoint_id){
+// Return: BP_SUCCESS if the breakpoint was found and deleted, BP_FAILURE otherwise.
+bp_error_t breakpoint_delete(int breakpoint_id){
 	if(!debuggee->breakpoints->front)
-		return 1;
+		return BP_FAILURE;
+
+	if(breakpoint_id == 0)
+		return BP_FAILURE;
 
 	struct node_t *current = debuggee->breakpoints->front;
 
@@ -71,13 +75,13 @@ int breakpoint_delete(int breakpoint_id){
 
 			printf("Breakpoint %d deleted\n", current_breakpoint->id);
 
-			return 0;
+			return BP_SUCCESS;
 		}
 
 		current = current->next;
 	}
 
-	return 1;
+	return BP_FAILURE;
 }
 
 // Delete every breakpoint

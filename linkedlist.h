@@ -1,13 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "defs.h"
 
+#pragma once
 struct node_t {
 	void *data;
 	struct node_t *next;
 };
 
+#pragma once
 struct linkedlist {
 	struct node_t *front;
 };

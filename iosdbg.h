@@ -1,33 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <signal.h>
-#include <unistd.h>
-#include <errno.h>
-#include <ctype.h>
-#include <pthread/pthread.h>
-#include <readline/readline.h>
-#include <readline/history.h>
-//#include "linenoise.h"
 #include "mach_exc.h"
-#include "linkedlist.h"
-#include "breakpoint.h"
-#include "memutils.h"
-#include "matchcmd.h"
-#include "defs.h"
+#include "dbgcmd.h" // Includes defs.h
 
-// Implemented in iosdbg.c
-void help();
-const char *get_exception_code(exception_type_t);
-void setup_initial_debuggee();
-int resume();
-int detach();
-void resume_threads();
-int suspend_threads();
-int attach(pid_t);
-void interrupt(int);
-int show_general_registers(int);
-int show_neon_register(char, int);
-void setup_exception_handling();
-int set_breakpoint(unsigned long long);
-int delete_breakpoint(int);
-pid_t pid_of_program(char *);
+/* Both unused. */
+kern_return_t catch_mach_exception_raise_state(mach_port_t exception_port, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
+kern_return_t catch_mach_exception_raise_state_identity(mach_port_t exception_port, mach_port_t thread, mach_port_t task, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}

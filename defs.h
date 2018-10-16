@@ -1,8 +1,25 @@
 /*
 Hold important definitions for things being used everywhere.
 */
+#ifndef _DEFS_H_
+#define _DEFS_H_
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <unistd.h>
+#include <ctype.h>
+#include <errno.h>
 #include <mach/mach.h>
+#include <pthread/pthread.h>
+#include <readline/readline.h>
+#include <readline/history.h>
+
+// General errors.
+typedef int gen_error_t;
+
+#define GEN_SUCCESS (gen_error_t)0;
+#define GEN_FAILURE (gen_error_t)1;
 
 #define MAX_EXCEPTION_PORTS 16
 
@@ -21,6 +38,9 @@ struct debuggee {
 
 	// PID of the debuggee.
 	pid_t pid;
+
+	// Port to notify us upon debuggee's termination.
+	mach_port_t death_port;
 
 	// Whether execution has been suspended or not.
 	int interrupted;
@@ -45,3 +65,5 @@ struct debuggee {
 };
 
 struct debuggee *debuggee;
+
+#endif
