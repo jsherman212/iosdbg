@@ -75,6 +75,12 @@ cmd_error_t cmdfunc_aslr(const char *args, int arg1){
 	return CMD_SUCCESS;
 }
 
+cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
+	
+
+	return CMD_SUCCESS;
+}
+
 cmd_error_t cmdfunc_break(const char *args, int arg1){
 	if(!args){
 		printf("Location?\n");
@@ -114,10 +120,15 @@ cmd_error_t cmdfunc_continue(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_delete(const char *args, int arg1){
+	if(!args){
+		printf("We need a breakpoint ID\n");
+		return CMD_FAILURE;
+	}
+	
 	int error = breakpoint_delete(atoi(args));
 
 	if(error){
-		printf("We need a breakpoint ID\n");
+		printf("Couldn't set breakpoint\n");
 		return CMD_FAILURE;
 	}
 
@@ -323,7 +334,8 @@ cmd_error_t execute_command(char *user_command){
 		return CMD_FAILURE;
 
 	// this string will hold all the arguments for the command passed in
-	char *cmd_args = malloc(1024);
+	// if it is still NULL by the time we exit the main loop, there were no commands
+	char *cmd_args = NULL;
 
 	char *piece = malloc(1024);
 	strcpy(piece, token);
@@ -350,10 +362,10 @@ cmd_error_t execute_command(char *user_command){
 		while(cur_cmd_idx < num_commands){
 			int use_prev_piece = prev_piece != NULL;
 			int piecelen = strlen(use_prev_piece ? prev_piece : piece);
-
-			// for when a command is shorter than another command
-			// and they're both ambiguous
-			if(cmd->function && strcmp(cmd->name, piece) == 0){
+			
+			// check if the command is an alias
+			// check when a command is shorter than another command
+			if((cmd->function && strcmp(cmd->name, piece) == 0) || (cmd->alias && strcmp(cmd->alias, user_command_copy) == 0)){
 				final_result = malloc(sizeof(struct cmd_match_result_t));
 
 				final_result->num_matches = 1;
@@ -483,6 +495,7 @@ cmd_error_t execute_command(char *user_command){
 		// once final_result->match is not NULL, we've found a match
 		// this means we can assume anything `token` contains is an argument
 		if(token && final_result && final_result->match){
+			cmd_args = malloc(1024);
 			strcat(cmd_args, token);
 			strcat(cmd_args, " ");
 		}
@@ -499,7 +512,7 @@ cmd_error_t execute_command(char *user_command){
 			printf("Ambigious command '%s': %s\n", user_command, final_result->matches);
 
 		// do the same with the cmd_args string
-		if(strlen(cmd_args) > 0)
+		if(cmd_args && strlen(cmd_args) > 0)
 			cmd_args[strlen(cmd_args) - 1] = '\0';
 
 		if(final_result->matched_cmd && final_result->matched_cmd->function)

@@ -28,13 +28,15 @@ struct cmd_match_result_t {
 };
 
 struct dbg_cmd_t {
-	char *name;
+	const char *name;
+	const char *alias;
 	Function *function;
-	char *desc;
+	const char *desc;
 };
 
 cmd_error_t cmdfunc_attach(const char *, int);
 cmd_error_t cmdfunc_aslr(const char *, int);
+cmd_error_t cmdfunc_backtrace(const char *, int);
 cmd_error_t cmdfunc_break(const char *, int);
 cmd_error_t cmdfunc_continue(const char *, int);
 cmd_error_t cmdfunc_delete(const char *, int);
@@ -47,19 +49,20 @@ cmd_error_t cmdfunc_regsgen(const char *, int);
 cmd_error_t cmdfunc_set(const char *, int);
 
 static struct dbg_cmd_t COMMANDS[] = {
-	{ "attach", cmdfunc_attach, "Attach to a program with its PID or executable name." },
-	{ "aslr", cmdfunc_aslr, "Show the ASLR slide." },
-	{ "break", cmdfunc_break, "Set a breakpoint." },
-	{ "continue", cmdfunc_continue, "Continue." },
-	{ "delete", cmdfunc_delete, "Delete a breakpoint via its ID. Specify no ID to delete all breakpoints." },
-	{ "detach", cmdfunc_detach, "Detach from the debuggee." },
-	{ "help", cmdfunc_help, "Get help for a specific command." },
-	{ "kill", cmdfunc_kill, "Kill the debuggee." },
-	{ "quit", cmdfunc_quit, "Quit iosdbg." },
-	{ "regs", NULL, NULL },
-	{ "regs float", cmdfunc_regsfloat, "Show a floating point register." },
-	{ "regs gen", cmdfunc_regsgen, "Show one or all general purpose registers." },
-	{ "set", cmdfunc_set, "Set" },
+	{ "attach", NULL, cmdfunc_attach, "Attach to a program with its PID or executable name." },
+	{ "aslr", NULL, cmdfunc_aslr, "Show the ASLR slide." },
+	{ "backtrace", "bt", cmdfunc_backtrace, "Unwind until we cannot unwind further." },
+	{ "break", "b", cmdfunc_break, "Set a breakpoint." },
+	{ "continue", "c", cmdfunc_continue, "Continue." },
+	{ "delete", "d", cmdfunc_delete, "Delete a breakpoint via its ID. Specify no ID to delete all breakpoints." },
+	{ "detach", NULL, cmdfunc_detach, "Detach from the debuggee." },
+	{ "help", NULL, cmdfunc_help, "Get help for a specific command." },
+	{ "kill", NULL, cmdfunc_kill, "Kill the debuggee." },
+	{ "quit", "q", cmdfunc_quit, "Quit iosdbg." },
+	{ "regs", NULL, NULL, NULL },
+	{ "regs float", NULL, cmdfunc_regsfloat, "Show a floating point register." },
+	{ "regs gen", NULL, cmdfunc_regsgen, "Show one or all general purpose registers." },
+	{ "set", NULL, cmdfunc_set, "Set" },
 };
 
 cmd_error_t execute_command(char *);
