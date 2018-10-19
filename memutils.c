@@ -23,8 +23,8 @@ unsigned long long CFSwapInt64(unsigned long long arg){
 }
 
 // This function reads memory from an address and places the data into buffer.
-kern_return_t memutils_read_memory_at_location(unsigned long long location, unsigned char *buffer, vm_size_t length){
-	return vm_read_overwrite(debuggee->task, location, length, (vm_address_t)buffer, &length);
+kern_return_t memutils_read_memory_at_location(void *location, void *buffer, vm_size_t length){
+	return vm_read_overwrite(debuggee->task, (vm_address_t)location, length, (vm_address_t)buffer, &length);
 }
 
 // This function writes data to location.
@@ -54,7 +54,6 @@ unsigned long long memutils_buffer_to_number(char *buffer, int length){
 	for(int i=0; i<length; i++){
 		// TODO don't malloc a byte allocate it on the stack
 		char *current_byte = malloc(1);
-
 		sprintf(current_byte, "%x", (unsigned char)buffer[i]);
 
 		// if we have a single digit hex, we need to put a zero in front of it
