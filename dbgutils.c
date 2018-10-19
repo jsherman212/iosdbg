@@ -12,8 +12,18 @@ pid_t pid_of_program(char *progname){
 		fprintf(mypidof, "#!/bin/sh\nps axc | awk \"{if (\\$5==\\\"%s\\\") print \\$1\\\",\\\"}\"|tr '\n' ' '", progname);
 		fflush(mypidof);
 		fclose(mypidof);
+		
+		pid_t chmod_pid;
+		char *chmod_argv[] = {"chmod", "+x", "temppidof", NULL};
 
-		system("chmod +x temppidof");
+		int chmod_status = posix_spawnp(&chmod_pid, "chmod", NULL, NULL, (char * const *)chmod_argv, NULL);
+
+		if(chmod_status){
+			printf("Couldn't spawn chmod?\n");
+			return -1;
+		}
+
+		waitpid(chmod_pid, &chmod_status, 0);
 
 		FILE *pidofreader = popen("./temppidof 2>&1", "r");
 
