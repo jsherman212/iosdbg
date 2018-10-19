@@ -76,7 +76,50 @@ cmd_error_t cmdfunc_aslr(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
+	// get SP register
+	arm_thread_state64_t thread_state;
+	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+
+	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+
+	if(err){
+		printf("cmdfunc_backtrace: thread_get_state failed: %s\n", mach_error_string(err));
+		return CMD_FAILURE;
+	}
+
+	// print frame 0, which is where we are currently at
+	printf("  * frame #0: 0x%llx\n", thread_state.__pc);
 	
+	// frame 1 is what is in LR
+	printf("     frame #1: 0x%llx\n", thread_state.__lr);
+
+	int frame_counter = 2;
+
+	// there's a linked list-like thing of frame pointers
+	// so we can unwind the stack by following this linked list
+	struct frame_t {
+		struct frame_t *next;
+		unsigned long long frame;
+	};
+
+	struct frame_t *current_frame = malloc(sizeof(struct frame_t));
+	err = memutils_read_memory_at_location((void *)thread_state.__fp, current_frame, sizeof(struct frame_t));
+	
+	if(err){
+		printf("Backtrace failed\n");
+		return CMD_FAILURE;
+	}
+
+	while(current_frame->next){
+		printf("     frame #%d: 0x%llx\n", frame_counter, current_frame->frame);
+
+		memutils_read_memory_at_location((void *)current_frame->next, (void *)current_frame, sizeof(struct frame_t));	
+		frame_counter++;
+	}
+
+	printf(" - cannot unwind past frame %d -\n", frame_counter);
+
+	free(current_frame);
 
 	return CMD_SUCCESS;
 }
@@ -411,7 +454,7 @@ cmd_error_t execute_command(char *user_command){
 					char *updated_piece = malloc(strlen(cmd->name) + 1 + 1);
 					
 					// find the end of the current word in the command
-					char *cmdname_copy = cmd->name;
+					char *cmdname_copy = (char *)cmd->name;
 
 					// advance to where piece leaves off
 					cmdname_copy += strlen(piece);
