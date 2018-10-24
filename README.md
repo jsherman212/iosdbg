@@ -90,6 +90,6 @@ Same as `regs gen` but shows a floating point register. Only supports single pre
 You can view what a command does with `help command`. However, most descriptions are incomplete. I'll touch up on them soon.
 
 ## Contributing
-Do not expect me to accept contributions. I learn the best when I am able to make mistakes and correct them, not by accepting someone else's solution or fix. I enjoy something the most when I figure it out and implement it myself. However, I am open to suggestions.
+While I may not accept contributions, I am open to suggestions.
 
-This is the first project I have used git and make with. My Makefile is the result of putting something together quickly. I plan to brush up on it soon.# iosdbg
+This is the first project I have used git and make with. My Makefile is the result of putting something together quickly. I plan to brush up on it soon.
