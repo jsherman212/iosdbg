@@ -7,7 +7,7 @@ A work in progress, native debugger built for jailbroken 64 bit iOS devices capa
 | iOS 7			| Unknown  |
 | iOS 8			| Unknown  |
 | iOS 9			| Yes	   |
-| iOS 10		| Unknown  |
+| iOS 10		| Yes	   |
 | iOS 11+		| Unknown  |
 
 ## Getting started
