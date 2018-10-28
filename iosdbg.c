@@ -23,7 +23,8 @@ int main(int argc, char **argv, const char **envp){
 			kern_return_t err = task_threads(debuggee->task, &debuggee->threads, &debuggee->thread_count);
 
 			if(err){
-				printf("we couldn't update the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
+				printf("We couldn't update the list of threads for %d: %s\nDetaching...\n", debuggee->pid, mach_error_string(err));
+				cmdfunc_detach(NULL, 1);
 				continue;
 			}
 		}

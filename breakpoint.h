@@ -32,7 +32,7 @@ typedef int bp_error_t;
 static int current_breakpoint_id = 1;
 
 // BRK #1
-static unsigned long long BRK = 0x200020D4;
+static const unsigned long long BRK = 0x200020D4;
 
 struct breakpoint *breakpoint_new(unsigned long long);
 bp_error_t breakpoint_at_address(unsigned long long);

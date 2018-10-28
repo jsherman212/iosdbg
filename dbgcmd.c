@@ -70,13 +70,19 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_aslr(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
 	printf("Debuggee ASLR slide: 0x%llx\n", debuggee->aslr_slide);
 	
 	return CMD_SUCCESS;
 }
 
 cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
-	// get SP register
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+	
+	// get FP register
 	arm_thread_state64_t thread_state;
 	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 
@@ -130,6 +136,9 @@ cmd_error_t cmdfunc_break(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
 	char *tok = strtok((char *)args, " ");
 
 	while(tok){
@@ -143,6 +152,9 @@ cmd_error_t cmdfunc_break(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_continue(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
 	if(!debuggee->interrupted)
 		return CMD_FAILURE;
 
@@ -168,9 +180,9 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 	
-	int error = breakpoint_delete(atoi(args));
+	bp_error_t error = breakpoint_delete(atoi(args));
 
-	if(error){
+	if(error == BP_FAILURE){
 		printf("Couldn't set breakpoint\n");
 		return CMD_FAILURE;
 	}
@@ -179,6 +191,9 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_detach(const char *args, int from_death){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
 	// delete all breakpoints on detach so the original instruction is written back to prevent a crash
 	// TODO: instead of deleting them, maybe disable all of them and if we are attached to the same thing again re-enable them?
 	breakpoint_delete_all();
@@ -214,7 +229,185 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	return CMD_SUCCESS;
 }
 
+cmd_error_t cmdfunc_examine(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
+	if(!args){
+		cmdfunc_help("examine", 0);
+		return CMD_FAILURE;
+	}
+
+	// first thing in the arguments will be the format
+	char *tok = strtok((char *)args, " ");
+
+	// first part of the argument should be as follows:
+	// <amount>/(optional size)<format>
+	// to get the amount, find the location of the '/'	
+	char *slash = strchr(tok, '/');
+
+	if(!slash){
+		printf("\t* Malformed argument\n\n");
+		cmdfunc_help("examine", 0);
+		return CMD_FAILURE;
+	}
+
+	char *amount_str = malloc(128);
+	strncpy(amount_str, tok, slash - tok);
+
+	// validate the amount given
+	// first, check if it's empty
+	if(strlen(amount_str) == 0){
+		printf("\t* No amount given\n\n");
+		cmdfunc_help("examine", 0);
+		return CMD_FAILURE;
+	}
+
+	// second, check if it's negative
+	if(strchr(amount_str, '-')){
+		printf("\t* Negative amount\n\n");
+		cmdfunc_help("examine", 0);
+		return CMD_FAILURE;
+	}
+	
+	int base = 10;
+
+	// if the user put '0x' before the amount,
+	// they want it to be interpreted as hex
+	char *zero_x = strstr(amount_str, "0x");
+	
+	if(zero_x){
+		// move up past the "0x"
+		amount_str += 2;
+		base = 16;
+	}
+
+	// third, check if it's a valid amount
+	for(char c=amount_str[0], i=0; c != '\0'; ){
+		if(base == 16 && !isxdigit(c)){
+			// bad character in hex amount string
+			printf("\t* Unexpected character in base 16 string\n\n");
+			cmdfunc_help("examine", 0);
+			return CMD_FAILURE;
+		}
+		else if(base == 10 && !isdigit(c)){
+			// bad character in base 10 amount string
+			printf("\t* Unexpected character in base 10 string\n\n");
+			cmdfunc_help("examine", 0);
+			return CMD_FAILURE;
+		}
+
+		c = amount_str[++i];
+	}
+
+	// if we ended up with a hexidecimal amount,
+	// go back to where we started so we can free this pointer
+	if(base == 16)
+		amount_str -= 2;
+	
+	long long amount = strtoull(amount_str, NULL, base);
+
+	free(amount_str);
+	
+	// now that we have the amount, get the format
+	// the `slash` variable contains the format
+	// it should be *max* two characters long
+	// to get it, advance slash by one byte
+	slash++;
+
+	char *format_str = malloc(64);
+	strcpy(format_str, slash);
+
+	// there should be max two format arguments
+	int format_len = strlen(format_str);
+
+	if(format_len <= 0 || format_len > 2){
+		printf("\t* Bad amount of format arguments\n\n");
+		cmdfunc_help("examine", 0);
+		return CMD_FAILURE;
+	}
+
+	// default size is 'w' (four byte word)
+	char size = 'w';
+	char format = '\0';
+
+	// only format was given, no size
+	if(format_len == 1)
+		format = format_str[0];
+
+	// a size and a format was given
+	// size will always be before the format
+	// and we've already done bounds checking
+	if(format_len == 2){
+		size = format_str[0];
+		format = format_str[1];
+	}
+
+	free(format_str);
+
+	// check for invalid format
+	if(format != 'i' && format != 'x'){
+		printf("\t* Bad format %c\n\n", format);
+		cmdfunc_help("examine", 0);
+		return CMD_FAILURE;
+	}
+
+	// check for invalid size
+	// only need to do this if format_len == 2
+	// because size will default to 'w' in that case
+	if(format_len == 2){
+		if(size != 'b' && size != 'h' && size != 'w' && size != 'g'){
+			printf("\t* Bad size %c\n\n", size);
+			cmdfunc_help("examine", 0);
+			return CMD_FAILURE;
+		}
+	}
+
+	// finally, print the memory the user asked for
+	// get the location
+	tok = strtok(NULL, " ");
+
+	if(!tok){
+		printf("\t* Missing location\n\n");
+		cmdfunc_help("examine", 0);
+		return CMD_FAILURE;
+	}
+	
+	// TODO allow for math for the location
+	void *location = strtoull(tok, NULL, 16);
+	
+	// again, assume the user didn't give a custom size
+	int real_size = 4;
+
+	if(size == 'b')
+		real_size = 1;
+	if(size == 'h')
+		real_size = 2;
+	if(size == 'g')
+		real_size = 8;
+
+	if(real_size > amount){
+		printf("\t* size > amount\n\n");
+		cmdfunc_help("examine", 0);
+		return CMD_FAILURE;
+	}
+	
+	if(format == 'i')
+		base = 10;
+	if(format == 'x')
+		base = 16;
+
+	printf("- ASLR has been accounted for -\n");
+
+	memutils_dump_memory_from_location(location + debuggee->aslr_slide, amount, real_size, base);
+
+	return CMD_SUCCESS;
+}
+
 cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
 	// Iterate through and show all the registers the user asked for
 	char *tok = strtok((char *)args, " ");
 
@@ -272,6 +465,9 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+	
 	arm_thread_state64_t thread_state;
 	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 
@@ -323,12 +519,17 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_kill(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
 	cmdfunc_detach(NULL, 0);
 	kill(debuggee->pid, SIGKILL);
 	return CMD_SUCCESS;
 }
 
 cmd_error_t cmdfunc_help(const char *args, int arg1){
+	if(!args)
+		return CMD_FAILURE;
 	// it does not make sense for the command to be autocompleted here
 	// so just search through the command table until we find the argument
 	int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
@@ -369,7 +570,7 @@ cmd_error_t execute_command(char *user_command){
 	int num_commands = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
 
 	// make a copy of the parameters so we don't modify them
-	char *user_command_copy = malloc(1024);
+	char *user_command_copy = malloc(128);
 	strcpy(user_command_copy, user_command);
 
 	char *token = strtok(user_command_copy, " ");
@@ -380,14 +581,14 @@ cmd_error_t execute_command(char *user_command){
 	// if it is still NULL by the time we exit the main loop, there were no commands
 	char *cmd_args = NULL;
 
-	char *piece = malloc(1024);
+	char *piece = malloc(128);
 	strcpy(piece, token);
 
 	struct cmd_match_result_t *current_result = malloc(sizeof(struct cmd_match_result_t));
 	current_result->num_matches = 0;
 	current_result->match = NULL;
 	current_result->matched_cmd = NULL;
-	current_result->matches = malloc(1024);
+	current_result->matches = malloc(256);
 	current_result->ambigious = 0;
 	current_result->perfect = 0;
 
@@ -412,7 +613,7 @@ cmd_error_t execute_command(char *user_command){
 				final_result = malloc(sizeof(struct cmd_match_result_t));
 
 				final_result->num_matches = 1;
-				final_result->match = malloc(1024);
+				final_result->match = malloc(64);
 				strcpy(final_result->match, cmd->name);
 				final_result->matches = NULL;
 				final_result->matched_cmd = cmd;
@@ -479,7 +680,7 @@ cmd_error_t execute_command(char *user_command){
 					// we need to check for ambiguity but we are modifing piece
 					// make a backup and use this in the strncmp call when it is not NULL
 					if(!prev_piece)
-						prev_piece = malloc(1024);
+						prev_piece = malloc(64);
 
 					strcpy(prev_piece, piece);
 					strcpy(piece, updated_piece);
@@ -487,7 +688,7 @@ cmd_error_t execute_command(char *user_command){
 					free(updated_piece);
 					
 					if(!current_result->match)
-						current_result->match = malloc(1024);
+						current_result->match = malloc(64);
 
 					strcpy(current_result->match, cmd->name);
 					strcpy(current_result->matches, current_result->match);
@@ -538,7 +739,8 @@ cmd_error_t execute_command(char *user_command){
 		// once final_result->match is not NULL, we've found a match
 		// this means we can assume anything `token` contains is an argument
 		if(token && final_result && final_result->match){
-			cmd_args = malloc(1024);
+			if(!cmd_args)
+				cmd_args = malloc(128);
 			strcat(cmd_args, token);
 			strcat(cmd_args, " ");
 		}
@@ -560,6 +762,9 @@ cmd_error_t execute_command(char *user_command){
 
 		if(final_result->matched_cmd && final_result->matched_cmd->function)
 			final_result->matched_cmd->function(cmd_args, 0);
+		
+		if(cmd_args)
+			free(cmd_args);
 	}
 	else
 		printf("Unknown command '%s'\n", user_command);

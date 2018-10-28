@@ -36,7 +36,7 @@ pid_t pid_of_program(char *progname){
 			// we don't need this anymore
 			remove("./temppidof");
 
-			char *finalpid = malloc(1024);
+			char *finalpid = malloc(64);
 
 			// count the number of commas
 			// if there's more than one comma, we have two instances of the same process
@@ -314,7 +314,7 @@ kern_return_t catch_mach_exception_raise(
 	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
 	// what to print out to the client when an exception is hit
-	char *exception_string = malloc(1024);
+	char *exception_string = malloc(256);
 
 	if(debuggee->breakpoints->front){
 		struct node_t *current = debuggee->breakpoints->front;

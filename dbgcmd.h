@@ -41,6 +41,7 @@ cmd_error_t cmdfunc_break(const char *, int);
 cmd_error_t cmdfunc_continue(const char *, int);
 cmd_error_t cmdfunc_delete(const char *, int);
 cmd_error_t cmdfunc_detach(const char *, int);
+cmd_error_t cmdfunc_examine(const char *, int);
 cmd_error_t cmdfunc_help(const char *, int);
 cmd_error_t cmdfunc_kill(const char *, int);
 cmd_error_t cmdfunc_quit(const char *, int);
@@ -56,6 +57,7 @@ static struct dbg_cmd_t COMMANDS[] = {
 	{ "continue", "c", cmdfunc_continue, "Continue." },
 	{ "delete", "d", cmdfunc_delete, "Delete a breakpoint via its ID. Specify no ID to delete all breakpoints." },
 	{ "detach", NULL, cmdfunc_detach, "Detach from the debuggee." },
+	{ "examine", "x", cmdfunc_examine, "Examine memory at a location. Syntax:\n\t  (examine|x) <amount>/(optional size)<format> <location>\n\tSizes:\n\t  b: bytes\n\t  h: halfwords (two bytes)\n\t  w: words (four bytes, default)\n\t  g: giant words (eight bytes)\n\tFormats:\n\t  i: integer\n\t  x: hexadecimal\n\tIf you want your amount interpreted as hex, use \'0x\'." },
 	{ "help", NULL, cmdfunc_help, "Get help for a specific command." },
 	{ "kill", NULL, cmdfunc_kill, "Kill the debuggee." },
 	{ "quit", "q", cmdfunc_quit, "Quit iosdbg." },

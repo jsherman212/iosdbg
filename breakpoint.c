@@ -19,7 +19,7 @@ struct breakpoint *breakpoint_new(unsigned long long location){
 	bp->location = location + debuggee->aslr_slide;
 	
 	unsigned char orig_instruction[0x4];
-	memutils_read_memory_at_location(bp->location, orig_instruction, 0x4);
+	memutils_read_memory_at_location((void *)bp->location, orig_instruction, 0x4);
 
 	bp->old_instruction = memutils_buffer_to_number((char *)orig_instruction, 0x4);
 	bp->hit_count = 0;
