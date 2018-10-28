@@ -80,7 +80,7 @@ void _print_dumped_memory(void *buffer, int bytes, int base, int two_column){
 		if(space)
 			memmove(space, space + 1, strlen(space));
 		
-		for(int i=0; i<hexlen; i+=2){
+		for(int i=0; i<hexlen - 1; i+=2){
 			// will every two bytes from the buffer
 			char char_str[3];
 			sprintf(char_str, "%c%c", fullhex[i], fullhex[i+1]);
