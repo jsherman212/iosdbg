@@ -13,7 +13,7 @@ A work in progress, native debugger built for jailbroken 64 bit iOS devices capa
 ## Getting started
 
 #### Theos
-Skip this step if it's already installed on your device. I have been using the iOS 9.3 SDK to build this project. If you use a different SDK, edit the Makefile.
+Skip this step if it's already installed on your device. I have been using the iOS 9.3 SDK and (currently) the iOS 11.2 SDK to build this project. If you use a different SDK, edit the Makefile.
 
 Theos is a cross-platform suite of tools capable of building iOS software without Xcode. Refer to this link for instructions on installing Theos on your jailbroken iOS device: https://github.com/theos/theos/wiki/Installation-iOS
 
@@ -38,7 +38,7 @@ You're set to compile iosdbg. SSH into your device as `root` and run these comma
 cd /var/mobile
 git clone https://github.com/jsherman212/iosdbg.git iosdbg
 cd iosdbg
-make -B
+make
 ldid -Sent.xml ./iosdbg
 chmod +x ./iosdbg
 ```
@@ -51,40 +51,62 @@ If all went well, you should be good to go. If you're below iOS 11, you can run 
 ## Commands
 My goal with this project is to have a reliable debugger with basic debugger functionality. Breakpoints, watchpoints (to come), and little conveniences like command completion and ASLR being automatically accounted for. Commands implemented in this commit are:
 
-`attach`
+### `attach`
 Attach to a program given its PID or executable name.
 
-`aslr`
-View the debuggee's ASLR slide. ASLR is automatically accounted for when setting breakpoints and viewing memory (a feature I'm still fixing up), so you do not need to add ASLR to every address you type.
+### `aslr`
+View the debuggee's ASLR slide. ASLR is automatically accounted for when setting breakpoints and viewing memory, so you do not need to add ASLR to every address you type.
 
-`backtrace` (alias: `bt`)
+### `backtrace` (alias: `bt`)
 Unwind the stack.
 
-`break` (alias: `b`)
+### `break` (alias: `b`)
 Set a breakpoint. Again, ASLR will be accounted for.
 
-`continue` (alias: `c`)
-Resume tthe debuggee's execution.
+### `continue` (alias: `c`)
+Resume the debuggee's execution.
 
-`delete <breakpoint ID>` (alias: `d`)
+### `delete <breakpoint ID>` (alias: `d`)
 Delete a breakpoint by specifing its ID.
 
-`detach`
+### `detach`
 Detach from the debuggee.
 
-`help <command name>`
+### `examine` (alias: `x`)
+
+Examine memory at a location. Syntax: `(examine|x) <amount>/(optional size)<format> <location>`
+	
+##### Sizes:
+
+`b`: bytes
+
+`h`: halfwords (two bytes)
+
+`w`: words (four bytes, default)
+
+`g`: giant words (eight bytes)
+	
+##### Formats:
+
+`i`: integer
+
+`x`: hexadecimal
+
+If you want your amount interpreted as hex, use `0x`.
+
+### `help <command name>`
 View command description. Does not autocomplete the argument.
 
-`kill`
+### `kill`
 Kill the debuggee.
 
-`quit` (alias: `q`)
+### `quit` (alias: `q`)
 Quit iosdbg.
 
-`regs gen <optional register arg0> ...`
+### `regs gen <optional register arg0> ...`
 Show general purpose registers. If no arguments are given, all of them are shown. If you only want to show specific ones, list them.
 
-`regs float <register arg0> ...`
+### `regs float <register arg0> ...`
 Same as `regs gen` but shows a floating point register. Only supports single precision registers (`S` registers) for now. The argument is not optional.
 
 You can view what a command does with `help command`. However, most descriptions are incomplete. I'll touch up on them soon.
@@ -92,4 +114,4 @@ You can view what a command does with `help command`. However, most descriptions
 ## Contributing
 While I may not accept contributions, I am open to suggestions.
 
-This is the first project I have used git and make with. My Makefile is the result of putting something together quickly. I plan to brush up on it soon.
+This is the first project I have used git and make with.
