@@ -42,7 +42,8 @@ kern_return_t memutils_write_memory_to_location(unsigned long long location, uns
 	return ret;
 }
 
-// return a neat string filled with the bytes from buffer
+// Return a neat string filled with the bytes from buffer
+// Caller is responsible for freeing it
 char *_format_dumped_memory(void *buffer, int length, int two_column){
 	char dump[length];
 	memset(dump, 0, length);
@@ -73,14 +74,13 @@ void _print_dumped_memory(void *buffer, int bytes, int base, int two_column){
 	else{
 		printf("%-20.20s", fullhex);
 		
-		int hexlen = strlen(fullhex);
-
 		// remove the space in fullhex now that we don't need it
 		char *space = strchr(fullhex, ' ');
 		if(space)
 			memmove(space, space + 1, strlen(space));
 		
-		for(int i=0; i<hexlen - 1; i+=2){
+		int hexlen = strlen(fullhex);		
+		for(int i=0; i<hexlen; i+=2){
 			// will every two bytes from the buffer
 			char char_str[3];
 			sprintf(char_str, "%c%c", fullhex[i], fullhex[i+1]);
@@ -101,7 +101,6 @@ void _print_dumped_memory(void *buffer, int bytes, int base, int two_column){
 }
 
 // This function takes a buffer of data and converts it to an unsigned long long.
-// Caller is responsible for freeing it
 unsigned long long memutils_buffer_to_number(void *buffer, int length){
 	if(!buffer)
 		return -1;
@@ -111,14 +110,13 @@ unsigned long long memutils_buffer_to_number(void *buffer, int length){
 	unsigned long long val;
 	sscanf(fullhex, "%llx", &val);
 	
+	free(fullhex);
+
 	return val;
 }
 
 // Dump memory
 void memutils_dump_memory_from_location(void *location, int amount, int bytes_per_line, int base){
-	if((location + debuggee->aslr_slide) < 0x100000000)
-		return;
-
 	int lines_to_print = amount / bytes_per_line;
 
 	// bytes_per_line may not divide into amount evenly

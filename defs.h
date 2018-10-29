@@ -1,6 +1,7 @@
 /*
 Hold important definitions for things being used everywhere.
 */
+
 #ifndef _DEFS_H_
 #define _DEFS_H_
 
@@ -18,8 +19,8 @@ Hold important definitions for things being used everywhere.
 // General errors.
 typedef int gen_error_t;
 
-#define GEN_SUCCESS (gen_error_t)0;
-#define GEN_FAILURE (gen_error_t)1;
+#define GEN_SUCCESS (gen_error_t)0
+#define GEN_FAILURE (gen_error_t)1
 
 #define MAX_EXCEPTION_PORTS 16
 

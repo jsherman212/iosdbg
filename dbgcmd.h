@@ -1,12 +1,6 @@
 #ifndef _DBGCMD_H_
 #define _DBGCMD_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <pthread/pthread.h>
-#include <readline/readline.h>
-#include <mach/mach.h>
 #include "breakpoint.h"
 #include "dbgutils.h"
 #include "defs.h"
@@ -49,6 +43,8 @@ cmd_error_t cmdfunc_regsfloat(const char *, int);
 cmd_error_t cmdfunc_regsgen(const char *, int);
 cmd_error_t cmdfunc_set(const char *, int);
 
+cmd_error_t execute_command(char *);
+
 static struct dbg_cmd_t COMMANDS[] = {
 	{ "attach", NULL, cmdfunc_attach, "Attach to a program with its PID or executable name." },
 	{ "aslr", NULL, cmdfunc_aslr, "Show the ASLR slide." },
@@ -66,7 +62,5 @@ static struct dbg_cmd_t COMMANDS[] = {
 	{ "regs gen", NULL, cmdfunc_regsgen, "Show one or all general purpose registers." },
 	{ "set", NULL, cmdfunc_set, "Set" },
 };
-
-cmd_error_t execute_command(char *);
 
 #endif

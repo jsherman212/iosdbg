@@ -8,6 +8,11 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	if(debuggee->pid != -1)
 		return CMD_FAILURE;
 
+	if(!args){
+		cmdfunc_help("attach", 0);
+		return CMD_FAILURE;
+	}
+
 	pid_t pid = pid_of_program((char *)args);
 
 	if(pid == -1)
@@ -374,7 +379,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 	}
 	
 	// TODO allow for math for the location
-	void *location = strtoull(tok, NULL, 16);
+	unsigned long long location = strtoull(tok, NULL, 16);
 	
 	// again, assume the user didn't give a custom size
 	int real_size = 4;
@@ -399,7 +404,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 
 	printf("- ASLR has been accounted for -\n");
 
-	memutils_dump_memory_from_location(location + debuggee->aslr_slide, amount, real_size, base);
+	memutils_dump_memory_from_location((void *)(location + debuggee->aslr_slide), amount, real_size, base);
 
 	return CMD_SUCCESS;
 }
@@ -439,12 +444,13 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 			// TODO figure this out...
 			// print each byte in this 128 bit integer (16)
 		
-			unsigned long long upper = neon_state.__v[reg_num] << 64;
-			unsigned long long lower  = neon_state.__v[reg_num];
+			//void *upper = neon_state.__v[reg_num] >> 64;
+			//void *lower = neon_state.__v[reg_num] << 64;
 			
-			
+			//memutils_dump_memory_from_location(upper, 8, 8, 16);
+			//memutils_dump_memory_from_location(lower, 8, 8, 16);	
 
-			printf("%llx %llx\n", upper, lower);
+		//	printf("%llx %llx\n", upper, lower);
 
 		}
 		else if(reg_type == 'd'){
@@ -481,7 +487,8 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 	// if there were no arguments, print every register
 	if(!args){
 		for(int i=0; i<29; i++)
-			printf("X%d                 0x%llx\n", i, thread_state.__x[i]);
+			printf("X%d0x%20llx\n", i, thread_state.__x[i]);
+			//printf("X%d%#*llx\n", i, 20, thread_state.__x[i]);
 		
 		printf("FP 				0x%llx\n", thread_state.__fp);
 		printf("LR 				0x%llx\n", thread_state.__lr);

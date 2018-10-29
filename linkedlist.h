@@ -1,6 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
+#ifndef _LINKEDLIST_H_
+#define _LINKEDLIST_H_
+
+#include "defs.h"
 
 #pragma once
 struct node_t {
@@ -19,3 +20,5 @@ void linkedlist_add(struct linkedlist *, void *);
 void linkedlist_delete(struct linkedlist *, void *);
 void linkedlist_print(struct linkedlist *);
 void linkedlist_free(struct linkedlist *);
+
+#endif

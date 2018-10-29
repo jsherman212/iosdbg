@@ -1,10 +1,6 @@
 #ifndef _MEMUTILS_H_
 #define _MEMUTILS_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <mach/mach.h>
 #include "defs.h"
 
 kern_return_t memutils_read_memory_at_location(void *, void *, vm_size_t);
