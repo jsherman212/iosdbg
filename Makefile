@@ -1,6 +1,54 @@
+SDK=/var/theos/sdks/iPhoneOS11.2.sdk
 CC=clang
-CFLAGS=-arch arm64 -isysroot /var/theos/sdks/iPhoneOS9.3.sdk
+CFLAGS=-g -arch arm64 -isysroot $(SDK)
 LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses
 
-iosdbg:
-	$(CC) $(CFLAGS) linkedlist.c breakpoint.c memutils.c dbgcmd.c dbgutils.c iosdbg.c mach_excUser.c mach_excServer.c $(LDFLAGS) -o iosdbg	
+SOURCE_FILES = \
+	breakpoint.c \
+	dbgcmd.c \
+	dbgutils.c \
+	iosdbg.c \
+	linkedlist.c \
+	mach_excUser.c \
+	mach_excServer.c \
+	memutils.c
+
+OBJECT_FILES = \
+	breakpoint.o \
+	dbgcmd.o \
+	dbgutils.o \
+	iosdbg.o \
+	linkedlist.o \
+	mach_excUser.o \
+	mach_excServer.o \
+	memutils.o
+
+iosdbg : breakpoint.o dbgcmd.o dbgutils.o iosdbg.o linkedlist.o mach_excUser.o mach_excServer.o memutils.o
+	$(CC) -isysroot $(SDK) $(OBJECT_FILES) $(LDFLAGS) -o iosdbg
+
+breakpoint.o : breakpoint.c breakpoint.h
+	$(CC) $(CFLAGS) -c breakpoint.c
+
+dbgcmd.o : dbgcmd.c dbgcmd.h
+	$(CC) $(CFLAGS) -c dbgcmd.c
+
+dbgutils.o : dbgutils.c dbgutils.h
+	$(CC) $(CFLAGS) -c dbgutils.c
+
+iosdbg.o : iosdbg.c iosdbg.h
+	$(CC) $(CFLAGS) -c iosdbg.c
+
+linkedlist.o : linkedlist.c linkedlist.h
+	$(CC) $(CFLAGS) -c linkedlist.c
+
+mach_excServer.o : mach_excServer.c
+	$(CC) $(CFLAGS) -c mach_excServer.c
+
+mach_excUser.o : mach_excUser.c mach_exc.h
+	$(CC) $(CFLAGS) -c mach_excUser.c
+
+memutils.o : memutils.c memutils.h
+	$(CC) $(CFLAGS) -c memutils.c
+
+clean :
+	rm iosdbg $(OBJECT_FILES)
