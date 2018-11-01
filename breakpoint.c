@@ -18,10 +18,12 @@ struct breakpoint *breakpoint_new(unsigned long long location){
 	bp->id = current_breakpoint_id++;
 	bp->location = location + debuggee->aslr_slide;
 	
-	unsigned char orig_instruction[0x4];
-	memutils_read_memory_at_location((void *)bp->location, orig_instruction, 0x4);
+	int sz = 0x4;
 
-	bp->old_instruction = memutils_buffer_to_number((char *)orig_instruction, 0x4);
+	unsigned char orig_instruction[sz];
+	memutils_read_memory_at_location((void *)bp->location, orig_instruction, sz);
+
+	bp->old_instruction = memutils_buffer_to_number((char *)orig_instruction, sz);
 	bp->hit_count = 0;
 	bp->disabled = 0;
 
@@ -41,7 +43,7 @@ bp_error_t breakpoint_at_address(unsigned long long address){
 	// add this breakpoint to the debuggee's linked list of breakpoints
 	linkedlist_add(debuggee->breakpoints, bp);
 
-	printf("Breakpoint %d at 0x%llx\n", bp->id, bp->location);
+	printf("Breakpoint %d at %#llx\n", bp->id, bp->location);
 
 	return BP_SUCCESS;
 }

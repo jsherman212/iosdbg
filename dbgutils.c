@@ -284,7 +284,7 @@ void interrupt(int x1){
 
 	int result = suspend_threads();
 
-	if(result != 0){
+	if(result){
 		printf("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
 		debuggee->interrupted = 0;
 
@@ -314,8 +314,6 @@ kern_return_t catch_mach_exception_raise(
 	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
 	// what to print out to the client when an exception is hit
-	char *exception_string = malloc(256);
-
 	if(debuggee->breakpoints->front){
 		struct node_t *current = debuggee->breakpoints->front;
 
@@ -327,10 +325,7 @@ kern_return_t catch_mach_exception_raise(
 
 				breakpoint_hit(hit);
 
-				sprintf(exception_string, "\n * Thread %x: breakpoint %d at 0x%llx hit %d time(s). 0x%llx in debuggee.", thread, hit->id, hit->location, hit->hit_count, thread_state.__pc);
-				printf("%s\n", exception_string);
-
-				free(exception_string);
+				printf("\n * Thread %#x: breakpoint %d at %#llx hit %d time(s). %#llx in debuggee.", thread, hit->id, hit->location, hit->hit_count, thread_state.__pc);
 
 				return KERN_SUCCESS;
 			}
@@ -339,10 +334,7 @@ kern_return_t catch_mach_exception_raise(
 		}
 	}
 
-	sprintf(exception_string, "\n * Thread %x received signal %d, %s. 0x%llx in debuggee.", thread, exception, get_exception_code(exception), thread_state.__pc);
-	printf("%s\n", exception_string);
-
-	free(exception_string);
+	printf("\n * Thread %#x received signal %d, %s. %#llx in debuggee.", thread, exception, get_exception_code(exception), thread_state.__pc);
 
 	return KERN_SUCCESS;
 }

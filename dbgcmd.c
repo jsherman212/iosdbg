@@ -242,7 +242,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		cmdfunc_help("examine", 0);
 		return CMD_FAILURE;
 	}
-
+	
 	// first thing in the arguments will be the format
 	char *tok = strtok((char *)args, " ");
 
@@ -361,7 +361,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 	// only need to do this if format_len == 2
 	// because size will default to 'w' in that case
 	if(format_len == 2){
-		if(size != 'b' && size != 'h' && size != 'w' && size != 'g'){
+		if(size != 'b' && size != 'h' && size != 'w' && size != 'g' && size != 'a'){
 			printf("\t* Bad size %c\n\n", size);
 			cmdfunc_help("examine", 0);
 			return CMD_FAILURE;
@@ -390,6 +390,8 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		real_size = 2;
 	if(size == 'g')
 		real_size = 8;
+	if(size == 'a')
+		real_size = 16;
 
 	if(real_size > amount){
 		printf("\t* size > amount\n\n");
@@ -402,8 +404,14 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 	if(format == 'x')
 		base = 16;
 
-	printf("- ASLR has been accounted for -\n");
+	// check if the user passed --no-aslr
+	tok = strtok(NULL, " ");
 
+	if(tok && strcmp(tok, "--no-aslr") == 0){
+		memutils_dump_memory_from_location((void *)location, amount, real_size, base);
+		return CMD_SUCCESS;
+	}
+	
 	memutils_dump_memory_from_location((void *)(location + debuggee->aslr_slide), amount, real_size, base);
 
 	return CMD_SUCCESS;
@@ -412,6 +420,11 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
+
+	if(!args){
+		printf("Register?\n");
+		return CMD_FAILURE;
+	}
 
 	// Iterate through and show all the registers the user asked for
 	char *tok = strtok((char *)args, " ");
@@ -461,7 +474,7 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 		else if(reg_type == 's'){
 			// S registers, bottom 32 bits of each Q register
 			IF.i = neon_state.__v[reg_num] & 0xFFFFFFFF;
-			printf("S%d 				%f (0x%x)\n", reg_num, IF.f, IF.i);
+			printf("S%d\t\t\t%f (0x%x)\n", reg_num, IF.f, IF.i);
 		}
 	
 		tok = strtok(NULL, " ");
@@ -480,21 +493,20 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
 	if(err){
-		printf("show_general_registers: thread_get_state failed: %s\n", mach_error_string(err));
+		printf("Failed\n");
 		return CMD_FAILURE;
 	}
 	
 	// if there were no arguments, print every register
 	if(!args){
 		for(int i=0; i<29; i++)
-			printf("X%d0x%20llx\n", i, thread_state.__x[i]);
-			//printf("X%d%#*llx\n", i, 20, thread_state.__x[i]);
+			printf("X%d\t\t\t%#llx\n", i, thread_state.__x[i]);
 		
-		printf("FP 				0x%llx\n", thread_state.__fp);
-		printf("LR 				0x%llx\n", thread_state.__lr);
-		printf("SP 				0x%llx\n", thread_state.__sp);
-		printf("PC 				0x%llx\n", thread_state.__pc);
-		printf("CPSR 				0x%x\n", thread_state.__cpsr);
+		printf("FP\t\t\t%#llx\n", thread_state.__fp);
+		printf("LR\t\t\t%#llx\n", thread_state.__lr);
+		printf("SP\t\t\t%#llx\n", thread_state.__sp);
+		printf("PC\t\t\t%#llx\n", thread_state.__pc);
+		printf("CPSR\t\t\t%#x\n", thread_state.__cpsr);
 
 		return CMD_SUCCESS;
 	}
@@ -517,7 +529,7 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 			continue;
 		}
 
-		printf("X%d                 0x%llx\n", reg_num, thread_state.__x[reg_num]);
+		printf("X%d\t\t\t%#llx\n", reg_num, thread_state.__x[reg_num]);
 
 		tok = strtok(NULL, " ");
 	}
@@ -537,6 +549,7 @@ cmd_error_t cmdfunc_kill(const char *args, int arg1){
 cmd_error_t cmdfunc_help(const char *args, int arg1){
 	if(!args)
 		return CMD_FAILURE;
+	
 	// it does not make sense for the command to be autocompleted here
 	// so just search through the command table until we find the argument
 	int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
@@ -567,7 +580,13 @@ cmd_error_t cmdfunc_quit(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_set(const char *args, int arg1){
-	printf("\nTODO\n");
+	if(!args){
+		cmdfunc_help("set", 0);
+		return CMD_FAILURE;
+	}
+
+		
+	
 	return CMD_SUCCESS;
 }
 

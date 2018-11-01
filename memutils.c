@@ -44,17 +44,26 @@ kern_return_t memutils_write_memory_to_location(unsigned long long location, uns
 
 // Return a neat string filled with the bytes from buffer
 // Caller is responsible for freeing it
-char *_format_dumped_memory(void *buffer, int length, int two_column){
-	char dump[length];
+char *_format_dumped_memory(void *buffer, int length, int extra_padding, int two_column, int split_point){
+	// (length * 2) compensates for single digit bytes being represented as two digits (added leading 0)
+	// + length compensates for the spaces we're adding
+	// extra_padding accounts for spaces we may need to add
+	char dump[(length * 2) + length + extra_padding];
 	memset(dump, 0, length);
 	
-	for(int i=0; i<length; i++){
-		// when the user wants eight bytes in one line
-		// split it down the middle so it looks better
-		if(two_column && i == 4)
+	if(extra_padding == 0){
+		for(int i=0; i<length; i++){
+			sprintf(dump, "%s%02x", dump, *(unsigned char *)(buffer + i));
 			strcat(dump, " ");
+		}
+	}
+	else{
+		int remaining_bytes = length - extra_padding;
+		for(int i=0; i<remaining_bytes; i++)
+			sprintf(dump, "%s%02x ", dump, *(unsigned char *)(buffer + i));
 
-		sprintf(dump, "%s%02x", dump, *(unsigned char *)(buffer + i));
+		for(int i=0; i<extra_padding; i++)
+			sprintf(dump, "%s   ", dump);
 	}
 	
 	return strdup(dump);
@@ -62,8 +71,8 @@ char *_format_dumped_memory(void *buffer, int length, int two_column){
 
 // Helper function to print memory given a buffer,
 // the amount of bytes to print, and what base to print them in.
-void _print_dumped_memory(void *buffer, int bytes, int base, int two_column){
-	char *fullhex = _format_dumped_memory(buffer, bytes, two_column);
+void _print_dumped_memory(void *buffer, int bytes, int extra_padding, int base, int two_column, int split_point){
+	char *fullhex = _format_dumped_memory(buffer, bytes, extra_padding, two_column, split_point);
 
 	if(base == 10){
 		// "convert" to base 10
@@ -72,11 +81,11 @@ void _print_dumped_memory(void *buffer, int bytes, int base, int two_column){
 		printf("%llu", base10);
 	}
 	else{
-		printf("%-20.20s", fullhex);
-		
-		// remove the space in fullhex now that we don't need it
-		char *space = strchr(fullhex, ' ');
-		if(space)
+		printf("%s", fullhex);
+
+		// remove all spaces in fullhex
+		char *space = NULL;
+		while((space = strchr(fullhex, ' ')) != NULL)
 			memmove(space, space + 1, strlen(space));
 		
 		int hexlen = strlen(fullhex);		
@@ -91,9 +100,9 @@ void _print_dumped_memory(void *buffer, int bytes, int base, int two_column){
 			
 			// check if this character is printable
 			if(isgraph(char_to_print))
-				printf("%c ", char_to_print);
+				printf("%c", char_to_print);
 			else
-				printf(". ");
+				printf(".");
 		}
 	}
 
@@ -105,7 +114,7 @@ unsigned long long memutils_buffer_to_number(void *buffer, int length){
 	if(!buffer)
 		return -1;
 	
-	char *fullhex = _format_dumped_memory(buffer, length, 0);
+	char *fullhex = _format_dumped_memory(buffer, length, 0, 0, 0);
 
 	unsigned long long val;
 	sscanf(fullhex, "%llx", &val);
@@ -136,8 +145,9 @@ void memutils_dump_memory_from_location(void *location, int amount, int bytes_pe
 		int cur_byte = 0;
 		
 		while(cur_byte < bytes_per_line){
-			int two_columns = bytes_per_line == 8 && base == 16;
-			_print_dumped_memory((void *)membuffer, bytes_per_line, base, two_columns);	
+			int two_columns = (bytes_per_line == 8 || bytes_per_line == 32) && base == 16;
+			int split_point = bytes_per_line == 8 ? 4 : 8;
+			_print_dumped_memory((void *)membuffer, bytes_per_line, 0, base, two_columns, split_point);
 			cur_byte += bytes_per_line;
 		}
 
@@ -152,8 +162,12 @@ void memutils_dump_memory_from_location(void *location, int amount, int bytes_pe
 		
 		printf(" 0x%llx: ", (unsigned long long)location);
 				
-		int two_columns = bytes_per_line == 8 && base == 16;
-		_print_dumped_memory((void *)membuffer, extra_bytes_to_print, base, two_columns);
+		int two_columns = (bytes_per_line == 8 || bytes_per_line == 16) && base == 16;
+		int split_point = bytes_per_line == 8 ? 4 : 8;
+		
+		int extra_padding = bytes_per_line - extra_bytes_to_print;
+		
+		_print_dumped_memory((void *)membuffer, bytes_per_line/*extra_bytes_to_print*/, extra_padding, base, two_columns, split_point);
 		
 		printf("\n");
 	}
