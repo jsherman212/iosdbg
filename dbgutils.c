@@ -276,7 +276,7 @@ void interrupt(int x1){
 	kern_return_t err = task_suspend(debuggee->task);
 
 	if(err){
-		printf("cannot interrupt: %s\n", mach_error_string(err));
+		printf("Cannot interrupt: %s\n", mach_error_string(err));
 		debuggee->interrupted = 0;
 
 		return;
@@ -285,13 +285,18 @@ void interrupt(int x1){
 	int result = suspend_threads();
 
 	if(result){
-		printf("couldn't suspend threads for %d during interrupt\n", debuggee->pid);
+		printf("Couldn't suspend threads for %d during interrupt\n", debuggee->pid);
 		debuggee->interrupted = 0;
 
 		return;
 	}
 
 	debuggee->interrupted = 1;
+
+	printf("\n%d suspended\n", debuggee->pid);
+	
+	// fake iosdbg prompt
+	printf("(iosdbg) ");
 }
 
 // Exceptions are caught here
@@ -325,7 +330,7 @@ kern_return_t catch_mach_exception_raise(
 
 				breakpoint_hit(hit);
 
-				printf("\n * Thread %#x: breakpoint %d at %#llx hit %d time(s). %#llx in debuggee.", thread, hit->id, hit->location, hit->hit_count, thread_state.__pc);
+				printf("\n * Thread %#x: breakpoint %d at %#llx hit %d time(s). %#llx in debuggee.\n", thread, hit->id, hit->location, hit->hit_count, thread_state.__pc);
 
 				return KERN_SUCCESS;
 			}
@@ -334,7 +339,7 @@ kern_return_t catch_mach_exception_raise(
 		}
 	}
 
-	printf("\n * Thread %#x received signal %d, %s. %#llx in debuggee.", thread, exception, get_exception_code(exception), thread_state.__pc);
+	printf("\n * Thread %#x received signal %d, %s. %#llx in debuggee.\n", thread, exception, get_exception_code(exception), thread_state.__pc);
 
 	return KERN_SUCCESS;
 }

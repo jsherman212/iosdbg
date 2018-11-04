@@ -23,22 +23,44 @@ unsigned long long CFSwapInt64(unsigned long long arg){
 }
 
 // This function reads memory from an address and places the data into buffer.
+// Before writing this data back call CFSwapInt32 on it
 kern_return_t memutils_read_memory_at_location(void *location, void *buffer, vm_size_t length){
 	return vm_read_overwrite(debuggee->task, (vm_address_t)location, length, (vm_address_t)buffer, &length);
 }
 
 // This function writes data to location.
 // Data is automatically put into little endian before writing to location.
-kern_return_t memutils_write_memory_to_location(unsigned long long location, unsigned long long data, vm_size_t size){
+kern_return_t memutils_write_memory_to_location(vm_address_t location, vm_offset_t data){
 	kern_return_t ret;
 
-	// put instruction hex into little endian for the machine to understand
-	data = CFSwapInt32(data);
+	// get old protections and figure out whether the location we're writing to exists
+	vm_region_basic_info_data_64_t info;
+	// we don't want to modify the real location...
+	vm_address_t region_location = location;
+	vm_size_t region_size;
+	mach_port_t object_name;
+	mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
+	
+	ret = vm_region_64(debuggee->task, &region_location, &region_size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
+	
+	if(ret)
+		return ret;
+	
+	int size = 0;
+	vm_offset_t data_copy = data;
 
+	do{
+		data_copy >>= 8;
+		size++;
+	}while(data_copy != 0);
+	
+	// get raw bytes from this number	
+	void *data_ptr = (uint8_t *)&data;
+	
 	vm_protect(debuggee->task, location, size, 0, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
-	ret = vm_write(debuggee->task, location, (vm_offset_t)&data, size);
-	vm_protect(debuggee->task, location, size, 0, VM_PROT_READ | VM_PROT_EXECUTE);
-
+	ret = vm_write(debuggee->task, location, (pointer_t)data_ptr, size);
+	vm_protect(debuggee->task, location, size, 0, info.protection);
+	
 	return ret;
 }
 
@@ -116,6 +138,13 @@ unsigned long long memutils_buffer_to_number(void *buffer, int length){
 	
 	char *fullhex = _format_dumped_memory(buffer, length, 0, 0, 0);
 
+	// remove all spaces in fullhex
+	char *space = NULL;
+	while((space = strchr(fullhex, ' ')) != NULL)
+		memmove(space, space + 1, strlen(space));
+
+	
+	printf("Fullhex: %s|\n", fullhex);
 	unsigned long long val;
 	sscanf(fullhex, "%llx", &val);
 	
@@ -167,7 +196,7 @@ void memutils_dump_memory_from_location(void *location, int amount, int bytes_pe
 		
 		int extra_padding = bytes_per_line - extra_bytes_to_print;
 		
-		_print_dumped_memory((void *)membuffer, bytes_per_line/*extra_bytes_to_print*/, extra_padding, base, two_columns, split_point);
+		_print_dumped_memory((void *)membuffer, bytes_per_line, extra_padding, base, two_columns, split_point);
 		
 		printf("\n");
 	}

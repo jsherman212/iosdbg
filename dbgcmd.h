@@ -53,14 +53,14 @@ static struct dbg_cmd_t COMMANDS[] = {
 	{ "continue", "c", cmdfunc_continue, "Continue." },
 	{ "delete", "d", cmdfunc_delete, "Delete a breakpoint via its ID. Specify no ID to delete all breakpoints." },
 	{ "detach", NULL, cmdfunc_detach, "Detach from the debuggee." },
-	{ "examine", "x", cmdfunc_examine, "Examine memory at a location. Syntax:\n\t  (examine|x) <amount>/(optional size)<format> <location>\n\tSizes:\n\t  b: bytes\n\t  h: halfwords (two bytes)\n\t  w: words (four bytes, default)\n\t  g: giant words (eight bytes)\n\tFormats:\n\t  i: integer\n\t  x: hexadecimal\n\tIf you want your amount interpreted as hex, use \'0x\'." },
+	{ "examine", "x", cmdfunc_examine, "Examine memory at a location. Syntax:\n\t  (examine|x) <amount>/(optional size)<format> <location>\n\tSizes:\n\t  b: bytes\n\t  h: halfwords (two bytes)\n\t  w: words (four bytes, default)\n\t  g: giant words (eight bytes)\n\t  e: enormous word (16 bytes per line)\n\tFormats:\n\t  i: integer\n\t  x: hexadecimal\n\n\tIf you want your amount interpreted as hex, use '0x'.\n\tPass --no-aslr to prevent ASLR from being added." },
 	{ "help", NULL, cmdfunc_help, "Get help for a specific command." },
 	{ "kill", NULL, cmdfunc_kill, "Kill the debuggee." },
 	{ "quit", "q", cmdfunc_quit, "Quit iosdbg." },
 	{ "regs", NULL, NULL, NULL },
 	{ "regs float", NULL, cmdfunc_regsfloat, "Show a floating point register." },
 	{ "regs gen", NULL, cmdfunc_regsgen, "Show one or all general purpose registers." },
-	{ "set", NULL, cmdfunc_set, "Set" },
+	{ "set", NULL, cmdfunc_set, "Set the value of memory or a configuration variable for the debugger. Syntax:\n\tset (*offset|variable)=value\n\n\tYou must prefix an offset with '*'.\n\n\tIf you want your value to be intepreted as hex, use '0x'.\n\n\tPass --no-aslr to prevent ASLR from being added." },
 };
 
 #endif

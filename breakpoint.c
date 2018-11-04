@@ -19,11 +19,14 @@ struct breakpoint *breakpoint_new(unsigned long long location){
 	bp->location = location + debuggee->aslr_slide;
 	
 	int sz = 0x4;
-
-	unsigned char orig_instruction[sz];
+	
+	void *orig_instruction = malloc(sz);
 	memutils_read_memory_at_location((void *)bp->location, orig_instruction, sz);
 
-	bp->old_instruction = memutils_buffer_to_number((char *)orig_instruction, sz);
+	bp->old_instruction = CFSwapInt32(memutils_buffer_to_number(orig_instruction, sz));
+	
+	free(orig_instruction);
+	
 	bp->hit_count = 0;
 	bp->disabled = 0;
 
@@ -38,7 +41,7 @@ bp_error_t breakpoint_at_address(unsigned long long address){
 		return BP_FAILURE;
 
 	// write BRK #1 to the address we're breakpointing at
-	memutils_write_memory_to_location(bp->location, BRK, 0x4);
+	memutils_write_memory_to_location(bp->location, BRK);
 
 	// add this breakpoint to the debuggee's linked list of breakpoints
 	linkedlist_add(debuggee->breakpoints, bp);
@@ -72,7 +75,7 @@ bp_error_t breakpoint_delete(int breakpoint_id){
 		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
 
 		if(current_breakpoint->id == breakpoint_id){
-			memutils_write_memory_to_location(current_breakpoint->location, current_breakpoint->old_instruction, 0x4);
+			memutils_write_memory_to_location(current_breakpoint->location, current_breakpoint->old_instruction);
 			linkedlist_delete(debuggee->breakpoints, current_breakpoint);
 
 			printf("Breakpoint %d deleted\n", current_breakpoint->id);

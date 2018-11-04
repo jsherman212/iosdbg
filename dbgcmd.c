@@ -361,7 +361,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 	// only need to do this if format_len == 2
 	// because size will default to 'w' in that case
 	if(format_len == 2){
-		if(size != 'b' && size != 'h' && size != 'w' && size != 'g' && size != 'a'){
+		if(size != 'b' && size != 'h' && size != 'w' && size != 'g' && size != 'e'){
 			printf("\t* Bad size %c\n\n", size);
 			cmdfunc_help("examine", 0);
 			return CMD_FAILURE;
@@ -390,7 +390,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		real_size = 2;
 	if(size == 'g')
 		real_size = 8;
-	if(size == 'a')
+	if(size == 'e')
 		real_size = 16;
 
 	if(real_size > amount){
@@ -584,8 +584,74 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 		cmdfunc_help("set", 0);
 		return CMD_FAILURE;
 	}
+	
+	// check for offset
+	if(args[0] == '*'){
+		// move past the '*'
+		args++;
+		args = strtok(args, " ");
+	
+		// get the location, an equals sign follows it
+		char *location_str = malloc(64);
+		char *equals = strchr(args, '=');
 
+		if(!equals){
+			printf("\t * No new value\n\n");
+			cmdfunc_help("set", 0);
+			return CMD_FAILURE;
+		}
+
+		strncpy(location_str, args, equals - args);
+
+		char *zero_x = strstr(location_str, "0x");
+		if(!zero_x){
+			printf("\t * Need '0x' before location\n\n");
+			cmdfunc_help("set", 0);
+			return CMD_FAILURE;
+		}
+
+		// TODO allow math on the location and the value
+
+		int base = 16;
+		unsigned long long location = strtoll(location_str, NULL, base);
+
+		// find out what they want the location set to
+		char *value_str = malloc(64);
+
+		// equals + 1 to get past the actual equals sign
+		strcpy(value_str, equals + 1);
 		
+		if(strlen(value_str) == 0){
+			printf("Need a value\n");
+			return CMD_FAILURE;
+		}
+
+		// see how they want their new value interpreted
+		int value_base = 16;
+
+		// no "0x", so base 10
+		if(!strstr(value_str, "0x"))
+			value_base = 10;
+
+		unsigned long long value = strtoll(value_str, NULL, value_base);
+
+		location += debuggee->aslr_slide;
+
+		args = strtok(NULL, " ");
+		if(args && strstr(args, "--no-aslr"))
+			location -= debuggee->aslr_slide;
+
+		kern_return_t result = memutils_write_memory_to_location((vm_address_t)location, (vm_offset_t)value);
+		
+		if(result){
+			printf("Error: %s\n", mach_error_string(result));
+			return CMD_FAILURE;
+		}
+	}
+
+	// if they're not modifing an offset, they're setting a config variable
+	// to be implemented
+
 	
 	return CMD_SUCCESS;
 }
