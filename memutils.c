@@ -53,6 +53,11 @@ kern_return_t memutils_write_memory_to_location(vm_address_t location, vm_offset
 		data_copy >>= 8;
 		size++;
 	}while(data_copy != 0);
+
+	if(size > sizeof(unsigned long long)){
+		printf("Number too large\n");
+		return KERN_INVALID_ARGUMENT;
+	}
 	
 	// get raw bytes from this number	
 	void *data_ptr = (uint8_t *)&data;
@@ -66,7 +71,7 @@ kern_return_t memutils_write_memory_to_location(vm_address_t location, vm_offset
 
 // Return a neat string filled with the bytes from buffer
 // Caller is responsible for freeing it
-char *_format_dumped_memory(void *buffer, int length, int extra_padding, int two_column, int split_point){
+char *_format_dumped_memory(void *buffer, int length, int extra_padding){
 	// (length * 2) compensates for single digit bytes being represented as two digits (added leading 0)
 	// + length compensates for the spaces we're adding
 	// extra_padding accounts for spaces we may need to add
@@ -93,8 +98,8 @@ char *_format_dumped_memory(void *buffer, int length, int extra_padding, int two
 
 // Helper function to print memory given a buffer,
 // the amount of bytes to print, and what base to print them in.
-void _print_dumped_memory(void *buffer, int bytes, int extra_padding, int base, int two_column, int split_point){
-	char *fullhex = _format_dumped_memory(buffer, bytes, extra_padding, two_column, split_point);
+void _print_dumped_memory(void *buffer, int bytes, int extra_padding, int base){
+	char *fullhex = _format_dumped_memory(buffer, bytes, extra_padding);
 
 	if(base == 10){
 		// "convert" to base 10
@@ -136,15 +141,13 @@ unsigned long long memutils_buffer_to_number(void *buffer, int length){
 	if(!buffer)
 		return -1;
 	
-	char *fullhex = _format_dumped_memory(buffer, length, 0, 0, 0);
+	char *fullhex = _format_dumped_memory(buffer, length, 0);
 
 	// remove all spaces in fullhex
 	char *space = NULL;
 	while((space = strchr(fullhex, ' ')) != NULL)
 		memmove(space, space + 1, strlen(space));
 
-	
-	printf("Fullhex: %s|\n", fullhex);
 	unsigned long long val;
 	sscanf(fullhex, "%llx", &val);
 	
@@ -174,9 +177,7 @@ void memutils_dump_memory_from_location(void *location, int amount, int bytes_pe
 		int cur_byte = 0;
 		
 		while(cur_byte < bytes_per_line){
-			int two_columns = (bytes_per_line == 8 || bytes_per_line == 32) && base == 16;
-			int split_point = bytes_per_line == 8 ? 4 : 8;
-			_print_dumped_memory((void *)membuffer, bytes_per_line, 0, base, two_columns, split_point);
+			_print_dumped_memory((void *)membuffer, bytes_per_line, 0, base);
 			cur_byte += bytes_per_line;
 		}
 
@@ -190,13 +191,10 @@ void memutils_dump_memory_from_location(void *location, int amount, int bytes_pe
 		memutils_read_memory_at_location(location, (void *)membuffer, (vm_size_t)extra_bytes_to_print);
 		
 		printf(" 0x%llx: ", (unsigned long long)location);
-				
-		int two_columns = (bytes_per_line == 8 || bytes_per_line == 16) && base == 16;
-		int split_point = bytes_per_line == 8 ? 4 : 8;
 		
 		int extra_padding = bytes_per_line - extra_bytes_to_print;
 		
-		_print_dumped_memory((void *)membuffer, bytes_per_line, extra_padding, base, two_columns, split_point);
+		_print_dumped_memory((void *)membuffer, bytes_per_line, extra_padding, base);
 		
 		printf("\n");
 	}
