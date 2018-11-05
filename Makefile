@@ -11,7 +11,8 @@ SOURCE_FILES = \
 	linkedlist.c \
 	mach_excUser.c \
 	mach_excServer.c \
-	memutils.c
+	memutils.c \
+	watchpoint.c
 
 OBJECT_FILES = \
 	breakpoint.o \
@@ -21,9 +22,10 @@ OBJECT_FILES = \
 	linkedlist.o \
 	mach_excUser.o \
 	mach_excServer.o \
-	memutils.o
+	memutils.o \
+	watchpoint.o
 
-iosdbg : breakpoint.o dbgcmd.o dbgutils.o iosdbg.o linkedlist.o mach_excUser.o mach_excServer.o memutils.o
+iosdbg : breakpoint.o dbgcmd.o dbgutils.o iosdbg.o linkedlist.o mach_excUser.o mach_excServer.o memutils.o watchpoint.o
 	$(CC) -isysroot $(SDK) $(OBJECT_FILES) $(LDFLAGS) -o iosdbg
 
 breakpoint.o : breakpoint.c breakpoint.h
@@ -49,6 +51,9 @@ mach_excUser.o : mach_excUser.c mach_exc.h
 
 memutils.o : memutils.c memutils.h
 	$(CC) $(CFLAGS) -c memutils.c
+
+watchpoint.o : watchpoint.c watchpoint.h
+	$(CC) $(CFLAGS) -c watchpoint.c
 
 clean :
 	rm iosdbg $(OBJECT_FILES)
