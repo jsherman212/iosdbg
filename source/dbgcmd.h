@@ -2,10 +2,9 @@
 #define _DBGCMD_H_
 
 #include "breakpoint.h"
-#include "dbgutils.h"
 #include "defs.h"
-
-extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
+#include "dbgutils.h"
+#include "machthread.h"
 
 typedef int cmd_error_t;
 
@@ -42,6 +41,8 @@ cmd_error_t cmdfunc_quit(const char *, int);
 cmd_error_t cmdfunc_regsfloat(const char *, int);
 cmd_error_t cmdfunc_regsgen(const char *, int);
 cmd_error_t cmdfunc_set(const char *, int);
+cmd_error_t cmdfunc_threadlist(const char *, int);
+cmd_error_t cmdfunc_threadselect(const char *, int);
 
 cmd_error_t execute_command(char *);
 
@@ -61,6 +62,9 @@ static struct dbg_cmd_t COMMANDS[] = {
 	{ "regs float", NULL, cmdfunc_regsfloat, "Show a floating point register." },
 	{ "regs gen", NULL, cmdfunc_regsgen, "Show one or all general purpose registers." },
 	{ "set", NULL, cmdfunc_set, "Set the value of memory or a configuration variable for the debugger. Syntax:\n\tset (*offset|variable)=value\n\n\tYou must prefix an offset with '*'.\n\n\tIf you want your value to be intepreted as hex, use '0x'.\n\n\tPass --no-aslr to prevent ASLR from being added." },
+	{ "thread", NULL, NULL, NULL },
+	{ "thread list", NULL, cmdfunc_threadlist, "List threads from the debuggee." },
+	{ "thread select", NULL, cmdfunc_threadselect, "Select a thread to focus on." },
 };
 
 #endif

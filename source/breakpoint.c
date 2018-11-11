@@ -91,6 +91,9 @@ bp_error_t breakpoint_delete(int breakpoint_id){
 
 // Delete every breakpoint
 void breakpoint_delete_all(){
+	if(!debuggee->breakpoints)
+		return;
+
 	if(!debuggee->breakpoints->front)
 		return;
 
@@ -101,6 +104,32 @@ void breakpoint_delete_all(){
 
 		breakpoint_delete(current_breakpoint->id);
 
+		current = current->next;
+	}
+}
+
+void breakpoint_disable_all(void){
+	if(!debuggee->breakpoints->front)
+		return;
+	
+	struct node_t *current = debuggee->breakpoints->front;
+
+	while(current){
+		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
+		memutils_write_memory_to_location(current_breakpoint->location, current_breakpoint->old_instruction);
+		current = current->next;
+	}
+}
+
+void breakpoint_enable_all(void){
+	if(!debuggee->breakpoints->front)
+		return;
+	
+	struct node_t *current = debuggee->breakpoints->front;
+
+	while(current){
+		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
+		memutils_write_memory_to_location(current_breakpoint->location, BRK);
 		current = current->next;
 	}
 }

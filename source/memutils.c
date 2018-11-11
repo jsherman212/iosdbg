@@ -172,7 +172,7 @@ void memutils_dump_memory_from_location(void *location, int amount, int bytes_pe
 	while(cur_line < lines_to_print){
 		memutils_read_memory_at_location(location, (void *)membuffer, (vm_size_t)bytes_per_line);
 		
-		printf(" 0x%llx: ", (unsigned long long)location);
+		printf(" %#llx: ", (unsigned long long)location);
 
 		int cur_byte = 0;
 		
@@ -190,7 +190,7 @@ void memutils_dump_memory_from_location(void *location, int amount, int bytes_pe
 	if(extra_bytes_to_print > 0){
 		memutils_read_memory_at_location(location, (void *)membuffer, (vm_size_t)extra_bytes_to_print);
 		
-		printf(" 0x%llx: ", (unsigned long long)location);
+		printf(" %#llx: ", (unsigned long long)location);
 		
 		int extra_padding = bytes_per_line - extra_bytes_to_print;
 		
@@ -198,4 +198,14 @@ void memutils_dump_memory_from_location(void *location, int amount, int bytes_pe
 		
 		printf("\n");
 	}
+}
+
+// Test a location to see if it's out of bounds or invalid
+kern_return_t memutils_valid_location(unsigned long long location){
+	vm_region_basic_info_data_64_t info;
+	vm_size_t region_size;
+	mach_port_t object_name;
+	mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
+	
+	return vm_region_64(debuggee->task, (vm_address_t)&location, &region_size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
 }

@@ -39,5 +39,7 @@ bp_error_t breakpoint_at_address(unsigned long long);
 void breakpoint_hit(struct breakpoint *);
 bp_error_t breakpoint_delete(int);
 void breakpoint_delete_all(void);
+void breakpoint_disable_all(void);
+void breakpoint_enable_all(void);
 
 #endif

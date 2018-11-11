@@ -25,23 +25,13 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
-	err = task_suspend(debuggee->task);
+	err = debuggee->suspend();
 
 	if(err){
 		printf("attach: task_suspend call failed: %s\n", mach_error_string(err));
 		return CMD_FAILURE;
 	}
-
-	int result = suspend_threads();
-
-	if(result != 0){
-		printf("attach: couldn't suspend threads for %d while attaching, detaching...\n", debuggee->pid);
-
-		cmdfunc_detach(NULL, 0);
-
-		return CMD_FAILURE;
-	}
-
+	
 	debuggee->pid = pid;
 	debuggee->interrupted = 1;
 
@@ -63,11 +53,10 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 
 	debuggee->aslr_slide = address - 0x100000000;
 
-	printf("Attached to %d, ASLR slide is 0x%llx. Do not worry about adding ASLR to addresses, it is already accounted for.\n", debuggee->pid, debuggee->aslr_slide);
+	printf("Attached to %d, slide: %#llx.\n", debuggee->pid, debuggee->aslr_slide);
 
 	debuggee->breakpoints = linkedlist_new();
-
-	// TODO maybe add a cool little thing like 0x000000018078cfd8 in debuggee
+	debuggee->threads = linkedlist_new();
 
 	setup_exception_handling();
 
@@ -78,7 +67,7 @@ cmd_error_t cmdfunc_aslr(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
-	printf("Debuggee ASLR slide: 0x%llx\n", debuggee->aslr_slide);
+	printf("%#llx\n", debuggee->aslr_slide);
 	
 	return CMD_SUCCESS;
 }
@@ -91,7 +80,14 @@ cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
 	arm_thread_state64_t thread_state;
 	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 
-	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+	struct machthread *focused = machthread_getfocused();
+	
+	if(!focused){
+		printf("We are not focused on any thread.\n");
+		return CMD_FAILURE;
+	}
+
+	kern_return_t err = thread_get_state(focused->port, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
 	if(err){
 		printf("cmdfunc_backtrace: thread_get_state failed: %s\n", mach_error_string(err));
@@ -99,10 +95,10 @@ cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
 	}
 
 	// print frame 0, which is where we are currently at
-	printf("  * frame #0: 0x%llx\n", thread_state.__pc);
+	printf("  * frame #0: %#llx\n", thread_state.__pc);
 	
 	// frame 1 is what is in LR
-	printf("     frame #1: 0x%llx\n", thread_state.__lr);
+	printf("     frame #1: %#llx\n", thread_state.__lr);
 
 	int frame_counter = 2;
 
@@ -122,7 +118,7 @@ cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
 	}
 
 	while(current_frame->next){
-		printf("     frame #%d: 0x%llx\n", frame_counter, current_frame->frame);
+		printf("     frame #%d: %#llx\n", frame_counter, current_frame->frame);
 
 		memutils_read_memory_at_location((void *)current_frame->next, (void *)current_frame, sizeof(struct frame_t));	
 		frame_counter++;
@@ -163,23 +159,25 @@ cmd_error_t cmdfunc_continue(const char *args, int arg1){
 	if(!debuggee->interrupted)
 		return CMD_FAILURE;
 
-	kern_return_t err = task_resume(debuggee->task);
+	kern_return_t err = debuggee->resume();
 
 	if(err){
 		printf("resume: couldn't continue: %s\n", mach_error_string(err));
 		return CMD_FAILURE;
 	}
 
-	resume_threads();
-
 	debuggee->interrupted = 0;
+	breakpoint_enable_all();
 
-	printf("Continuing.\n");
+	rl_printf(RL_NO_REPROMPT, "Continuing.\n");
 
 	return CMD_SUCCESS;
 }
 
 cmd_error_t cmdfunc_delete(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+	
 	if(!args){
 		printf("We need a breakpoint ID\n");
 		return CMD_FAILURE;
@@ -188,7 +186,7 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 	bp_error_t error = breakpoint_delete(atoi(args));
 
 	if(error == BP_FAILURE){
-		printf("Couldn't set breakpoint\n");
+		printf("Couldn't delete breakpoint\n");
 		return CMD_FAILURE;
 	}
 
@@ -226,6 +224,9 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 
 	linkedlist_free(debuggee->breakpoints);
 	debuggee->breakpoints = NULL;
+
+	linkedlist_free(debuggee->threads);
+	debuggee->threads = NULL;
 
 	printf("Detached from %d\n", debuggee->pid);
 
@@ -440,8 +441,15 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 
 		arm_neon_state64_t neon_state;
 		mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
+		
+		struct machthread *focused = machthread_getfocused();
 
-		kern_return_t err = thread_get_state(debuggee->threads[0], ARM_NEON_STATE64, (thread_state_t)&neon_state, &count);
+		if(!focused){
+			printf("We are not focused on any thread.\n");
+			return CMD_FAILURE;
+		}
+
+		kern_return_t err = thread_get_state(focused->port, ARM_NEON_STATE64, (thread_state_t)&neon_state, &count);
 
 		if(err){
 			printf("show_neon_registers: thread_get_state failed: %s\n", mach_error_string(err));
@@ -489,8 +497,15 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 	
 	arm_thread_state64_t thread_state;
 	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+	
+	struct machthread *focused = machthread_getfocused();
 
-	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+	if(!focused){
+		printf("We are not focused on any thread.\n");
+		return CMD_FAILURE;
+	}
+
+	kern_return_t err = thread_get_state(focused->port, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
 	if(err){
 		printf("Failed\n");
@@ -541,10 +556,14 @@ cmd_error_t cmdfunc_kill(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
-	cmdfunc_detach(NULL, 0);
-	kill(debuggee->pid, SIGKILL);
+	//cmdfunc_detach(NULL, 0);
+	//kill(debuggee->pid, SIGKILL);
+	
+	printf("Disabled for safety right now\n");
+	
 	return CMD_SUCCESS;
 }
+
 
 cmd_error_t cmdfunc_help(const char *args, int arg1){
 	if(!args)
@@ -589,7 +608,7 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 	if(args[0] == '*'){
 		// move past the '*'
 		args++;
-		args = strtok(args, " ");
+		args = strtok((char *)args, " ");
 	
 		// get the location, an equals sign follows it
 		char *location_str = malloc(64);
@@ -652,6 +671,60 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 	// if they're not modifing an offset, they're setting a config variable
 	// to be implemented
 
+	
+	return CMD_SUCCESS;
+}
+
+cmd_error_t cmdfunc_threadlist(const char *args, int arg1){
+	if(!debuggee)
+		return CMD_FAILURE;
+
+	if(!debuggee->threads)
+		return CMD_FAILURE;
+	
+	if(!debuggee->threads->front)
+		return CMD_FAILURE;
+	
+	struct node_t *current = debuggee->threads->front;
+
+	while(current){
+		struct machthread *t = current->data;
+
+		printf("\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", t->focused ? "* " : "", t->ID, t->tid, t->tname, t->thread_state.__pc);
+		
+		current = current->next;
+	}
+
+	return CMD_SUCCESS;
+}
+
+cmd_error_t cmdfunc_threadselect(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
+	if(!debuggee->threads)
+		return CMD_FAILURE;
+
+	if(!debuggee->threads->front)
+		return CMD_FAILURE;
+
+	int thread_id = atoi(args);
+
+	if(thread_id < 1 || thread_id > debuggee->thread_count){
+		printf("Out of bounds, must be in between [1, %d]\n", debuggee->thread_count);
+		printf("Threads:\n");
+		cmdfunc_threadlist(NULL, 0);
+		return CMD_FAILURE;
+	}
+
+	int result = machthread_setfocusgivenindex(thread_id);
+	
+	if(result){
+		printf("Failed, result = %d\n", result);
+		return CMD_FAILURE;
+	}
+
+	printf("Selected thread %d\n", thread_id);
 	
 	return CMD_SUCCESS;
 }

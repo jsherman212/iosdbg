@@ -16,6 +16,8 @@ Hold important definitions for things being used everywhere.
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include "printutils.h" // rl_printf
+
 // General errors.
 typedef int gen_error_t;
 
@@ -32,7 +34,6 @@ struct original_exception_ports_t {
 	thread_state_flavor_t flavors[MAX_EXCEPTION_PORTS];
 };
 
-#pragma once
 struct debuggee {
 	// Task port to the debuggee.
 	mach_port_t task;
@@ -47,7 +48,7 @@ struct debuggee {
 	int interrupted;
 
 	// The list of threads for the debuggee.
-	thread_act_port_array_t threads;
+	//thread_act_port_array_t threads;
 
 	// Count of threads for the debuggee.
 	mach_msg_type_number_t thread_count;
@@ -61,8 +62,17 @@ struct debuggee {
 	// List of breakpoints on the debuggee.
 	struct linkedlist *breakpoints;
 
+	// List of threads on the debuggee.
+	struct linkedlist *threads;
+
 	// The debuggee's ASLR slide.
 	unsigned long long aslr_slide;
+
+	// The function pointer to task_suspend
+	kern_return_t (*suspend)();
+
+	// The function pointer to task_resume
+	kern_return_t (*resume)();
 };
 
 struct debuggee *debuggee;

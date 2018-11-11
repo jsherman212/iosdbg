@@ -1,3 +1,5 @@
+![alt text](https://raw.githubusercontent.com/jsherman212/iosdbg/master/iosdbg4.png)
+
 # iosdbg
 
 A work in progress, native debugger built for jailbroken 64 bit iOS devices capable of debugging any 64 bit process (except the kernel). Inspired by GDB and LLDB.
@@ -18,7 +20,7 @@ Skip this step if it's already installed on your device. I have been using the i
 Theos is a cross-platform suite of tools capable of building iOS software without Xcode. Refer to this link for instructions on installing Theos on your jailbroken iOS device: https://github.com/theos/theos/wiki/Installation-iOS
 
 #### GNU readline 7.0
-This project uses GNU readline 7.0. Compile it for `aarch64-apple-darwin`:
+This project uses GNU readline 7.0. Compile it for `aarch64-apple-darwin` on a non-iOS device:
 
 ```
 curl -O ftp://ftp.cwru.edu/pub/bash/readline-7.0.tar.gz
@@ -92,10 +94,10 @@ Examine memory at a location. Syntax: `(examine|x) <amount>/(optional size)<form
 
 `x`: hexadecimal
 
-If you want your amount interpreted as hex, use `0x`.
+If you want your amount interpreted as hex, use `0x`. Pass `--no-aslr` to keep ASLR from being added.
 
 ### `help <command name>`
-View command description. Does not autocomplete the argument.
+View command description. Does not auto-complete the argument.
 
 ### `kill`
 Kill the debuggee.
@@ -110,6 +112,17 @@ Show general purpose registers. If no arguments are given, all of them are shown
 Same as `regs gen` but shows a floating point register. Only supports single precision registers (`S` registers) for now. The argument is not optional.
 
 You can view what a command does with `help command`. However, most descriptions are incomplete. I'll touch up on them soon.
+
+### `set <(*offset|variable)=value>`
+Modify debuggee memory or a configuration variable (TODO) for iosdbg.
+
+You must prefix an offset with a `*`. If you want your value to be interpreted as hex, use `0x`. Pass `--no-aslr` to prevent ASLR from being added.
+
+### `thread list`
+List threads belonging to the debuggee.
+
+### `thread select <thread ID>`
+Select a different thread to focus on while debugging. Default focused thread is thread #1. If the focused thread goes away, the first available thread is selected automatically. When an exception is caused, focus goes to the thread that caused it.
 
 ## Contributing
 While I may not accept contributions, I am open to suggestions.

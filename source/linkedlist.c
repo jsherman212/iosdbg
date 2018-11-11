@@ -47,6 +47,22 @@ void linkedlist_add(struct linkedlist *list, void *data_to_add){
 	current->next = add;
 }
 
+int linkedlist_contains(struct linkedlist *list, void *data){
+	if(!list->front)
+		return 0;
+
+	struct node_t *current = list->front;
+
+	while(current->next){
+		if(current->data == data)
+			return 1;
+
+		current = current->next;
+	}
+
+	return 0;
+}
+
 void linkedlist_delete(struct linkedlist *list, void *data_to_remove){
 	// empty list
 	if(!list->front)
@@ -76,25 +92,6 @@ void linkedlist_delete(struct linkedlist *list, void *data_to_remove){
 			return;
 		}
 	}
-}
-
-void linkedlist_print(struct linkedlist *list){
-	if(!list->front){
-		printf("[]\n");
-		return;
-	}
-
-	struct node_t *current = list->front;
-
-	printf("[");
-
-	while(current){
-		printf("[node: %p data: %p] ", current, current->data);
-
-		current = current->next;
-	}
-
-	printf("]\n");
 }
 
 void linkedlist_free(struct linkedlist *list){

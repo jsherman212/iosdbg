@@ -1,0 +1,14 @@
+11-10-2018
+
+- added this ChangeLog
+- added structure to the source code directories
+- a much better Makefile to go with new organization
+- (iosdbg) prompt restored after a function not called by me returned
+- fixed crash that would happen if a breakpoint was attempted to be deleted
+when iosdbg wasn't attached to anything
+- new command: thread list, list threads from the debuggee
+- new command: thread select, select a thread to focus on in the debuggee
+- real thread ID is shown
+- real thread name is shown
+- fixed breakpoint race condition
+- tons and tons of smaller bugfixes

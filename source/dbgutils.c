@@ -78,78 +78,7 @@ pid_t pid_of_program(char *progname){
 	return -1;
 }
 
-void *death_server(void *arg){
-	while(1){
-		if(debuggee->pid != -1){
-			mach_port_type_t type;
-			kern_return_t err = mach_port_type(mach_task_self(), debuggee->task, &type);
-
-			if(err)
-				printf("death_server: mach_port_type failed: %s\n", mach_error_string(err));
-
-			if(type == MACH_PORT_TYPE_DEAD_NAME){
-				printf("\n %d dead? Detaching...\n", debuggee->pid);
-				cmdfunc_detach(NULL, 1);
-			}
-		}
-
-		sleep(1);
-	}
-}
-
-int suspend_threads(){
-	kern_return_t err = task_threads(debuggee->task, &debuggee->threads, &debuggee->thread_count);
-
-	if(err){
-		printf("suspend_threads: couldn't get the list of threads for %d: %s\n", debuggee->pid, mach_error_string(err));
-		return -1;
-	}
-
-	for(int i=0; i<debuggee->thread_count; i++)
-		thread_suspend(debuggee->threads[i]);
-
-	return 0;
-}
-
-void resume_threads(){
-	for(int i=0; i<debuggee->thread_count; i++)
-		thread_resume(debuggee->threads[i]);
-}
-
-const char *get_exception_code(exception_type_t exception){
-	switch(exception){
-	case EXC_BAD_ACCESS:
-		return "EXC_BAD_ACCESS";
-	case EXC_BAD_INSTRUCTION:
-		return "EXC_BAD_INSTRUCTION";
-	case EXC_ARITHMETIC:
-		return "EXC_ARITHMETIC";
-	case EXC_EMULATION:
-		return "EXC_EMULATION";
-	case EXC_SOFTWARE:
-		return "EXC_SOFTWARE";
-	case EXC_BREAKPOINT:
-		return "EXC_BREAKPOINT";
-	case EXC_SYSCALL:
-		return "EXC_SYSCALL";
-	case EXC_MACH_SYSCALL:
-		return "EXC_MACH_SYSCALL";
-	case EXC_RPC_ALERT:
-		return "EXC_RPC_ALERT";
-	case EXC_CRASH:
-		return "EXC_CRASH";
-	case EXC_RESOURCE:
-		return "EXC_RESOURCE";
-	case EXC_GUARD:
-		return "EXC_GUARD";
-	case EXC_CORPSE_NOTIFY:
-		return "EXC_CORPSE_NOTIFY";
-	default:
-		return "<Unknown Exception>";
-	}
-}
-
-void *exception_server(void *arg){
+void *_exception_server(void *arg){
 	while(1){
 		// shut down this thread once we detach
 		if(debuggee->pid == -1)
@@ -165,7 +94,7 @@ void *exception_server(void *arg){
 }
 
 // setup our exception related stuff
-void setup_exception_handling(){
+void setup_exception_handling(void){
 	// make an exception port for the debuggee
 	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
 
@@ -240,7 +169,7 @@ void setup_exception_handling(){
 
 	// start the exception server
 	pthread_t exception_server_thread;
-	pthread_create(&exception_server_thread, NULL, exception_server, NULL);
+	pthread_create(&exception_server_thread, NULL, _exception_server, NULL);
 }
 
 void setup_initial_debuggee(){
@@ -259,44 +188,60 @@ void setup_initial_debuggee(){
 	debuggee->breakpoints = linkedlist_new();
 
 	if(!debuggee->breakpoints){
-		printf("setup_initial_debuggee: couldn't allocate memory for breakpoint linked list.\n");
+		printf("Couldn't allocate memory for breakpoint linked list.\n");
 		exit(1);
 	}
+
+	debuggee->threads = linkedlist_new();
+
+	if(!debuggee->threads){
+		printf("Couldn't allocate memory for thread linked list.\n");
+		exit(1);
+	}
+	
+	debuggee->resume = &resume_debuggee;
+	debuggee->suspend = &suspend_debuggee;
 }
 
-// SIGINT handler
-void interrupt(int x1){
-	if(debuggee->pid == -1)
-		return;
+kern_return_t suspend_debuggee(){
+	return task_suspend(debuggee->task);
+}
 
-	if(debuggee->interrupted)
-		return;
+kern_return_t resume_debuggee(){
+	return task_resume(debuggee->task);
+}
 
-	// TODO: Provide a nice way of showing the client they interrupted the debuggee that doesn't screw up the limenoise prompt
-	kern_return_t err = task_suspend(debuggee->task);
-
-	if(err){
-		printf("Cannot interrupt: %s\n", mach_error_string(err));
-		debuggee->interrupted = 0;
-
-		return;
+const char *get_exception_code(exception_type_t exception){
+	switch(exception){
+	case EXC_BAD_ACCESS:
+		return "EXC_BAD_ACCESS";
+	case EXC_BAD_INSTRUCTION:
+		return "EXC_BAD_INSTRUCTION";
+	case EXC_ARITHMETIC:
+		return "EXC_ARITHMETIC";
+	case EXC_EMULATION:
+		return "EXC_EMULATION";
+	case EXC_SOFTWARE:
+		return "EXC_SOFTWARE";
+	case EXC_BREAKPOINT:
+		return "EXC_BREAKPOINT";
+	case EXC_SYSCALL:
+		return "EXC_SYSCALL";
+	case EXC_MACH_SYSCALL:
+		return "EXC_MACH_SYSCALL";
+	case EXC_RPC_ALERT:
+		return "EXC_RPC_ALERT";
+	case EXC_CRASH:
+		return "EXC_CRASH";
+	case EXC_RESOURCE:
+		return "EXC_RESOURCE";
+	case EXC_GUARD:
+		return "EXC_GUARD";
+	case EXC_CORPSE_NOTIFY:
+		return "EXC_CORPSE_NOTIFY";
+	default:
+		return "<Unknown Exception>";
 	}
-
-	int result = suspend_threads();
-
-	if(result){
-		printf("Couldn't suspend threads for %d during interrupt\n", debuggee->pid);
-		debuggee->interrupted = 0;
-
-		return;
-	}
-
-	debuggee->interrupted = 1;
-
-	printf("\n%d suspended\n", debuggee->pid);
-	
-	// fake iosdbg prompt
-	printf("(iosdbg) ");
 }
 
 // Exceptions are caught here
@@ -308,38 +253,68 @@ kern_return_t catch_mach_exception_raise(
 		exception_type_t exception,
 		exception_data_t code,
 		mach_msg_type_number_t code_count){
+	
+	// Temporarily disable all breakpoints so the machine can execute the next instruction
+	// They are re-enabled when the user continues
+	// Safer than manually incrementing PC
+	breakpoint_disable_all();
 
-	// interrupt debuggee
-	interrupt(0);
+	// The kernel calls this function faster than we can flip debuggee->interrupted
+	// That results in breakpoints hitting 1 - 20 additional times
+	int debuggee_was_interrupted = debuggee->interrupted ? 1 : 0;
 
-	// get PC to check if we're at a breakpointed address
-	arm_thread_state64_t thread_state;
-	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-
-	kern_return_t err = thread_get_state(debuggee->threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
-
-	// what to print out to the client when an exception is hit
-	if(debuggee->breakpoints->front){
-		struct node_t *current = debuggee->breakpoints->front;
-
-		while(current){
-			unsigned long long location = ((struct breakpoint *)current->data)->location;
-
-			if(location == thread_state.__pc){
-				struct breakpoint *hit = (struct breakpoint *)current->data;
-
-				breakpoint_hit(hit);
-
-				printf("\n * Thread %#x: breakpoint %d at %#llx hit %d time(s). %#llx in debuggee.\n", thread, hit->id, hit->location, hit->hit_count, thread_state.__pc);
-
-				return KERN_SUCCESS;
-			}
-
-			current = current->next;
-		}
+	if(!debuggee->interrupted){
+		debuggee->suspend();
+		debuggee->interrupted = 1;
 	}
 
-	printf("\n * Thread %#x received signal %d, %s. %#llx in debuggee.\n", thread, exception, get_exception_code(exception), thread_state.__pc);
+	if(!debuggee_was_interrupted){
+		// get PC to check if we're at a breakpointed address
+		arm_thread_state64_t thread_state;
+		mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+		
+		struct machthread *curfocused = machthread_getfocused();
+		
+		unsigned long long tid = get_tid_from_thread_port(thread);
+		
+		// give focus to the thread that caused this exception
+		if(!curfocused || curfocused->port != thread){
+			printf("[Switching to thread %#llx]\n", tid);
+			machthread_setfocused(thread);
+		}
+
+		kern_return_t err = thread_get_state(thread, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+
+		//unsigned long long tid = get_tid_from_thread_port(thread);
+		char *tname = get_thread_name_from_thread_port(thread);
+			
+		if(debuggee->breakpoints->front && !debuggee_was_interrupted){
+			struct node_t *current = debuggee->breakpoints->front;
+
+			while(current){
+				unsigned long long location = ((struct breakpoint *)current->data)->location;
+
+				if(location == thread_state.__pc){
+					struct breakpoint *hit = (struct breakpoint *)current->data;
+
+					breakpoint_hit(hit);
+
+					printf("\n * Thread %#llx, '%s': breakpoint %d at %#llx hit %d time(s). %#llx in debuggee.\n", tid, tname, hit->id, hit->location, hit->hit_count, thread_state.__pc);
+					
+					rl_on_new_line();
+					
+					return KERN_SUCCESS;
+				}
+
+				current = current->next;
+			}
+		}
+		
+		printf("\n * Thread %#llx, '%s' received signal %d, %s. %#llx in debuggee.\n", tid, tname, exception, get_exception_code(exception), thread_state.__pc);
+		rl_on_new_line();
+
+		free(tname);
+	}
 
 	return KERN_SUCCESS;
 }
