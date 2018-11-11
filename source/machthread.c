@@ -221,7 +221,7 @@ void machthread_setfocused(mach_port_t thread_port){
 }
 
 void machthread_free(struct machthread *mt){
-	current_machthread_id = 1;
+	//current_machthread_id = 1;
 
 	free(mt);
 }
@@ -242,7 +242,7 @@ char *get_thread_name_from_thread_port(mach_port_t thread_port){
 	return strdup(exinfo.pth_name);
 }
 
-unsigned long long get_tid_from_thread_port(mach_port_t thread_port){
+kern_return_t get_tid_from_thread_port(mach_port_t thread_port){
 	if(thread_port == MACH_PORT_NULL)
 		return KERN_FAILURE;
 

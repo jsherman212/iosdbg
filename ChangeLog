@@ -1,3 +1,8 @@
+11-11-2018
+- fixed return value of get_thread_name_from_thread_port
+- functions with no parameters now take now parameters
+- pid_of_program is about 1000x faster
+
 11-10-2018
 
 - added this ChangeLog

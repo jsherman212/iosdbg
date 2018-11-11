@@ -564,7 +564,6 @@ cmd_error_t cmdfunc_kill(const char *args, int arg1){
 	return CMD_SUCCESS;
 }
 
-
 cmd_error_t cmdfunc_help(const char *args, int arg1){
 	if(!args)
 		return CMD_FAILURE;
@@ -720,7 +719,7 @@ cmd_error_t cmdfunc_threadselect(const char *args, int arg1){
 	int result = machthread_setfocusgivenindex(thread_id);
 	
 	if(result){
-		printf("Failed, result = %d\n", result);
+		printf("Failed");
 		return CMD_FAILURE;
 	}
 

@@ -4,7 +4,7 @@ Implementation for a singly linked list.
 
 #include "linkedlist.h"
 
-struct linkedlist *linkedlist_new(){
+struct linkedlist *linkedlist_new(void){
 	struct linkedlist *list = malloc(sizeof(struct linkedlist));
 
 	if(!list)

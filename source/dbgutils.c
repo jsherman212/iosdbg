@@ -4,76 +4,67 @@
 // Get the pid of a program based on the program name provided
 // Return: pid on success, -1 on error
 pid_t pid_of_program(char *progname){
-	FILE *mypidof = fopen("temppidof", "w");
+	int err;
+	struct kinfo_proc *result = NULL;
 
-	if(mypidof){
-		// dump a bash script to get the pid of what we want to attach to in the file
-		// given a name of a binary, print the PID(s) in a string separated by commas
-		fprintf(mypidof, "#!/bin/sh\nps axc | awk \"{if (\\$5==\\\"%s\\\") print \\$1\\\",\\\"}\"|tr '\n' ' '", progname);
-		fflush(mypidof);
-		fclose(mypidof);
-		
-		pid_t chmod_pid;
-		char *chmod_argv[] = {"chmod", "+x", "temppidof", NULL};
+	static const int name[] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
 
-		int chmod_status = posix_spawnp(&chmod_pid, "chmod", NULL, NULL, (char * const *)chmod_argv, NULL);
+	size_t length = 0;
 
-		if(chmod_status){
-			printf("Couldn't spawn chmod?\n");
-			return -1;
-		}
-
-		waitpid(chmod_pid, &chmod_status, 0);
-
-		FILE *pidofreader = popen("./temppidof 2>&1", "r");
-
-		if(pidofreader){
-			char program_pid[256];
-			fgets(program_pid, sizeof(program_pid), pidofreader);
-
-			pclose(pidofreader);
-
-			// we don't need this anymore
-			remove("./temppidof");
-
-			char *finalpid = malloc(64);
-
-			// count the number of commas
-			// if there's more than one comma, we have two instances of the same process
-			int num_commas = 0;
-			int len = strlen(program_pid);
-
-			for(int i=0; i<len; i++){
-				if(program_pid[i] == ',')
-					num_commas++;
-				else if(num_commas == 0)
-					// at the same time we can start to construct the PID string without the comma
-					sprintf(finalpid, "%s%c", finalpid, program_pid[i]);
-			}
-
-			pid_t pid;
-
-			if(num_commas == 1){
-				pid = atoi(finalpid);
-				free(finalpid);
-				return pid;
-			}
-			else if(num_commas > 1){
-				printf("There is more than one instance of %s. Aborting. PIDs: %s\n", progname, program_pid);
-				free(finalpid);
-				return -1;
-			}
-			else if(num_commas == 0){
-				printf("%s not found\n", progname);
-				free(finalpid);
-				return -1;
-			}
-		}
-		else
-			return -1;
-	}
-	else
+	err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, NULL, &length, NULL, 0);
+	
+	if(err){
+		printf("Couldn't get the size of our kinfo_proc buffer: %s\n", strerror(errno));
 		return -1;
+	}
+	
+	result = malloc(length);
+	err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, result, &length, NULL, 0);
+	
+	if(err){
+		printf("Second sysctl call failed: %s\n", strerror(errno));
+		return -1;
+	}
+
+	int num_procs = length / sizeof(struct kinfo_proc);
+	int matches = 0;
+	char *matchstr = malloc(512);
+	pid_t final_pid = -1;
+	int maxnamelen = MAXCOMLEN + 1;
+
+	for(int i=0; i<num_procs; i++){
+		struct kinfo_proc *current = &result[i];
+		
+		if(current){
+			pid_t pid = current->kp_proc.p_pid;
+			char *pname = current->kp_proc.p_comm;
+			int pnamelen = strlen(pname);
+			int charstocompare = pnamelen < maxnamelen ? pnamelen : maxnamelen;
+
+			if(strncmp(pname, progname, charstocompare) == 0){
+				matches++;
+				sprintf(matchstr, "%s PID %d: %s\n", matchstr, pid, pname);
+				final_pid = pid;
+			}
+		}
+	}
+	
+	free(result);
+	
+	if(matches == 0){
+		free(matchstr);
+		printf("%s not found\n", progname);
+		return -1;
+	}
+	else if(matches == 1){
+		free(matchstr);
+		return final_pid;
+	}
+	else if(matches > 1){
+		printf("Multiple instances of '%s': \n%s\n", progname, matchstr);
+		free(matchstr);
+		return -1;
+	}
 
 	return -1;
 }
@@ -253,12 +244,6 @@ kern_return_t catch_mach_exception_raise(
 		exception_type_t exception,
 		exception_data_t code,
 		mach_msg_type_number_t code_count){
-	
-	// Temporarily disable all breakpoints so the machine can execute the next instruction
-	// They are re-enabled when the user continues
-	// Safer than manually incrementing PC
-	breakpoint_disable_all();
-
 	// The kernel calls this function faster than we can flip debuggee->interrupted
 	// That results in breakpoints hitting 1 - 20 additional times
 	int debuggee_was_interrupted = debuggee->interrupted ? 1 : 0;
@@ -269,6 +254,11 @@ kern_return_t catch_mach_exception_raise(
 	}
 
 	if(!debuggee_was_interrupted){
+		// Temporarily disable all breakpoints so the machine can execute the next instruction
+		// They are re-enabled when the user continues
+		// Safer than manually incrementing PC
+		breakpoint_disable_all();
+		
 		// get PC to check if we're at a breakpointed address
 		arm_thread_state64_t thread_state;
 		mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;

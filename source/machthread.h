@@ -60,7 +60,7 @@ void machthread_free(struct machthread *);
 
 // other utility functions that could be used from anywhere
 char *get_thread_name_from_thread_port(mach_port_t);
-unsigned long long get_tid_from_thread_port(mach_port_t);
+kern_return_t get_tid_from_thread_port(mach_port_t);
 
 static int current_machthread_id = 1;
 

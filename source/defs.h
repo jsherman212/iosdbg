@@ -46,10 +46,7 @@ struct debuggee {
 
 	// Whether execution has been suspended or not.
 	int interrupted;
-
-	// The list of threads for the debuggee.
-	//thread_act_port_array_t threads;
-
+	
 	// Count of threads for the debuggee.
 	mach_msg_type_number_t thread_count;
 

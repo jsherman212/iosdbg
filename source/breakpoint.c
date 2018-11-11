@@ -90,7 +90,7 @@ bp_error_t breakpoint_delete(int breakpoint_id){
 }
 
 // Delete every breakpoint
-void breakpoint_delete_all(){
+void breakpoint_delete_all(void){
 	if(!debuggee->breakpoints)
 		return;
 

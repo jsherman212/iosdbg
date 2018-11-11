@@ -12,7 +12,7 @@ struct linkedlist {
 	struct node_t *front;
 };
 
-struct linkedlist *linkedlist_new();
+struct linkedlist *linkedlist_new(void);
 void linkedlist_add_front(struct linkedlist *, void *);
 void linkedlist_add(struct linkedlist *, void *);
 int linkedlist_contains(struct linkedlist *, void *);
