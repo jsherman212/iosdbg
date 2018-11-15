@@ -57,13 +57,13 @@ My goal with this project is to have a reliable debugger with basic debugger fun
 Attach to a program given its PID or executable name.
 
 ### `aslr`
-View the debuggee's ASLR slide. ASLR is automatically accounted for when setting breakpoints and viewing memory, so you do not need to add ASLR to every address you type.
+View the debuggee's ASLR slide.
 
 ### `backtrace` (alias: `bt`)
 Unwind the stack.
 
 ### `break` (alias: `b`)
-Set a breakpoint. Again, ASLR will be accounted for.
+Set a breakpoint. ASLR will be accounted for.
 
 ### `continue` (alias: `c`)
 Resume the debuggee's execution.
@@ -88,6 +88,8 @@ Examine memory at a location. Syntax: `(examine|x) <amount>/(optional size)<form
 
 `g`: giant words (eight bytes)
 	
+`e`: enormous words (sixteen bytes)
+
 ##### Formats:
 
 `i`: integer
@@ -111,8 +113,6 @@ Show general purpose registers. If no arguments are given, all of them are shown
 ### `regs float <register arg0> ...`
 Same as `regs gen` but shows a floating point register. Only supports single precision registers (`S` registers) for now. The argument is not optional.
 
-You can view what a command does with `help command`. However, most descriptions are incomplete. I'll touch up on them soon.
-
 ### `set <(*offset|variable)=value>`
 Modify debuggee memory or a configuration variable (TODO) for iosdbg.
 
@@ -123,6 +123,8 @@ List threads belonging to the debuggee.
 
 ### `thread select <thread ID>`
 Select a different thread to focus on while debugging. Default focused thread is thread #1. If the focused thread goes away, the first available thread is selected automatically. When an exception is caused, focus goes to the thread that caused it.
+
+You can view what a command does with `help command`. However, most descriptions are incomplete. I'll touch up on them soon.
 
 ## Contributing
 While I may not accept contributions, I am open to suggestions.
