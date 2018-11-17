@@ -9,6 +9,7 @@ OBJECT_FILES = \
 	$(SRCDIR)/dbgcmd.o \
 	$(SRCDIR)/dbgutils.o \
 	$(SRCDIR)/iosdbg.o \
+	$(SRCDIR)/handlers.o \
 	$(SRCDIR)/linkedlist.o \
 	$(SRCDIR)/mach_excUser.o \
 	$(SRCDIR)/mach_excServer.o \

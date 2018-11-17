@@ -48,24 +48,25 @@ pid_t pid_of_program(char *progname){
 			}
 		}
 	}
-	
+
 	free(result);
 	
-	if(matches == 0){
-		free(matchstr);
-		printf("%s not found\n", progname);
-		return -1;
-	}
-	else if(matches == 1){
-		free(matchstr);
-		return final_pid;
-	}
-	else if(matches > 1){
+	if(matches > 1){
 		printf("Multiple instances of '%s': \n%s\n", progname, matchstr);
 		free(matchstr);
 		return -1;
 	}
 
+	free(matchstr);
+
+	if(matches == 0){
+		printf("%s not found\n", progname);
+		return -1;
+	}
+
+	if(matches == 1)
+		return final_pid;
+	
 	return -1;
 }
 
@@ -85,78 +86,8 @@ void *_exception_server(void *arg){
 }
 
 // setup our exception related stuff
-void setup_exception_handling(void){
-	// make an exception port for the debuggee
-	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
-
-	if(err){
-		printf("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	// be able to send messages on that exception port
-	err = mach_port_insert_right(mach_task_self(), debuggee->exception_port, debuggee->exception_port, MACH_MSG_TYPE_MAKE_SEND);
-
-	if(err){
-		printf("setup_exception_handling: mach_port_insert_right failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	mach_port_t port_set;
-
-	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &port_set);
-
-	if(err){
-		printf("setup_exception_handling: mach_port_allocate failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	err = mach_port_move_member(mach_task_self(), debuggee->exception_port, port_set);
-
-	if(err){
-		printf("setup_exception_handling: mach_port_move_member failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	// allocate port to notify us of termination
-	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->death_port);
-
-	if(err){
-		printf("setup_exception_handling: mach_port_allocate failed allocating termination notification port: %s\n", mach_error_string(err));
-		return;
-	}
-
-	err = mach_port_move_member(mach_task_self(), debuggee->death_port, port_set);
-
-	if(err){
-		printf("setup_exception_handling: mach_port_move_member failed: %s\n", mach_error_string(err));
-		return;
-	}
-	
-	mach_port_t p;
-	err = mach_port_request_notification(mach_task_self(), debuggee->task, MACH_NOTIFY_DEAD_NAME, 0, debuggee->death_port, MACH_MSG_TYPE_MAKE_SEND_ONCE, &p);
-
-	if(err){
-		printf("setup_exception_handling: mach_port_request_notification failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	// save the old exception ports
-	err = task_get_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->original_exception_ports.masks, &debuggee->original_exception_ports.count, debuggee->original_exception_ports.ports, debuggee->original_exception_ports.behaviors, debuggee->original_exception_ports.flavors);
-
-	if(err){
-		printf("setup_exception_handling: task_get_exception_ports failed: %s\n", mach_error_string(err));
-		return;
-	}
-
-	// add the ability to get exceptions on the debuggee exception port
-	// OR EXCEPTION_DEFAULT with MACH_EXCEPTION_CODES so 64-bit safe exception messages will be provided 
-	err = task_set_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->exception_port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, THREAD_STATE_NONE);
-
-	if(err){
-		printf("setup_exception_handling: task_set_exception_ports failed: %s\n", mach_error_string(err));
-		return;
-	}
+void setup_exceptions(void){
+	debuggee->setup_exception_handling();
 
 	// start the exception server
 	pthread_t exception_server_thread;
@@ -189,17 +120,6 @@ void setup_initial_debuggee(){
 		printf("Couldn't allocate memory for thread linked list.\n");
 		exit(1);
 	}
-	
-	debuggee->resume = &resume_debuggee;
-	debuggee->suspend = &suspend_debuggee;
-}
-
-kern_return_t suspend_debuggee(){
-	return task_suspend(debuggee->task);
-}
-
-kern_return_t resume_debuggee(){
-	return task_resume(debuggee->task);
 }
 
 const char *get_exception_code(exception_type_t exception){
@@ -275,7 +195,6 @@ kern_return_t catch_mach_exception_raise(
 
 		kern_return_t err = thread_get_state(thread, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
-		//unsigned long long tid = get_tid_from_thread_port(thread);
 		char *tname = get_thread_name_from_thread_port(thread);
 			
 		if(debuggee->breakpoints->front && !debuggee_was_interrupted){

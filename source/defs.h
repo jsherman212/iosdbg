@@ -64,12 +64,24 @@ struct debuggee {
 
 	// The debuggee's ASLR slide.
 	unsigned long long aslr_slide;
+	
+	// The function pointer to find the debuggee's ASLR slide
+	unsigned long long (*find_slide)();
+
+	// The function pointer to restore original exception ports
+	kern_return_t (*restore_exception_ports)();
+
+	// The function pointer to task_resume
+	kern_return_t (*resume)();
+
+	// The function pointer to set up exception handling
+	kern_return_t (*setup_exception_handling)();
 
 	// The function pointer to task_suspend
 	kern_return_t (*suspend)();
 
-	// The function pointer to task_resume
-	kern_return_t (*resume)();
+	// The function pointer to update the list of the debuggee's threads
+	kern_return_t (*update_threads)(thread_act_port_array_t *);
 };
 
 struct debuggee *debuggee;

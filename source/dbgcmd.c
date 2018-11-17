@@ -34,31 +34,15 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	
 	debuggee->pid = pid;
 	debuggee->interrupted = 1;
-
-	vm_region_basic_info_data_64_t info;
-	vm_address_t address = 0;
-	vm_size_t size;
-	mach_port_t object_name;
-	mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
 	
-	err = vm_region_64(debuggee->task, &address, &size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
-
-	if(err){
-		printf("attach: vm_region_64: %s, detaching\n", mach_error_string(err));
-
-		cmdfunc_detach(NULL, 0);
-
-		return CMD_FAILURE;
-	}
-
-	debuggee->aslr_slide = address - 0x100000000;
-
+	debuggee->aslr_slide = debuggee->find_slide();
+	
 	printf("Attached to %d, slide: %#llx.\n", debuggee->pid, debuggee->aslr_slide);
 
 	debuggee->breakpoints = linkedlist_new();
 	debuggee->threads = linkedlist_new();
 
-	setup_exception_handling();
+	setup_exceptions();
 
 	return CMD_SUCCESS;
 }
@@ -202,13 +186,7 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	breakpoint_delete_all();
 
 	if(!from_death){
-		// restore original exception ports
-		for(mach_msg_type_number_t i=0; i<debuggee->original_exception_ports.count; i++){
-			kern_return_t err = task_set_exception_ports(debuggee->task, debuggee->original_exception_ports.masks[i], debuggee->original_exception_ports.ports[i], debuggee->original_exception_ports.behaviors[i], debuggee->original_exception_ports.flavors[i]);
-			
-			if(err)
-				printf("detach: task_set_exception_ports: %s, %d\n", mach_error_string(err), i);
-		}
+		debuggee->restore_exception_ports();
 
 		if(debuggee->interrupted){
 			cmd_error_t result = cmdfunc_continue(NULL, 0);

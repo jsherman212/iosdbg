@@ -1,3 +1,10 @@
+11-16-18
+- make code more concise with "handlers", debuggee function pointers that
+keep clutter in another file
+
+11-12-18
+- pid_of_program more concise
+
 11-11-2018
 - fixed return value of get_thread_name_from_thread_port
 - functions with no parameters now take now parameters

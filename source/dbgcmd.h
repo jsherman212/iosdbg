@@ -49,9 +49,9 @@ cmd_error_t execute_command(char *);
 static struct dbg_cmd_t COMMANDS[] = {
 	{ "attach", NULL, cmdfunc_attach, "Attach to a program with its PID or executable name." },
 	{ "aslr", NULL, cmdfunc_aslr, "Show the ASLR slide." },
-	{ "backtrace", "bt", cmdfunc_backtrace, "Unwind until we cannot unwind further." },
+	{ "backtrace", "bt", cmdfunc_backtrace, "Unwind the stack." },
 	{ "break", "b", cmdfunc_break, "Set a breakpoint." },
-	{ "continue", "c", cmdfunc_continue, "Continue." },
+	{ "continue", "c", cmdfunc_continue, "Resume debuggee execution." },
 	{ "delete", "d", cmdfunc_delete, "Delete a breakpoint via its ID. Specify no ID to delete all breakpoints." },
 	{ "detach", NULL, cmdfunc_detach, "Detach from the debuggee." },
 	{ "examine", "x", cmdfunc_examine, "Examine memory at a location. Syntax:\n\t  (examine|x) <amount>/(optional size)<format> <location>\n\tSizes:\n\t  b: bytes\n\t  h: halfwords (two bytes)\n\t  w: words (four bytes, default)\n\t  g: giant words (eight bytes)\n\t  e: enormous word (16 bytes per line)\n\tFormats:\n\t  i: integer\n\t  x: hexadecimal\n\n\tIf you want your amount interpreted as hex, use '0x'.\n\tPass --no-aslr to prevent ASLR from being added." },

@@ -41,9 +41,19 @@ void interrupt(int show_prompt){
 		rl_printf(RL_REPROMPT, "\nSuspended\n");
 }
 
+void install_handlers(void){
+	debuggee->find_slide = &find_slide;
+	debuggee->restore_exception_ports = &restore_exception_ports;
+	debuggee->resume = &resume;
+	debuggee->setup_exception_handling = &setup_exception_handling;
+	debuggee->suspend = &suspend;
+	debuggee->update_threads = &update_threads;
+}
 
 int main(int argc, char **argv, const char **envp){
 	setup_initial_debuggee();
+	install_handlers();
+
 	rl_catch_signals = 0;
 
 	signal(SIGINT, interrupt);
@@ -63,17 +73,7 @@ int main(int argc, char **argv, const char **envp){
 		// update the debuggee's linkedlist of threads
 		if(debuggee->pid != -1){
 			thread_act_port_array_t threads;
-			mach_msg_type_number_t thread_count;
-
-			kern_return_t err = task_threads(debuggee->task, &threads, &thread_count);
-			
-			if(err){
-				printf("We couldn't update the list of threads for %d: %s\nDetaching...\n", debuggee->pid, mach_error_string(err));
-				cmdfunc_detach(NULL, 1);
-				continue;
-			}
-
-			debuggee->thread_count = thread_count;	
+			debuggee->update_threads(&threads);
 			
 			machthread_updatethreads(threads);
 
