@@ -34,6 +34,7 @@ cmd_error_t cmdfunc_break(const char *, int);
 cmd_error_t cmdfunc_continue(const char *, int);
 cmd_error_t cmdfunc_delete(const char *, int);
 cmd_error_t cmdfunc_detach(const char *, int);
+cmd_error_t cmdfunc_disassemble(const char *, int);
 cmd_error_t cmdfunc_examine(const char *, int);
 cmd_error_t cmdfunc_help(const char *, int);
 cmd_error_t cmdfunc_kill(const char *, int);
@@ -54,7 +55,8 @@ static struct dbg_cmd_t COMMANDS[] = {
 	{ "continue", "c", cmdfunc_continue, "Resume debuggee execution." },
 	{ "delete", "d", cmdfunc_delete, "Delete a breakpoint via its ID. Specify no ID to delete all breakpoints." },
 	{ "detach", NULL, cmdfunc_detach, "Detach from the debuggee." },
-	{ "examine", "x", cmdfunc_examine, "Examine memory at a location. Syntax:\n\t  (examine|x) <amount>/(optional size)<format> <location>\n\tSizes:\n\t  b: bytes\n\t  h: halfwords (two bytes)\n\t  w: words (four bytes, default)\n\t  g: giant words (eight bytes)\n\t  e: enormous word (16 bytes per line)\n\tFormats:\n\t  i: integer\n\t  x: hexadecimal\n\n\tIf you want your amount interpreted as hex, use '0x'.\n\tPass --no-aslr to prevent ASLR from being added." },
+	{ "disassemble", "disas", cmdfunc_disassemble, "Disassemble memory from the debuggee. Syntax:\n\tdisassemble <location> <numlines>.\n\n\tPass --no-aslr to keep ASLR from being added to the location." },
+	{ "examine", "x", cmdfunc_examine, "Examine debuggee memory. Syntax:\n\t(examine|x) <location> <count>\n\n\tPass --no-aslr to keep ASLR from being added to the location." },
 	{ "help", NULL, cmdfunc_help, "Get help for a specific command." },
 	{ "kill", NULL, cmdfunc_kill, "Kill the debuggee." },
 	{ "quit", "q", cmdfunc_quit, "Quit iosdbg." },

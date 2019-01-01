@@ -22,6 +22,103 @@ unsigned long long CFSwapInt64(unsigned long long arg){
     return result.sv;
 }
 
+kern_return_t memutils_disassemble_at_location(unsigned long long location, int num_instrs){
+	const int data_size = 0x4;
+	unsigned long long current_location = location;
+
+	while(current_location < (location + (num_instrs * data_size))){
+		char *data = malloc(data_size);
+		kern_return_t err = memutils_read_memory_at_location(current_location, data, data_size);
+
+		// format the memory given back
+		// for NULL terminator
+		char *bigendian = malloc((data_size * 2) + 1);
+		bzero(bigendian, (data_size * 2) + 1);
+
+		for(int i=0; i<data_size; i++)
+			sprintf(bigendian, "%s%02x", bigendian, (unsigned char)data[i]);
+
+		free(data);
+
+		unsigned long long instr = strtoull(bigendian, NULL, 16);		
+		free(bigendian);
+
+		char *disassembled = ArmadilloDisassembleB(instr, current_location);
+
+		printf("%s%#llx:  %s\n", debuggee->PC == location ? "->  " : "    ", current_location, disassembled);
+
+		free(disassembled);
+
+		current_location += data_size;
+	}
+
+	return KERN_SUCCESS;
+}
+
+kern_return_t memutils_dump_memory_new(unsigned long long location, vm_size_t amount){
+	if(amount == 0)
+		return KERN_SUCCESS;
+
+	// display memory in chunks of 0x10 bytes
+	const int row_size = 0x10;
+
+	int amount_dumped = 0;
+	unsigned long long current_location = location;
+
+	while(amount_dumped < amount){
+		char *membuffer = malloc(row_size);
+		bzero(membuffer, row_size);
+
+		kern_return_t ret = memutils_read_memory_at_location((void *)current_location, membuffer, row_size);
+
+		if(ret)
+			return ret;
+
+		int current_row_length = amount - amount_dumped;
+		
+		if(current_row_length >= row_size)
+			current_row_length = row_size;
+
+		unsigned char data_array[current_row_length];
+
+		for(int i=0; i<current_row_length; i++)
+			data_array[i] = (unsigned char)membuffer[i];
+
+		free(membuffer);
+
+		printf("  %#llx: ", current_location);
+
+		for(int i=0; i<current_row_length; i++)
+			printf("%02x ", data_array[i]);
+
+		if(current_row_length < 0x10){
+			// print filler spaces
+			// 2 spaces for would be '%02x', one more for the space after
+			for(int i=current_row_length; i<row_size; i++)
+				printf("   ");
+		}
+		
+		printf("  ");
+
+		// print what the bytes represent
+		for(int i=0; i<current_row_length; i++){
+			unsigned char cur_char = data_array[i];
+
+			if(isgraph(cur_char))
+				printf("%c", cur_char);
+			else
+				printf(".");
+		}
+
+		printf("\n");
+
+		amount_dumped += row_size;
+		current_location += row_size;
+	}
+
+	return KERN_SUCCESS;
+}
+
 // This function reads memory from an address and places the data into buffer.
 // Before writing this data back call CFSwapInt32 on it
 kern_return_t memutils_read_memory_at_location(void *location, void *buffer, vm_size_t length){

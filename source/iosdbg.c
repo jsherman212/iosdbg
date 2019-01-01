@@ -77,9 +77,18 @@ int main(int argc, char **argv, const char **envp){
 			
 			machthread_updatethreads(threads);
 
+			struct machthread *focused = machthread_getfocused();
+
 			// we have to set a focused thread first, so set it to the first thread
-			if(!machthread_getfocused())
+			if(!focused){
 				machthread_setfocused(threads[0]);
+				focused = machthread_getfocused();
+			}
+
+			machthread_updatestate(focused);
+
+			
+			debuggee->PC = focused->thread_state.__pc;
 		}
 		
 		execute_command(line);

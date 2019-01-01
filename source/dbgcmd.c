@@ -25,6 +25,16 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
+	thread_act_port_array_t threads;
+	debuggee->update_threads(&threads);
+	
+	// update PC
+	arm_thread_state64_t thread_state;
+	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+	err = thread_get_state(threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+	
+	debuggee->PC = thread_state.__pc;
+
 	err = debuggee->suspend();
 
 	if(err){
@@ -213,6 +223,64 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	return CMD_SUCCESS;
 }
 
+cmd_error_t cmdfunc_disassemble(const char *args, int arg1){
+	if(!args){
+		cmdfunc_help("disassemble", 0);
+		return CMD_FAILURE;
+	}
+
+	char *tok = strtok((char *)args, " ");
+	
+	if(!tok){
+		cmdfunc_help("disassemble", 0);
+		return CMD_FAILURE;
+	}
+
+	// first thing is the location
+	char *loc_str = malloc(strlen(tok) + 1);
+	strcpy(loc_str, tok);
+
+	unsigned long long location = strtoull(loc_str, NULL, 16);
+
+	free(loc_str);
+
+	// then the amount of instructions to disassemble
+	tok = strtok(NULL, " ");
+
+	if(!tok){
+		cmdfunc_help("disassemble", 0);
+		return CMD_FAILURE;
+	}
+
+	int base = 10;
+
+	if(strstr(tok, "0x"))
+		base = 16;
+	
+	int amount = strtol(tok, NULL, base);
+
+	if(amount <= 0){
+		cmdfunc_help("disassemble", 0);
+		return CMD_FAILURE;
+	}
+
+	// finally, whether or not '--no-aslr' was given
+	tok = strtok(NULL, " ");
+
+	// if it is NULL, nothing is there, so add ASLR to the location
+	if(!tok)
+		location += debuggee->aslr_slide;
+
+	kern_return_t err = memutils_disassemble_at_location(location, amount);
+	
+	if(err){
+		printf("Couldn't disassemble\n");
+		return CMD_FAILURE;
+	}
+	
+	return CMD_SUCCESS;
+}
+
 cmd_error_t cmdfunc_examine(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
@@ -221,178 +289,74 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		cmdfunc_help("examine", 0);
 		return CMD_FAILURE;
 	}
+
+	// x <location> <amount> {--no-aslr}
 	
-	// first thing in the arguments will be the format
 	char *tok = strtok((char *)args, " ");
-
-	// first part of the argument should be as follows:
-	// <amount>/(optional size)<format>
-	// to get the amount, find the location of the '/'	
-	char *slash = strchr(tok, '/');
-
-	if(!slash){
-		printf("\t* Malformed argument\n\n");
+	
+	if(!tok){
 		cmdfunc_help("examine", 0);
 		return CMD_FAILURE;
 	}
 
-	char *amount_str = malloc(128);
-	strncpy(amount_str, tok, slash - tok);
-
-	// validate the amount given
-	// first, check if it's empty
-	if(strlen(amount_str) == 0){
-		printf("\t* No amount given\n\n");
-		cmdfunc_help("examine", 0);
-		return CMD_FAILURE;
-	}
-
-	// second, check if it's negative
-	if(strchr(amount_str, '-')){
-		printf("\t* Negative amount\n\n");
-		cmdfunc_help("examine", 0);
-		return CMD_FAILURE;
-	}
+	// first thing will be the location
+	char *loc_str = malloc(strlen(tok) + 1);
+	strcpy(loc_str, tok);
 	
 	int base = 10;
 
-	// if the user put '0x' before the amount,
-	// they want it to be interpreted as hex
-	char *zero_x = strstr(amount_str, "0x");
-	
-	if(zero_x){
-		// move up past the "0x"
-		amount_str += 2;
+	if(strstr(loc_str, "0x"))
 		base = 16;
-	}
 
-	// third, check if it's a valid amount
-	for(char c=amount_str[0], i=0; c != '\0'; ){
-		if(base == 16 && !isxdigit(c)){
-			// bad character in hex amount string
-			printf("\t* Unexpected character in base 16 string\n\n");
-			cmdfunc_help("examine", 0);
-			return CMD_FAILURE;
-		}
-		else if(base == 10 && !isdigit(c)){
-			// bad character in base 10 amount string
-			printf("\t* Unexpected character in base 10 string\n\n");
-			cmdfunc_help("examine", 0);
-			return CMD_FAILURE;
-		}
+	unsigned long long location = strtoull(loc_str, NULL, base);
 
-		c = amount_str[++i];
-	}
+	free(loc_str);
 
-	// if we ended up with a hexidecimal amount,
-	// go back to where we started so we can free this pointer
-	if(base == 16)
-		amount_str -= 2;
-	
-	long long amount = strtoull(amount_str, NULL, base);
-
-	free(amount_str);
-	
-	// now that we have the amount, get the format
-	// the `slash` variable contains the format
-	// it should be *max* two characters long
-	// to get it, advance slash by one byte
-	slash++;
-
-	char *format_str = malloc(64);
-	strcpy(format_str, slash);
-
-	// there should be max two format arguments
-	int format_len = strlen(format_str);
-
-	if(format_len <= 0 || format_len > 2){
-		printf("\t* Bad amount of format arguments\n\n");
-		cmdfunc_help("examine", 0);
-		return CMD_FAILURE;
-	}
-
-	// default size is 'w' (four byte word)
-	char size = 'w';
-	char format = '\0';
-
-	// only format was given, no size
-	if(format_len == 1)
-		format = format_str[0];
-
-	// a size and a format was given
-	// size will always be before the format
-	// and we've already done bounds checking
-	if(format_len == 2){
-		size = format_str[0];
-		format = format_str[1];
-	}
-
-	free(format_str);
-
-	// check for invalid format
-	if(format != 'i' && format != 'x'){
-		printf("\t* Bad format %c\n\n", format);
-		cmdfunc_help("examine", 0);
-		return CMD_FAILURE;
-	}
-
-	// check for invalid size
-	// only need to do this if format_len == 2
-	// because size will default to 'w' in that case
-	if(format_len == 2){
-		if(size != 'b' && size != 'h' && size != 'w' && size != 'g' && size != 'e'){
-			printf("\t* Bad size %c\n\n", size);
-			cmdfunc_help("examine", 0);
-			return CMD_FAILURE;
-		}
-	}
-
-	// finally, print the memory the user asked for
-	// get the location
+	// next thing will be however many bytes is wanted
 	tok = strtok(NULL, " ");
 
 	if(!tok){
-		printf("\t* Missing location\n\n");
 		cmdfunc_help("examine", 0);
 		return CMD_FAILURE;
 	}
-	
-	// TODO allow for math for the location
-	unsigned long long location = strtoull(tok, NULL, 16);
-	
-	// again, assume the user didn't give a custom size
-	int real_size = 4;
 
-	if(size == 'b')
-		real_size = 1;
-	if(size == 'h')
-		real_size = 2;
-	if(size == 'g')
-		real_size = 8;
-	if(size == 'e')
-		real_size = 16;
+	char *amount_str = malloc(strlen(tok) + 1);
+	strcpy(amount_str, tok);
 
-	if(real_size > amount){
-		printf("\t* size > amount\n\n");
-		cmdfunc_help("examine", 0);
-		return CMD_FAILURE;
-	}
-	
-	if(format == 'i')
-		base = 10;
-	if(format == 'x')
+	base = 10;
+
+	if(strstr(amount_str, "0x"))
 		base = 16;
 
-	// check if the user passed --no-aslr
+	unsigned long amount = strtol(amount_str, NULL, base);
+
+	free(amount_str);
+
+	// check if --no-aslr was given
 	tok = strtok(NULL, " ");
 
-	if(tok && strcmp(tok, "--no-aslr") == 0){
-		memutils_dump_memory_from_location((void *)location, amount, real_size, base);
+	kern_return_t ret;
+
+	if(tok){
+		if(strcmp(tok, "--no-aslr") == 0){
+			ret = memutils_dump_memory_new(location, amount);
+			
+			if(ret)
+				return CMD_FAILURE;
+		}
+		else{
+			cmdfunc_help("examine", 0);
+			return CMD_FAILURE;
+		}
+
 		return CMD_SUCCESS;
 	}
-	
-	memutils_dump_memory_from_location((void *)(location + debuggee->aslr_slide), amount, real_size, base);
 
+	ret = memutils_dump_memory_new(location + debuggee->aslr_slide, amount);
+
+	if(ret)
+		return CMD_FAILURE;
+	
 	return CMD_SUCCESS;
 }
 
@@ -730,9 +694,11 @@ cmd_error_t execute_command(char *user_command){
 	current_result->num_matches = 0;
 	current_result->match = NULL;
 	current_result->matched_cmd = NULL;
-	current_result->matches = malloc(256);
+	current_result->matches = malloc(512);
 	current_result->ambigious = 0;
 	current_result->perfect = 0;
+
+	bzero(current_result->matches, 512);
 
 	// will hold the best command we've found
 	// this compensates for command arguments being included
@@ -881,8 +847,11 @@ cmd_error_t execute_command(char *user_command){
 		// once final_result->match is not NULL, we've found a match
 		// this means we can assume anything `token` contains is an argument
 		if(token && final_result && final_result->match){
-			if(!cmd_args)
+			if(!cmd_args){
 				cmd_args = malloc(128);
+				bzero(cmd_args, 128);
+			}
+
 			strcat(cmd_args, token);
 			strcat(cmd_args, " ");
 		}

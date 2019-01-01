@@ -1,3 +1,9 @@
+1-1-19
+- implemented Armadillo and its corresponding command
+- fixed tons of stack/heap overflows
+- rewrote the memory dumper again (memutils_dump_memory_new)
+- fixed the Makefile
+
 11-16-18
 - make code more concise with "handlers", debuggee function pointers that
 keep clutter in another file

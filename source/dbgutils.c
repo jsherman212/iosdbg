@@ -29,6 +29,7 @@ pid_t pid_of_program(char *progname){
 	int num_procs = length / sizeof(struct kinfo_proc);
 	int matches = 0;
 	char *matchstr = malloc(512);
+	bzero(matchstr, 512);
 	pid_t final_pid = -1;
 	int maxnamelen = MAXCOMLEN + 1;
 

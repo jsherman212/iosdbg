@@ -1,8 +1,8 @@
-![alt text](https://raw.githubusercontent.com/jsherman212/iosdbg/master/iosdbg4.png)
+![alt text](https://raw.githubusercontent.com/jsherman212/iosdbg/master/iosdbg5.png)
 
 # iosdbg
 
-A work in progress, native debugger built for jailbroken 64 bit iOS devices capable of debugging any 64 bit process (except the kernel). Inspired by GDB and LLDB.
+A work in progress, native debugger built for jailbroken 64 bit iOS devices capable of debugging any 64 bit process (except the kernel and itself). Inspired by GDB and LLDB.
 
 | iOS Version |	Supported? |
 | ----------- |:---------: |
@@ -33,6 +33,9 @@ make
 
 After you build it, you'll find `libreadline.a` and `libhistory.a` inside of the current working directory. Upload those files to your device at `/path/to/theos/sdks/your/sdk/usr/lib/`. After that, rename them to `libreadline7.0.a` and `libhistory7.0.a`.
 
+#### armadillo
+I took a break from this project to write the disassembler for it. Head over to https://github.com/jsherman212/armadillo and follow the instructions for compiling it **on your jailbroken device**. Copy `source/armadillo.h` to `/path/to/your/iPhoneOS/sdk/usr/include`.
+
 #### iosdbg
 You're set to compile iosdbg. SSH into your device as `root` and run these commands:
 
@@ -51,7 +54,7 @@ If you're on iOS 11 and above you'll need to copy it to /usr/bin/:
 If all went well, you should be good to go. If you're below iOS 11, you can run it in your current working directory with `./iosdbg`. Otherwise, you'll have to run it with `iosdbg`. Attach to your program with its PID or executable name and have fun.
 
 ## Commands
-My goal with this project is to have a reliable debugger with basic debugger functionality. Breakpoints, watchpoints (to come), and little conveniences like command completion and ASLR being automatically accounted for. Commands implemented in this commit are:
+My goal with this project is to have a reliable debugger with basic functionality. Breakpoints, watchpoints (to come), and little conveniences like command completion and ASLR being automatically accounted for. Commands implemented in this commit are:
 
 ### `attach`
 Attach to a program given its PID or executable name.
@@ -68,6 +71,9 @@ Set a breakpoint. ASLR will be accounted for.
 ### `continue` (alias: `c`)
 Resume the debuggee's execution.
 
+### `disassemble` (alias: `dis`)
+Disassemble debuggee memory. Syntax: `(disassemble|dis) <location> <numlines>`
+
 ### `delete <breakpoint ID>` (alias: `d`)
 Delete a breakpoint by specifing its ID.
 
@@ -75,26 +81,7 @@ Delete a breakpoint by specifing its ID.
 Detach from the debuggee.
 
 ### `examine` (alias: `x`)
-
-Examine memory at a location. Syntax: `(examine|x) <amount>/(optional size)<format> <location>`
-	
-##### Sizes:
-
-`b`: bytes
-
-`h`: halfwords (two bytes)
-
-`w`: words (four bytes, default)
-
-`g`: giant words (eight bytes)
-	
-`e`: enormous words (sixteen bytes)
-
-##### Formats:
-
-`i`: integer
-
-`x`: hexadecimal
+Examine memory at a location. Syntax: `(examine|x) <location> <count>`
 
 If you want your amount interpreted as hex, use `0x`. Pass `--no-aslr` to keep ASLR from being added.
 

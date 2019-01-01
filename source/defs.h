@@ -18,6 +18,8 @@ Hold important definitions for things being used everywhere.
 
 #include "printutils.h" // rl_printf
 
+#include <armadillo.h>
+
 // General errors.
 typedef int gen_error_t;
 
@@ -46,6 +48,9 @@ struct debuggee {
 
 	// Whether execution has been suspended or not.
 	int interrupted;
+
+	// Keeps track of the debuggee's program counter.
+	unsigned long long PC;
 	
 	// Count of threads for the debuggee.
 	mach_msg_type_number_t thread_count;

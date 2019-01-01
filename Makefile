@@ -1,11 +1,10 @@
 SDK=/var/theos/sdks/iPhoneOS11.2.sdk
 CC=clang
-CFLAGS=-g -arch arm64 -isysroot $(SDK)
-LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses
+CFLAGS=-arch arm64 -isysroot $(SDK)
+LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo
 SRCDIR=source
 
-OBJECT_FILES = \
-	$(SRCDIR)/breakpoint.o \
+OBJECT_FILES = $(SRCDIR)/breakpoint.o \
 	$(SRCDIR)/dbgcmd.o \
 	$(SRCDIR)/dbgutils.o \
 	$(SRCDIR)/iosdbg.o \
