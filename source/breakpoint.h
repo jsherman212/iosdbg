@@ -32,12 +32,15 @@ typedef int bp_error_t;
 static int current_breakpoint_id = 1;
 
 // BRK #1
-static const unsigned long long BRK = 0x200020D4;
+static const unsigned long long BRK = 0x000020D4;
 
 struct breakpoint *breakpoint_new(unsigned long long);
 bp_error_t breakpoint_at_address(unsigned long long);
 void breakpoint_hit(struct breakpoint *);
 bp_error_t breakpoint_delete(int);
+bp_error_t breakpoint_disable(int);
+bp_error_t breakpoint_enable(int);
+int breakpoint_disabled(int);
 void breakpoint_delete_all(void);
 void breakpoint_disable_all(void);
 void breakpoint_enable_all(void);

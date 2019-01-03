@@ -51,7 +51,19 @@ struct debuggee {
 
 	// Keeps track of the debuggee's program counter.
 	unsigned long long PC;
+
+	// Keeps track of the last address we executed BRK #0 at.
+	unsigned long long last_bkpt_PC;
 	
+	// Keeps track of the ID of the last breakpoint that hit.
+	int last_bkpt_ID;
+
+	// How many breakpoints are set.
+	int num_breakpoints;
+
+	// The debuggee's name.
+	char *debuggee_name;
+
 	// Count of threads for the debuggee.
 	mach_msg_type_number_t thread_count;
 
@@ -90,5 +102,6 @@ struct debuggee {
 };
 
 struct debuggee *debuggee;
+
 
 #endif

@@ -22,19 +22,10 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 
 	if(err){
 		printf("attach: couldn't get task port for pid %d: %s\n", pid, mach_error_string(err));
+		printf("Did you forget to sign iosdbg with entitlements?\n");
 		return CMD_FAILURE;
 	}
-
-	thread_act_port_array_t threads;
-	debuggee->update_threads(&threads);
 	
-	// update PC
-	arm_thread_state64_t thread_state;
-	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-	err = thread_get_state(threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
-	
-	debuggee->PC = thread_state.__pc;
-
 	err = debuggee->suspend();
 
 	if(err){
@@ -47,12 +38,30 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	
 	debuggee->aslr_slide = debuggee->find_slide();
 	
-	printf("Attached to %d, slide: %#llx.\n", debuggee->pid, debuggee->aslr_slide);
+	debuggee->debuggee_name = malloc(strlen(args) + 1);
+	bzero(debuggee->debuggee_name, strlen(args) + 1);
+	strcpy(debuggee->debuggee_name, args);
+	
+	printf("Attached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
 	debuggee->breakpoints = linkedlist_new();
 	debuggee->threads = linkedlist_new();
 
 	setup_exceptions();
+
+	debuggee->num_breakpoints = 0;
+	
+	thread_act_port_array_t threads;
+	debuggee->update_threads(&threads);
+	
+	// update PC
+	arm_thread_state64_t thread_state;
+	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+	err = thread_get_state(threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+	
+	debuggee->PC = thread_state.__pc;
+
+	memutils_disassemble_at_location(debuggee->PC, 0x4);
 
 	return CMD_SUCCESS;
 }
@@ -161,10 +170,9 @@ cmd_error_t cmdfunc_continue(const char *args, int arg1){
 	}
 
 	debuggee->interrupted = 0;
-	breakpoint_enable_all();
 
 	rl_printf(RL_NO_REPROMPT, "Continuing.\n");
-
+	
 	return CMD_SUCCESS;
 }
 
@@ -219,6 +227,10 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	printf("Detached from %d\n", debuggee->pid);
 
 	debuggee->pid = -1;
+	debuggee->num_breakpoints = 0;
+	
+	//free(debuggee->debuggee_name);
+	//debuggee->debuggee_name = NULL;
 
 	return CMD_SUCCESS;
 }
@@ -486,7 +498,7 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 			continue;
 		}
 
-		printf("X%d\t\t\t%#llx\n", reg_num, thread_state.__x[reg_num]);
+		printf("x%d\t\t\t%#llx\n", reg_num, thread_state.__x[reg_num]);
 
 		tok = strtok(NULL, " ");
 	}
@@ -676,7 +688,7 @@ cmd_error_t execute_command(char *user_command){
 	int num_commands = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
 
 	// make a copy of the parameters so we don't modify them
-	char *user_command_copy = malloc(128);
+	char *user_command_copy = malloc(strlen(user_command) + 1);
 	strcpy(user_command_copy, user_command);
 
 	char *token = strtok(user_command_copy, " ");
@@ -721,7 +733,7 @@ cmd_error_t execute_command(char *user_command){
 				final_result = malloc(sizeof(struct cmd_match_result_t));
 
 				final_result->num_matches = 1;
-				final_result->match = malloc(64);
+				final_result->match = malloc(128);
 				strcpy(final_result->match, cmd->name);
 				final_result->matches = NULL;
 				final_result->matched_cmd = cmd;
@@ -761,7 +773,7 @@ cmd_error_t execute_command(char *user_command){
 				if(current_result->num_matches == 1){
 					// strlen(cmd->name) + ' ' + '\0'
 					char *updated_piece = malloc(strlen(cmd->name) + 1 + 1);
-					
+					bzero(updated_piece, strlen(cmd->name) + 1);
 					// find the end of the current word in the command
 					char *cmdname_copy = (char *)cmd->name;
 
@@ -787,16 +799,20 @@ cmd_error_t execute_command(char *user_command){
 
 					// we need to check for ambiguity but we are modifing piece
 					// make a backup and use this in the strncmp call when it is not NULL
-					if(!prev_piece)
-						prev_piece = malloc(64);
+					if(!prev_piece){
+						prev_piece = malloc(128);
+						bzero(prev_piece, 128);
+					}
 
 					strcpy(prev_piece, piece);
 					strcpy(piece, updated_piece);
 
 					free(updated_piece);
 					
-					if(!current_result->match)
-						current_result->match = malloc(64);
+					if(!current_result->match){
+						current_result->match = malloc(128);
+						bzero(current_result->match, 128);
+					}
 
 					strcpy(current_result->match, cmd->name);
 					strcpy(current_result->matches, current_result->match);
@@ -835,6 +851,7 @@ cmd_error_t execute_command(char *user_command){
 				// append the next piece to the command string
 				if(lastspace){
 					char *updated_piece = malloc(strlen(piece) + strlen(token) + 1);
+					bzero(updated_piece, strlen(piece) + strlen(token));
 					strcpy(updated_piece, piece);
 					strcat(updated_piece, token);
 					strcpy(piece, updated_piece);

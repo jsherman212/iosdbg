@@ -1,3 +1,9 @@
+1-2-19
+- breakpoints are completely fixed. You no longer are stuck hitting the same
+breakpoint over and over again
+- disassembler incorporated into other parts of iosdbg
+- fixed some more buffer overflows
+
 1-1-19
 - implemented Armadillo and its corresponding command
 - fixed tons of stack/heap overflows

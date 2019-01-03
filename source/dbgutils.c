@@ -95,11 +95,35 @@ void setup_exceptions(void){
 	pthread_create(&exception_server_thread, NULL, _exception_server, NULL);
 }
 
+void *bp_manager_thread(void *arg){
+	while(1){
+		if(debuggee->num_breakpoints > 0 && debuggee->pid != -1){
+			struct machthread *focused = machthread_getfocused();
+
+			if(focused){
+				arm_thread_state64_t thread_state;
+				mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+				kern_return_t err = thread_get_state(focused->port, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+
+				if(err == KERN_SUCCESS){
+					// we need a way to disable breakpoints once they hit or we'll be stuck on them forever
+					if(debuggee->last_bkpt_PC != thread_state.__pc && breakpoint_disabled(debuggee->last_bkpt_ID)){
+						// cease debuggee execution while we do this to prevent anything screwy
+						task_suspend(debuggee->task);
+						breakpoint_enable(debuggee->last_bkpt_ID);
+						task_resume(debuggee->task);
+					}
+				}
+			}
+		}
+	}
+
+	return NULL;
+}
+
 void setup_initial_debuggee(){
-	debuggee = NULL;
-
 	debuggee = malloc(sizeof(struct debuggee));
-
+	
 	if(!debuggee){
 		printf("setup_initial_debuggee: malloc returned NULL, please restart iosdbg.\n");
 		exit(1);
@@ -121,6 +145,10 @@ void setup_initial_debuggee(){
 		printf("Couldn't allocate memory for thread linked list.\n");
 		exit(1);
 	}
+
+	// this thread will manage the job of re-enabling breakpoints after they're hit
+	pthread_t bp_manager;
+	pthread_create(&bp_manager, NULL, bp_manager_thread, NULL);
 }
 
 const char *get_exception_code(exception_type_t exception){
@@ -165,27 +193,15 @@ kern_return_t catch_mach_exception_raise(
 		exception_type_t exception,
 		exception_data_t code,
 		mach_msg_type_number_t code_count){
-	// The kernel calls this function faster than we can flip debuggee->interrupted
-	// That results in breakpoints hitting 1 - 20 additional times
 	int debuggee_was_interrupted = debuggee->interrupted ? 1 : 0;
 
 	if(!debuggee->interrupted){
 		debuggee->suspend();
 		debuggee->interrupted = 1;
 	}
-
+	
 	if(!debuggee_was_interrupted){
-		// Temporarily disable all breakpoints so the machine can execute the next instruction
-		// They are re-enabled when the user continues
-		// Safer than manually incrementing PC
-		breakpoint_disable_all();
-		
-		// get PC to check if we're at a breakpointed address
-		arm_thread_state64_t thread_state;
-		mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-		
 		struct machthread *curfocused = machthread_getfocused();
-		
 		unsigned long long tid = get_tid_from_thread_port(thread);
 		
 		// give focus to the thread that caused this exception
@@ -194,24 +210,40 @@ kern_return_t catch_mach_exception_raise(
 			machthread_setfocused(thread);
 		}
 
+		// get PC to check if we're at a breakpointed address
+		arm_thread_state64_t thread_state;
+		mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 		kern_return_t err = thread_get_state(thread, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
 		char *tname = get_thread_name_from_thread_port(thread);
-			
-		if(debuggee->breakpoints->front && !debuggee_was_interrupted){
+		
+		if(debuggee->breakpoints->front){
 			struct node_t *current = debuggee->breakpoints->front;
 
 			while(current){
 				unsigned long long location = ((struct breakpoint *)current->data)->location;
 
 				if(location == thread_state.__pc){
+					debuggee->PC = thread_state.__pc;
+
 					struct breakpoint *hit = (struct breakpoint *)current->data;
 
 					breakpoint_hit(hit);
+					
+					// disable this so we can continue execution
+					breakpoint_disable(hit->id);	
+
+					debuggee->last_bkpt_PC = thread_state.__pc;
+					debuggee->last_bkpt_ID = hit->id;
 
 					printf("\n * Thread %#llx, '%s': breakpoint %d at %#llx hit %d time(s). %#llx in debuggee.\n", tid, tname, hit->id, hit->location, hit->hit_count, thread_state.__pc);
 					
+					memutils_disassemble_at_location(location, 0x4);
+					
 					rl_on_new_line();
+					rl_forced_update_display();
+					
+					free(tname);
 					
 					return KERN_SUCCESS;
 				}
@@ -222,9 +254,10 @@ kern_return_t catch_mach_exception_raise(
 		
 		printf("\n * Thread %#llx, '%s' received signal %d, %s. %#llx in debuggee.\n", tid, tname, exception, get_exception_code(exception), thread_state.__pc);
 		rl_on_new_line();
-
+		rl_forced_update_display();
+		
 		free(tname);
 	}
-
+	
 	return KERN_SUCCESS;
 }

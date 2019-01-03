@@ -45,7 +45,7 @@ kern_return_t memutils_disassemble_at_location(unsigned long long location, int 
 
 		char *disassembled = ArmadilloDisassembleB(instr, current_location);
 
-		printf("%s%#llx:  %s\n", debuggee->PC == location ? "->  " : "    ", current_location, disassembled);
+		printf("%s%#llx:  %s\n", debuggee->PC == current_location ? "->  " : "    ", current_location, disassembled);
 
 		free(disassembled);
 
@@ -126,7 +126,6 @@ kern_return_t memutils_read_memory_at_location(void *location, void *buffer, vm_
 }
 
 // This function writes data to location.
-// Data is automatically put into little endian before writing to location.
 kern_return_t memutils_write_memory_to_location(vm_address_t location, vm_offset_t data){
 	kern_return_t ret;
 
@@ -158,8 +157,13 @@ kern_return_t memutils_write_memory_to_location(vm_address_t location, vm_offset
 	
 	// get raw bytes from this number	
 	void *data_ptr = (uint8_t *)&data;
+
+	//printf("size %d\n", size);
 	
+	//const char zeros[] = {0, 0, 0, 0};
+
 	vm_protect(debuggee->task, location, size, 0, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
+	//vm_write(debuggee->task, location, (pointer_t)zeros, sizeof(zeros));
 	ret = vm_write(debuggee->task, location, (pointer_t)data_ptr, size);
 	vm_protect(debuggee->task, location, size, 0, info.protection);
 	

@@ -37,8 +37,12 @@ void interrupt(int show_prompt){
 
 	debuggee->interrupted = 1;
 
+	printf("\n");
+
+	memutils_disassemble_at_location(debuggee->PC, 0x4);
+
 	if(show_prompt)
-		rl_printf(RL_REPROMPT, "\nSuspended\n");
+		rl_printf(RL_REPROMPT, "%s stopped.\n", debuggee->debuggee_name);
 }
 
 void install_handlers(void){
@@ -51,6 +55,8 @@ void install_handlers(void){
 }
 
 int main(int argc, char **argv, const char **envp){
+	debuggee = NULL;
+
 	setup_initial_debuggee();
 	install_handlers();
 
@@ -85,14 +91,13 @@ int main(int argc, char **argv, const char **envp){
 				focused = machthread_getfocused();
 			}
 
-			machthread_updatestate(focused);
-
-			
-			debuggee->PC = focused->thread_state.__pc;
+			if(focused){
+				machthread_updatestate(focused);
+				debuggee->PC = focused->thread_state.__pc;
+			}
 		}
 		
 		execute_command(line);
-
 		free(line);
 	}
 
