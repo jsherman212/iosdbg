@@ -1,4 +1,4 @@
-![alt text](https://raw.githubusercontent.com/jsherman212/iosdbg/master/iosdbg5.png)
+![alt text](https://raw.githubusercontent.com/jsherman212/iosdbg/master/iosdbg6.png)
 
 # iosdbg
 
@@ -54,7 +54,7 @@ If you're on iOS 11 and above you'll need to copy it to /usr/bin/:
 If all went well, you should be good to go. If you're below iOS 11, you can run it in your current working directory with `./iosdbg`. Otherwise, you'll have to run it with `iosdbg`. Attach to your program with its PID or executable name and have fun.
 
 ## Commands
-My goal with this project is to have a reliable debugger with basic functionality. Breakpoints, watchpoints (to come), and little conveniences like command completion and ASLR being automatically accounted for. Commands implemented in this commit are:
+My goal with this project is to have a reliable debugger with basic functionality. Breakpoints, watchpoints, and little conveniences like command completion and ASLR being automatically accounted for. Commands implemented in this commit are:
 
 ### `attach`
 Attach to a program given its PID or executable name.
@@ -74,8 +74,8 @@ Resume the debuggee's execution.
 ### `disassemble` (alias: `dis`)
 Disassemble debuggee memory. Syntax: `(disassemble|dis) <location> <numlines>`
 
-### `delete <breakpoint ID>` (alias: `d`)
-Delete a breakpoint by specifing its ID.
+### `delete <type> <ID>` (alias: `d`)
+Delete a breakpoint or a watchpoint by specifing its ID. Syntax: `(d|delete) <type> <ID>`. Type can be `b` for breakpoint or `w` for watchpoint.
 
 ### `detach`
 Detach from the debuggee.
@@ -111,7 +111,11 @@ List threads belonging to the debuggee.
 ### `thread select <thread ID>`
 Select a different thread to focus on while debugging. Default focused thread is thread #1. If the focused thread goes away, the first available thread is selected automatically. When an exception is caused, focus goes to the thread that caused it.
 
-You can view what a command does with `help command`. However, most descriptions are incomplete. I'll touch up on them soon.
+### `watch <location> <size>`
+Set a watchpoint. Syntax: `watch <addr> <size>`
+
+You can view what a command does with `help command`.
+
 
 ## Contributing
 While I may not accept contributions, I am open to suggestions.

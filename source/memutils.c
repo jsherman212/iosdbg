@@ -22,7 +22,7 @@ unsigned long long CFSwapInt64(unsigned long long arg){
     return result.sv;
 }
 
-kern_return_t memutils_disassemble_at_location(unsigned long long location, int num_instrs){
+kern_return_t memutils_disassemble_at_location(unsigned long long location, int num_instrs, int show_arrow_at_location_param){
 	const int data_size = 0x4;
 	unsigned long long current_location = location;
 
@@ -45,7 +45,11 @@ kern_return_t memutils_disassemble_at_location(unsigned long long location, int 
 
 		char *disassembled = ArmadilloDisassembleB(instr, current_location);
 
-		printf("%s%#llx:  %s\n", debuggee->PC == current_location ? "->  " : "    ", current_location, disassembled);
+		if(show_arrow_at_location_param)
+			printf("%s%#llx:  %s\n", location == current_location ? "->  " : "    ", current_location, disassembled);
+		else
+			printf("%s%#llx:  %s\n", debuggee->PC == current_location ? "->  " : "    ", current_location, disassembled);
+
 
 		free(disassembled);
 
@@ -158,12 +162,7 @@ kern_return_t memutils_write_memory_to_location(vm_address_t location, vm_offset
 	// get raw bytes from this number	
 	void *data_ptr = (uint8_t *)&data;
 
-	//printf("size %d\n", size);
-	
-	//const char zeros[] = {0, 0, 0, 0};
-
 	vm_protect(debuggee->task, location, size, 0, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
-	//vm_write(debuggee->task, location, (pointer_t)zeros, sizeof(zeros));
 	ret = vm_write(debuggee->task, location, (pointer_t)data_ptr, size);
 	vm_protect(debuggee->task, location, size, 0, info.protection);
 	
@@ -237,6 +236,25 @@ void _print_dumped_memory(void *buffer, int bytes, int extra_padding, int base){
 	free(fullhex);
 }
 
+long long memutils_buffer_to_number(void *buffer, int length){
+	if(!buffer)
+		return -1;
+
+	char *fullhex = malloc((length * 2) + 1);
+	memset(fullhex, '\0', length);
+
+	for(int i=0; i<length; i++)
+		sprintf(fullhex, "%s%02x", fullhex, *(unsigned char *)(buffer + i));
+
+	long long val;
+	sscanf(fullhex, "%llx", &val);
+
+	free(fullhex);
+
+	return val;
+}
+
+/*
 // This function takes a buffer of data and converts it to an unsigned long long.
 unsigned long long memutils_buffer_to_number(void *buffer, int length){
 	if(!buffer)
@@ -256,6 +274,7 @@ unsigned long long memutils_buffer_to_number(void *buffer, int length){
 
 	return val;
 }
+*/
 
 // Dump memory
 void memutils_dump_memory_from_location(void *location, int amount, int bytes_per_line, int base){

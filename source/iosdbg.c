@@ -39,7 +39,7 @@ void interrupt(int show_prompt){
 
 	printf("\n");
 
-	memutils_disassemble_at_location(debuggee->PC, 0x4);
+	memutils_disassemble_at_location(debuggee->PC, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 
 	if(show_prompt)
 		rl_printf(RL_REPROMPT, "%s stopped.\n", debuggee->debuggee_name);

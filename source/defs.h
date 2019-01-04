@@ -55,11 +55,17 @@ struct debuggee {
 	// Keeps track of the last address we executed BRK #0 at.
 	unsigned long long last_bkpt_PC;
 	
+	// Keeps track of the last address EXC_BAD_ACCESS was caused for watchpoints.
+	unsigned long long last_wp_PC;
+
 	// Keeps track of the ID of the last breakpoint that hit.
 	int last_bkpt_ID;
 
 	// How many breakpoints are set.
 	int num_breakpoints;
+
+	// How many watchpoints are set.
+	int num_watchpoints;
 
 	// The debuggee's name.
 	char *debuggee_name;
@@ -75,6 +81,9 @@ struct debuggee {
 
 	// List of breakpoints on the debuggee.
 	struct linkedlist *breakpoints;
+
+	// List of watchpoints on the debuggee.
+	struct linkedlist *watchpoints;
 
 	// List of threads on the debuggee.
 	struct linkedlist *threads;

@@ -4,13 +4,11 @@ Implementation for a breakpoint.
 
 #include "breakpoint.h"
 
-//void *
-
 // Create a new breakpoint.
-struct breakpoint *breakpoint_new(unsigned long long location){
+struct breakpoint *breakpoint_new(unsigned long long location, int temporary){
 	// invalid address
-	if(location + debuggee->aslr_slide < debuggee->aslr_slide + 0x100000000)
-		return NULL;
+	//if(location + debuggee->aslr_slide < debuggee->aslr_slide + 0x100000000)
+	//	return NULL;
 
 	struct breakpoint *bp = malloc(sizeof(struct breakpoint));
 
@@ -18,7 +16,7 @@ struct breakpoint *breakpoint_new(unsigned long long location){
 		return NULL;
 
 	bp->id = current_breakpoint_id++;
-	bp->location = location + debuggee->aslr_slide;
+	bp->location = location /*+ debuggee->aslr_slide*/;
 	
 	int sz = 0x4;
 	
@@ -31,6 +29,8 @@ struct breakpoint *breakpoint_new(unsigned long long location){
 	
 	bp->hit_count = 0;
 	bp->disabled = 0;
+
+	bp->temporary = temporary;
 	
 	debuggee->num_breakpoints++;
 
@@ -38,19 +38,20 @@ struct breakpoint *breakpoint_new(unsigned long long location){
 }
 
 // Set a breakpoint at address.
-bp_error_t breakpoint_at_address(unsigned long long address){
-	struct breakpoint *bp = breakpoint_new(address);
+bp_error_t breakpoint_at_address(unsigned long long address, int temporary){
+	struct breakpoint *bp = breakpoint_new(address, temporary);
 
 	if(!bp)
 		return BP_FAILURE;
 
-	// write BRK #1 to the address we're breakpointing at
-	memutils_write_memory_to_location(bp->location, CFSwapInt32(0x000020d4));//BRK);
+	// write BRK #0 to the address we're breakpointing at
+	memutils_write_memory_to_location(bp->location, CFSwapInt32(BRK));
 
 	// add this breakpoint to the debuggee's linked list of breakpoints
 	linkedlist_add(debuggee->breakpoints, bp);
 
-	printf("Breakpoint %d at %#llx\n", bp->id, bp->location);
+	if(!temporary)
+		printf("Breakpoint %d at %#llx\n", bp->id, bp->location);
 
 	return BP_SUCCESS;
 }
@@ -59,9 +60,12 @@ bp_error_t breakpoint_at_address(unsigned long long address){
 void breakpoint_hit(struct breakpoint *bp){
 	if(!bp)
 		return;
-
-	// increment hit count
-	bp->hit_count++;
+	
+	if(bp->temporary)
+		breakpoint_delete(bp->id);
+	else
+		// increment hit count
+		bp->hit_count++;
 }
 
 // Deleting a breakpoint means restoring the original instruction.
@@ -82,7 +86,8 @@ bp_error_t breakpoint_delete(int breakpoint_id){
 			memutils_write_memory_to_location(current_breakpoint->location, current_breakpoint->old_instruction);
 			linkedlist_delete(debuggee->breakpoints, current_breakpoint);
 
-			printf("Breakpoint %d deleted\n", current_breakpoint->id);
+			if(!current_breakpoint->temporary)
+				printf("Breakpoint %d deleted\n", current_breakpoint->id);
 			
 			debuggee->num_breakpoints--;
 

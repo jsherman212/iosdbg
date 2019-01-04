@@ -45,12 +45,14 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	printf("Attached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
 	debuggee->breakpoints = linkedlist_new();
+	debuggee->watchpoints = linkedlist_new();
 	debuggee->threads = linkedlist_new();
 
 	setup_exceptions();
 
 	debuggee->num_breakpoints = 0;
-	
+	debuggee->num_watchpoints = 0;
+
 	thread_act_port_array_t threads;
 	debuggee->update_threads(&threads);
 	
@@ -61,7 +63,7 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	
 	debuggee->PC = thread_state.__pc;
 
-	memutils_disassemble_at_location(debuggee->PC, 0x4);
+	memutils_disassemble_at_location(debuggee->PC, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 
 	return CMD_SUCCESS;
 }
@@ -147,7 +149,7 @@ cmd_error_t cmdfunc_break(const char *args, int arg1){
 
 	while(tok){
 		unsigned long long location = strtoul(tok, NULL, 16);
-		breakpoint_at_address(location);
+		breakpoint_at_address(location + debuggee->aslr_slide, BP_NO_TEMP);
 
 		tok = strtok(NULL, " ");
 	}
@@ -181,14 +183,47 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 		return CMD_FAILURE;
 	
 	if(!args){
-		printf("We need a breakpoint ID\n");
+		cmdfunc_help("delete", 0);
+		return CMD_FAILURE;
+	}
+
+	char *tok = strtok((char *)args, " ");
+	
+	if(!tok){
+		cmdfunc_help("delete", 0);
 		return CMD_FAILURE;
 	}
 	
-	bp_error_t error = breakpoint_delete(atoi(args));
+	char *type = malloc(strlen(tok) + 1);
+	strcpy(type, tok);
+	
+	tok = strtok(NULL, " ");
 
-	if(error == BP_FAILURE){
-		printf("Couldn't delete breakpoint\n");
+	if(!tok){
+		cmdfunc_help("delete", 0);
+		return CMD_FAILURE;
+	}
+	
+	int id = atoi(tok);
+
+	if(strcmp(type, "b") == 0){
+		bp_error_t error = breakpoint_delete(id);
+
+		if(error == BP_FAILURE){
+			printf("Couldn't delete breakpoint\n");
+			return CMD_FAILURE;
+		}
+	}
+	else if(strcmp(type, "w") == 0){
+		wp_error_t error = watchpoint_delete(id);
+
+		if(error == WP_FAILURE){
+			printf("Couldn't delete watchpoint\n");
+			return CMD_FAILURE;
+		}
+	}
+	else{
+		cmdfunc_help("delete", 0);
 		return CMD_FAILURE;
 	}
 
@@ -202,6 +237,7 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	// delete all breakpoints on detach so the original instruction is written back to prevent a crash
 	// TODO: instead of deleting them, maybe disable all of them and if we are attached to the same thing again re-enable them?
 	breakpoint_delete_all();
+	watchpoint_delete_all();
 
 	if(!from_death){
 		debuggee->restore_exception_ports();
@@ -221,6 +257,9 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	linkedlist_free(debuggee->breakpoints);
 	debuggee->breakpoints = NULL;
 
+	linkedlist_free(debuggee->watchpoints);
+	debuggee->watchpoints = NULL;
+
 	linkedlist_free(debuggee->threads);
 	debuggee->threads = NULL;
 
@@ -228,9 +267,10 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 
 	debuggee->pid = -1;
 	debuggee->num_breakpoints = 0;
+	debuggee->num_watchpoints = 0;
 	
-	//free(debuggee->debuggee_name);
-	//debuggee->debuggee_name = NULL;
+	free(debuggee->debuggee_name);
+	debuggee->debuggee_name = NULL;
 
 	return CMD_SUCCESS;
 }
@@ -283,7 +323,7 @@ cmd_error_t cmdfunc_disassemble(const char *args, int arg1){
 	if(!tok)
 		location += debuggee->aslr_slide;
 
-	kern_return_t err = memutils_disassemble_at_location(location, amount);
+	kern_return_t err = memutils_disassemble_at_location(location, amount, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 	
 	if(err){
 		printf("Couldn't disassemble\n");
@@ -679,6 +719,27 @@ cmd_error_t cmdfunc_threadselect(const char *args, int arg1){
 
 	printf("Selected thread %d\n", thread_id);
 	
+	return CMD_SUCCESS;
+}
+
+cmd_error_t cmdfunc_watch(const char *args, int arg1){
+	if(!args){
+		cmdfunc_help("watch", 0);
+		return CMD_FAILURE;
+	}
+
+	// TODO TEMPORARY
+	char *tok = strtok((char *)args, " ");
+
+	unsigned long long location = strtoull(tok, NULL, 16);
+	
+	tok = strtok(NULL, " ");
+	unsigned int data_len = strtol(tok, NULL, 16);
+
+	//printf("location %#llx, data_len %d\n", location, data_len);
+
+	watchpoint_at_address(location, data_len);
+
 	return CMD_SUCCESS;
 }
 
