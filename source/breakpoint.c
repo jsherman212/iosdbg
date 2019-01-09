@@ -5,10 +5,13 @@ Implementation for a breakpoint.
 #include "breakpoint.h"
 
 // Create a new breakpoint.
-struct breakpoint *breakpoint_new(unsigned long long location, int temporary){
+struct breakpoint *breakpoint_new(unsigned long long location, int temporary, int for_what){
 	// invalid address
 	//if(location + debuggee->aslr_slide < debuggee->aslr_slide + 0x100000000)
 	//	return NULL;
+	//
+	if(!temporary && for_what != BP_FOR_NONE)
+		return NULL;
 
 	struct breakpoint *bp = malloc(sizeof(struct breakpoint));
 
@@ -31,6 +34,7 @@ struct breakpoint *breakpoint_new(unsigned long long location, int temporary){
 	bp->disabled = 0;
 
 	bp->temporary = temporary;
+	bp->for_what = for_what;
 	
 	debuggee->num_breakpoints++;
 
@@ -38,8 +42,8 @@ struct breakpoint *breakpoint_new(unsigned long long location, int temporary){
 }
 
 // Set a breakpoint at address.
-bp_error_t breakpoint_at_address(unsigned long long address, int temporary){
-	struct breakpoint *bp = breakpoint_new(address, temporary);
+bp_error_t breakpoint_at_address(unsigned long long address, int temporary, int for_what){
+	struct breakpoint *bp = breakpoint_new(address, temporary, for_what);
 
 	if(!bp)
 		return BP_FAILURE;

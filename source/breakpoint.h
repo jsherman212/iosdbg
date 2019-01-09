@@ -25,6 +25,10 @@ struct breakpoint {
 
 	// Whether or not this breakpoint deletes itself after hitting.
 	int temporary;
+
+	// Whether or not this breakpoint is to disable a watchpoint or a breakpoint.
+	// When this is set, the breakpoint is guarenteed to be temporary.
+	int for_what;
 };
 
 typedef int bp_error_t;
@@ -35,13 +39,17 @@ typedef int bp_error_t;
 #define BP_NO_TEMP 0
 #define BP_TEMP 1
 
+#define BP_FOR_NONE 0
+#define BP_FOR_BP 1
+#define BP_FOR_WP 2
+
 static int current_breakpoint_id = 1;
 
 // BRK #0
 static const unsigned long long BRK = 0x000020D4;
 
-struct breakpoint *breakpoint_new(unsigned long long, int);
-bp_error_t breakpoint_at_address(unsigned long long, int);
+struct breakpoint *breakpoint_new(unsigned long long, int, int);
+bp_error_t breakpoint_at_address(unsigned long long, int, int);
 void breakpoint_hit(struct breakpoint *);
 bp_error_t breakpoint_delete(int);
 bp_error_t breakpoint_disable(int);

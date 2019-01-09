@@ -2,7 +2,7 @@
 
 # iosdbg
 
-A work in progress, native debugger built for jailbroken 64 bit iOS devices capable of debugging any 64 bit process (except the kernel and itself). Inspired by GDB and LLDB.
+A work in progress, native debugger built for *jailbroken* 64 bit iOS devices capable of debugging any 64 bit process (except the kernel and itself). Inspired by GDB and LLDB.
 
 | iOS Version |	Supported? |
 | ----------- |:---------: |

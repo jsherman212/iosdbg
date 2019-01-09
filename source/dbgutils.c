@@ -29,7 +29,7 @@ pid_t pid_of_program(char *progname){
 	int num_procs = length / sizeof(struct kinfo_proc);
 	int matches = 0;
 	char *matchstr = malloc(512);
-	bzero(matchstr, 512);
+	memset(matchstr, '\0', 512);
 	pid_t final_pid = -1;
 	int maxnamelen = MAXCOMLEN + 1;
 
@@ -95,62 +95,7 @@ void setup_exceptions(void){
 	pthread_create(&exception_server_thread, NULL, _exception_server, NULL);
 }
 
-void *bp_manager_thread(void *arg){
-	while(1){
-		if(debuggee->num_breakpoints > 0 && debuggee->pid != -1){
-			struct machthread *focused = machthread_getfocused();
-
-			if(focused){
-				arm_thread_state64_t thread_state;
-				mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-				kern_return_t err = thread_get_state(focused->port, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
-
-				if(err == KERN_SUCCESS){
-					// we need a way to disable breakpoints once they hit or we'll be stuck on them forever
-					if(debuggee->last_bkpt_PC != thread_state.__pc && breakpoint_disabled(debuggee->last_bkpt_ID)){
-						// cease debuggee execution while we do this to prevent anything screwy
-						task_suspend(debuggee->task);
-						breakpoint_enable(debuggee->last_bkpt_ID);
-						task_resume(debuggee->task);
-					}
-				}
-			}
-		}
-	}
-
-	return NULL;
-}
-
-void hexdump(const void* data, size_t size) {
-    char ascii[17];
-    size_t i, j;
-    ascii[16] = '\0';
-    for (i = 0; i < size; ++i) {
-        printf("%02X ", ((unsigned char*)data)[i]);
-        if (((unsigned char*)data)[i] >= ' ' && ((unsigned char*)data)[i] <= '~') {
-            ascii[i % 16] = ((unsigned char*)data)[i];
-        } else {
-            ascii[i % 16] = '.';
-        }
-        if ((i+1) % 8 == 0 || i+1 == size) {
-            printf(" ");
-            if ((i+1) % 16 == 0) {
-                printf("|  %s \n", ascii);
-            } else if (i+1 == size) {
-                ascii[(i+1) % 16] = '\0';
-                if ((i+1) % 16 <= 8) {
-                    printf(" ");
-                }
-                for (j = (i+1) % 16; j < 16; ++j) {
-                    printf("   ");
-                }
-                printf("|  %s \n", ascii);
-            }
-        }
-    }
-}
-
-void setup_initial_debuggee(){
+void setup_initial_debuggee(void){
 	debuggee = malloc(sizeof(struct debuggee));
 
 	// if we aren't attached to anything, debuggee's pid is -1
@@ -163,10 +108,8 @@ void setup_initial_debuggee(){
 	debuggee->num_breakpoints = 0;
 	debuggee->num_watchpoints = 0;
 
-	// TODO get rid of this BS
-	// this thread will manage the job of re-enabling breakpoints after they're hit
-	pthread_t bp_manager;
-	pthread_create(&bp_manager, NULL, bp_manager_thread, NULL);
+	debuggee->last_bkpt_PC = 0;
+	debuggee->last_bkpt_ID = 0;
 }
 
 const char *get_exception_code(exception_type_t exception){
@@ -202,7 +145,7 @@ const char *get_exception_code(exception_type_t exception){
 	}
 }
 
-// Exceptions are caught herei
+// Exceptions are caught here
 // Breakpoints are handled here
 kern_return_t catch_mach_exception_raise(
 		mach_port_t exception_port,
@@ -215,7 +158,7 @@ kern_return_t catch_mach_exception_raise(
 	// hardware watchpoints are out of the question
 	// software watchpoints would halt the debuggee
 	// the only option left would be to cause an exception and assume it was caused by a watchpoint we set
-	if(/*!debuggee_was_interrupted && */exception == EXC_BAD_ACCESS && debuggee->num_watchpoints > 0){	
+	if(exception == EXC_BAD_ACCESS && debuggee->num_watchpoints > 0){	
 		task_suspend(debuggee->task);
 		
 		arm_thread_state64_t thread_state;
@@ -229,14 +172,12 @@ kern_return_t catch_mach_exception_raise(
 		// so this instruction can execute as normal
 		watchpoint_disable_all();
 
-		//printf("Temp breakpointing at thread_state.__pc + 0x4: %#llx\n", debuggee->last_wp_PC + 0x4);
-
 		// we have no idea which watchpoint caused this exception
 		// but if we set a temporary breakpoint at the next instruction, we can compare
 		// watchpoint data from this exception with the one that's about to happen to figure that out
 		// once this breakpoint hits, the value of whatever watchpoint caused this EXC_BAD_ACCESS
 		// will have been updated
-		breakpoint_at_address(debuggee->last_wp_PC + 0x4, BP_TEMP);
+		breakpoint_at_address(debuggee->last_wp_PC + 0x4, BP_TEMP, BP_FOR_WP);
 
 		//printf("Temp breakpointing at thread_state.__lr in case this function is only one instr: %#llx\n", thread_state.__lr);
 		
@@ -286,14 +227,19 @@ kern_return_t catch_mach_exception_raise(
 					breakpoint_hit(hit);
 					
 					// disable this so we can continue execution
-					breakpoint_disable(hit->id);	
+					breakpoint_disable(hit->id);
 
 					debuggee->last_bkpt_PC = thread_state.__pc;
 					debuggee->last_bkpt_ID = hit->id;
-
+					
 					printf("\n * Thread %#llx, '%s': breakpoint %d at %#llx hit %d time(s). %#llx in debuggee.\n", tid, tname, hit->id, hit->location, hit->hit_count, thread_state.__pc);
 					
 					memutils_disassemble_at_location(location, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+					
+					// set a temporary breakpoint at next instr
+					// so we can have a place to re-enable this breakpoint
+					// do this after disassemble call so user doesn't see BRK #0
+					breakpoint_at_address(debuggee->last_bkpt_PC + 0x4, BP_TEMP, BP_FOR_BP);
 					
 					rl_on_new_line();
 					rl_forced_update_display();
@@ -305,9 +251,10 @@ kern_return_t catch_mach_exception_raise(
 				else if(hit->temporary){
 					breakpoint_hit(hit);
 
-					if(thread_state.__pc - 0x4 == debuggee->last_wp_PC){
+					if(hit->for_what == BP_FOR_WP && thread_state.__pc - 0x4 == debuggee->last_wp_PC){
 						struct node_t *current_wp_node = debuggee->watchpoints->front;
 
+						// figure out which watchpoint hit
 						while(current_wp_node){
 							struct watchpoint *current_watchpoint = (struct watchpoint *)current_wp_node->data;
 							int sz = current_watchpoint->data_len;
@@ -326,14 +273,14 @@ kern_return_t catch_mach_exception_raise(
 								// 1 = char
 								// 2 = short
 								// 4 = signed/unsigned int or float
-								// 8 = unsigned long (long) or  double
+								// 8 = signed/unsigned long (long) or double
 								unsigned int sz = current_watchpoint->data_len;
 								
 								long long old_val = memutils_buffer_to_number(prev_data, sz);
 								long long new_val = memutils_buffer_to_number(current_watchpoint->data, sz);
 
 								if(sz == sizeof(char))
-									printf("Old value: %c\nNew value: %c\n\n", (char)old_val, (char)new_val);
+									printf("Old value: %s%#x\nNew value: %s%#x\n\n", (char)old_val < 0 ? "-" : "", (char)old_val < 0 ? (char)-old_val : (char)old_val, (char)new_val < 0 ? "-" : "", (char)new_val < 0 ? (char)-new_val : (char)new_val);
 								else if(sz == sizeof(short) || sz == sizeof(int)){
 									old_val = (int)CFSwapInt32(old_val);
 									new_val = (int)CFSwapInt32(new_val);
@@ -356,6 +303,7 @@ kern_return_t catch_mach_exception_raise(
 								watchpoint_enable_all();
 								
 								free(prev_data);
+								free(tname);
 
 								return KERN_SUCCESS;
 							}
@@ -363,12 +311,16 @@ kern_return_t catch_mach_exception_raise(
 							
 							free(prev_data);
 						}
+						
+						watchpoint_enable_all();
 					}
-
-					watchpoint_enable_all();
+					else if(hit->for_what == BP_FOR_BP && thread_state.__pc - 0x4 == debuggee->last_bkpt_PC)
+						breakpoint_enable(debuggee->last_bkpt_ID);
 
 					task_resume(debuggee->task);
 					debuggee->interrupted = 0;
+
+					free(tname);
 
 					return KERN_SUCCESS;
 				}

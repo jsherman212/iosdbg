@@ -13,6 +13,11 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
+	if(strcmp(args, "iosdbg") == 0){
+		printf("Not so fast\n");
+		return CMD_FAILURE;
+	}
+
 	pid_t pid = pid_of_program((char *)args);
 
 	if(pid == -1)
@@ -39,7 +44,7 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	debuggee->aslr_slide = debuggee->find_slide();
 	
 	debuggee->debuggee_name = malloc(strlen(args) + 1);
-	bzero(debuggee->debuggee_name, strlen(args) + 1);
+	memset(debuggee->debuggee_name, '\0', strlen(args) + 1);
 	strcpy(debuggee->debuggee_name, args);
 	
 	printf("Attached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
@@ -149,7 +154,7 @@ cmd_error_t cmdfunc_break(const char *args, int arg1){
 
 	while(tok){
 		unsigned long long location = strtoul(tok, NULL, 16);
-		breakpoint_at_address(location + debuggee->aslr_slide, BP_NO_TEMP);
+		breakpoint_at_address(location + debuggee->aslr_slide, BP_NO_TEMP, BP_FOR_NONE);
 
 		tok = strtok(NULL, " ");
 	}
@@ -167,14 +172,14 @@ cmd_error_t cmdfunc_continue(const char *args, int arg1){
 	kern_return_t err = debuggee->resume();
 
 	if(err){
-		printf("resume: couldn't continue: %s\n", mach_error_string(err));
+		printf("continue: %s\n", mach_error_string(err));
 		return CMD_FAILURE;
 	}
 
 	debuggee->interrupted = 0;
 
 	rl_printf(RL_NO_REPROMPT, "Continuing.\n");
-	
+
 	return CMD_SUCCESS;
 }
 
@@ -263,14 +268,19 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	linkedlist_free(debuggee->threads);
 	debuggee->threads = NULL;
 
-	printf("Detached from %d\n", debuggee->pid);
+	printf("Detached from %s (%d)\n", debuggee->debuggee_name, debuggee->pid);
 
 	debuggee->pid = -1;
 	debuggee->num_breakpoints = 0;
 	debuggee->num_watchpoints = 0;
-	
+
 	free(debuggee->debuggee_name);
 	debuggee->debuggee_name = NULL;
+
+	debuggee->last_bkpt_PC = 0;
+	debuggee->last_wp_PC = 0;
+
+	debuggee->last_bkpt_ID = 0;
 
 	return CMD_SUCCESS;
 }
@@ -550,17 +560,36 @@ cmd_error_t cmdfunc_kill(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
-	//cmdfunc_detach(NULL, 0);
-	//kill(debuggee->pid, SIGKILL);
+	if(!debuggee->debuggee_name)
+		return CMD_FAILURE;
+
+	char *saved_name = malloc(strlen(debuggee->debuggee_name) + 1);
+	strcpy(saved_name, debuggee->debuggee_name);
+
+	cmdfunc_detach(NULL, 0);
 	
-	printf("Disabled for safety right now\n");
+	// the kill system call panics all my devices
+	pid_t p;
+	char *argv[] = {"killall", "-9", saved_name, NULL};
+	int status = posix_spawnp(&p, "killall", NULL, NULL, (char * const *)argv, NULL);
+	
+	free(saved_name);
+
+	if(status == 0)
+		waitpid(p, &status, 0);
+	else{
+		printf("posix_spawnp failed\n");
+		return CMD_FAILURE;
+	}
 	
 	return CMD_SUCCESS;
 }
 
 cmd_error_t cmdfunc_help(const char *args, int arg1){
-	if(!args)
+	if(!args){
+		printf("Need the command\n");
 		return CMD_FAILURE;
+	}
 	
 	// it does not make sense for the command to be autocompleted here
 	// so just search through the command table until we find the argument
@@ -663,7 +692,6 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 
 	// if they're not modifing an offset, they're setting a config variable
 	// to be implemented
-
 	
 	return CMD_SUCCESS;
 }
@@ -692,6 +720,9 @@ cmd_error_t cmdfunc_threadlist(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_threadselect(const char *args, int arg1){
+	if(!args)
+		return CMD_FAILURE;
+	
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -728,15 +759,25 @@ cmd_error_t cmdfunc_watch(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
-	// TODO TEMPORARY
 	char *tok = strtok((char *)args, " ");
+
+	if(!tok){
+		cmdfunc_help("watch", 0);
+		return CMD_FAILURE;
+	}
 
 	unsigned long long location = strtoull(tok, NULL, 16);
 	
 	tok = strtok(NULL, " ");
-	unsigned int data_len = strtol(tok, NULL, 16);
+	
+	if(!tok){
+		cmdfunc_help("watch", 0);
+		return CMD_FAILURE;
+	}
 
-	//printf("location %#llx, data_len %d\n", location, data_len);
+	// base doesn't matter here
+	// since watchpoint_at_address bails if data_len > sizeof(long long)
+	unsigned int data_len = strtol(tok, NULL, 16);
 
 	watchpoint_at_address(location, data_len);
 
@@ -771,8 +812,8 @@ cmd_error_t execute_command(char *user_command){
 	current_result->ambigious = 0;
 	current_result->perfect = 0;
 
-	bzero(current_result->matches, 512);
-
+	memset(current_result->matches, '\0', 512);
+	
 	// will hold the best command we've found
 	// this compensates for command arguments being included
 	// in the command string we're testing for
@@ -834,7 +875,8 @@ cmd_error_t execute_command(char *user_command){
 				if(current_result->num_matches == 1){
 					// strlen(cmd->name) + ' ' + '\0'
 					char *updated_piece = malloc(strlen(cmd->name) + 1 + 1);
-					bzero(updated_piece, strlen(cmd->name) + 1);
+					memset(updated_piece, '\0', strlen(cmd->name) + 1 + 1);
+					
 					// find the end of the current word in the command
 					char *cmdname_copy = (char *)cmd->name;
 
@@ -862,7 +904,7 @@ cmd_error_t execute_command(char *user_command){
 					// make a backup and use this in the strncmp call when it is not NULL
 					if(!prev_piece){
 						prev_piece = malloc(128);
-						bzero(prev_piece, 128);
+						memset(prev_piece, '\0', 128);
 					}
 
 					strcpy(prev_piece, piece);
@@ -872,7 +914,7 @@ cmd_error_t execute_command(char *user_command){
 					
 					if(!current_result->match){
 						current_result->match = malloc(128);
-						bzero(current_result->match, 128);
+						memset(current_result->match, '\0', 128);
 					}
 
 					strcpy(current_result->match, cmd->name);
@@ -912,7 +954,7 @@ cmd_error_t execute_command(char *user_command){
 				// append the next piece to the command string
 				if(lastspace){
 					char *updated_piece = malloc(strlen(piece) + strlen(token) + 1);
-					bzero(updated_piece, strlen(piece) + strlen(token));
+					memset(updated_piece, '\0', strlen(piece) + strlen(token) + 1);
 					strcpy(updated_piece, piece);
 					strcat(updated_piece, token);
 					strcpy(piece, updated_piece);
@@ -927,7 +969,7 @@ cmd_error_t execute_command(char *user_command){
 		if(token && final_result && final_result->match){
 			if(!cmd_args){
 				cmd_args = malloc(128);
-				bzero(cmd_args, 128);
+				memset(cmd_args, '\0', 128);
 			}
 
 			strcat(cmd_args, token);
@@ -949,9 +991,15 @@ cmd_error_t execute_command(char *user_command){
 		if(cmd_args && strlen(cmd_args) > 0)
 			cmd_args[strlen(cmd_args) - 1] = '\0';
 
-		if(final_result->matched_cmd && final_result->matched_cmd->function)
-			final_result->matched_cmd->function(cmd_args, 0);
-		
+		if(final_result->matched_cmd && final_result->matched_cmd->function){
+			cmd_error_t result = final_result->matched_cmd->function(cmd_args, 0);
+			
+			//DONE_PRINTING = 1;
+
+			//if(result == CMD_FAILURE)
+			//	printf("Could not carry out command\n");
+		}
+
 		if(cmd_args)
 			free(cmd_args);
 	}

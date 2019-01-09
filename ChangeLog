@@ -1,3 +1,11 @@
+1-8-19
+- fixed up watchpoints
+- greatly improved breakpoints, no more bp_manager_thread nonsense
+- cmdfunc_watch implemented formally
+- other small fixes + improvements
+- kill command fixed
+- bzero -> memset
+
 1-3-19
 - watchpoints
 - memory leak fixed
@@ -22,13 +30,12 @@ keep clutter in another file
 11-12-18
 - pid_of_program more concise
 
-11-11-2018
+11-11-18
 - fixed return value of get_thread_name_from_thread_port
 - functions with no parameters now take now parameters
 - pid_of_program is about 1000x faster
 
-11-10-2018
-
+11-10-18
 - added this ChangeLog
 - added structure to the source code directories
 - a much better Makefile to go with new organization
