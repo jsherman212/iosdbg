@@ -82,7 +82,7 @@ int main(int argc, char **argv, const char **envp){
 	pthread_t dt;
 	pthread_create(&dt, NULL, death_server, NULL);
 
-	while((line = readline("(iosdbg) ")) != NULL){
+	while((line = readline(prompt)) != NULL){
 		// add the command to history
 		if(strlen(line) > 0)
 			add_history(line);

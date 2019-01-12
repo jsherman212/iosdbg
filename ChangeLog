@@ -1,3 +1,11 @@
+1-12-19
+- hardware watchpoints
+- optimized code inside breakpoint.c
+- optimized code inside watchpoint.c
+- safe_reprompt, hopefully prevents double readline prompts
+- disable single stepping on detach so debuggee does not crash
+- options to delete all breakpoints or watchpoints
+
 1-11-19
 - I realized I was interpreting the ARMv8 instruction set manual wrong and
 found out you can access debug registers in EL0 through kernel APIs

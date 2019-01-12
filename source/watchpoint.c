@@ -36,8 +36,8 @@ int find_ready_wp_reg(void){
 	return -1;
 }
 
-struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len){
-	if(data_len == 0 || data_len > sizeof(unsigned long long))
+struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len, int LSC){
+	if(data_len == 0 || data_len > sizeof(unsigned long))
 		return NULL;
 
 	kern_return_t result = memutils_valid_location(location);
@@ -53,18 +53,7 @@ struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len)
 	wp->data_len = data_len;
 	wp->data = malloc(wp->data_len);
 
-	result = memutils_read_memory_at_location(wp->location, wp->data, wp->data_len);
-
-/*	long long d = memutils_buffer_to_number(wp->data, wp->data_len);
-	
-
-
-	printf("*****wp data when setting is %#llx\n", d);
-	
-	// make this memory location read only
-	vm_protect(debuggee->task, location, data_len, 0, VM_PROT_READ);
-	//printf("%s\n", mach_error_string(result));
-*/
+	result = memutils_read_memory_at_location((void *)wp->location, wp->data, wp->data_len);
 
 	if(result){
 		free(wp);
@@ -72,8 +61,6 @@ struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len)
 	}
 
 	int available_wp_reg = find_ready_wp_reg();
-
-	printf("available_wp_reg %d\n", available_wp_reg);
 
 	if(available_wp_reg == -1){
 		free(wp);
@@ -91,10 +78,10 @@ struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len)
 	 *    where we are executing.
 	 *  - E must be 0b1 so this watchpoint is enabled.
 	 */
-	//last_used_wp_reg++;
-
 	int BAS_ = (((1 << wp->data_len) - 1) << 5);
-	int LSC = (3 << 3); // for now, do read/write
+	LSC <<= 3;
+
+	wp->LSC = LSC;
 
 	debuggee->debug_state.__wcr[available_wp_reg] = 
 		WT |
@@ -102,8 +89,6 @@ struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len)
 		LSC |
 		PAC |
 		E;
-
-	//print_bin_long(debuggee->debug_state.__wcr[0], -1);
 
 	/* Bits[1:0] must be clear in DBGWVR<n>_EL1. */
 	location &= ~0x3;
@@ -119,8 +104,8 @@ struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len)
 	return wp;
 }
 
-wp_error_t watchpoint_at_address(unsigned long location, unsigned int data_len){
-	struct watchpoint *wp = watchpoint_new(location, data_len);
+wp_error_t watchpoint_at_address(unsigned long location, unsigned int data_len, int LSC){
+	struct watchpoint *wp = watchpoint_new(location, data_len, LSC);
 
 	if(!wp){
 		printf("Could not set watchpoint\n");
@@ -129,7 +114,14 @@ wp_error_t watchpoint_at_address(unsigned long location, unsigned int data_len){
 	
 	linkedlist_add(debuggee->watchpoints, wp);
 
-	printf("Watchpoint %d at %#lx\n", wp->id, wp->location);
+	const char *type = "r";
+
+	if(LSC == WP_WRITE)
+		type = "w";
+	else if(LSC == WP_READ_WRITE)
+		type = "rw";
+
+	printf("Watchpoint %d: addr = %#lx size = %d type = %s\n", wp->id, wp->location, wp->data_len, type);
 	
 	debuggee->num_watchpoints++;
 
@@ -141,6 +133,43 @@ void watchpoint_hit(struct watchpoint *wp){
 		return;
 
 	wp->hit_count++;
+}
+
+void enable_wp(struct watchpoint *wp){
+	debuggee->get_debug_state();
+	
+	int BAS_ = (((1 << wp->data_len) - 1) << 5);
+	
+	debuggee->debug_state.__wcr[wp->hw_wp_reg] =
+		WT |
+		BAS_ |
+		wp->LSC |
+		PAC |
+		E;
+
+	debuggee->debug_state.__wvr[wp->hw_wp_reg] = (wp->location & ~0x3);
+
+	debuggee->set_debug_state();
+}
+
+void disable_wp(struct watchpoint *wp){
+	debuggee->get_debug_state();
+	debuggee->debug_state.__wcr[wp->hw_wp_reg] = 0;
+	debuggee->set_debug_state();
+}
+
+void wp_set_state_internal(struct watchpoint *wp, int disabled){
+	if(disabled)
+		disable_wp(wp);
+	else
+		enable_wp(wp);
+}
+
+void wp_delete_internal(struct watchpoint *wp){
+	disable_wp(wp);
+	linkedlist_delete(debuggee->watchpoints, wp);
+
+	debuggee->num_watchpoints--;
 }
 
 wp_error_t watchpoint_delete(int wp_id){
@@ -156,17 +185,7 @@ wp_error_t watchpoint_delete(int wp_id){
 		struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
 
 		if(current_watchpoint->id == wp_id){		
-			linkedlist_delete(debuggee->watchpoints, current_watchpoint);
-			
-			debuggee->get_debug_state();
-			debuggee->debug_state.__wcr[current_watchpoint->hw_wp_reg] |= 0;
-			debuggee->set_debug_state();
-			//vm_protect(debuggee->task, current_watchpoint->location, current_watchpoint->data_len, 0, VM_PROT_READ | VM_PROT_WRITE);
-
-			printf("Watchpoint %d deleted\n", wp_id);
-
-			debuggee->num_watchpoints--;
-			
+			wp_delete_internal(current_watchpoint);
 			return WP_SUCCESS;
 		}
 
@@ -175,36 +194,6 @@ wp_error_t watchpoint_delete(int wp_id){
 
 	return WP_FAILURE;
 }
-/*
-wp_error_t watchpoint_set_state(int wp_id, int state){
-	if(!debuggee->watchpoints->front)
-		return WP_FAILURE;
-
-	if(wp_id == 0)
-		return WP_FAILURE;
-
-	if(state != WP_DISABLE && state != WP_ENABLE)
-		return WP_FAILURE;
-
-	struct node_t *current = debuggee->watchpoints->front;
-
-	while(current){
-		struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
-
-		if(current_watchpoint->id == wp_id){
-			if(state == WP_DISABLE)
-				vm_protect(debuggee->task, current_watchpoint->location, current_watchpoint->data_len, 0, VM_PROT_READ | VM_PROT_WRITE);
-			else
-				vm_protect(debuggee->task, current_watchpoint->location, current_watchpoint->data_len, 0, VM_PROT_READ);
-			
-			return WP_SUCCESS;
-		}
-
-		current = current->next;
-	}
-
-	return WP_FAILURE;	
-}*/
 
 void watchpoint_enable_all(void){
 	if(!debuggee->watchpoints->front)
@@ -215,10 +204,7 @@ void watchpoint_enable_all(void){
 	while(current){
 		struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
 
-		debuggee->get_debug_state();
-		debuggee->debug_state.__wcr[current_watchpoint->hw_wp_reg] |= 1;
-		debuggee->set_debug_state();
-		//vm_protect(debuggee->task, current_watchpoint->location, current_watchpoint->data_len, 0, VM_PROT_READ);
+		wp_set_state_internal(current_watchpoint, WP_ENABLED);
 
 		current = current->next;
 	}
@@ -233,11 +219,7 @@ void watchpoint_disable_all(void){
 	while(current){
 		struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
 		
-		debuggee->get_debug_state();
-		debuggee->debug_state.__wcr[current_watchpoint->hw_wp_reg] |= 0;
-		debuggee->set_debug_state();
-		
-		//vm_protect(debuggee->task, current_watchpoint->location, current_watchpoint->data_len, 0, VM_PROT_READ | VM_PROT_WRITE);
+		wp_set_state_internal(current_watchpoint, WP_DISABLED);
 
 		current = current->next;
 	}
@@ -251,14 +233,9 @@ void watchpoint_delete_all(void){
 
 	while(current){
 		struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
-
-		debuggee->get_debug_state();
-		debuggee->debug_state.__wcr[current_watchpoint->hw_wp_reg] |= 0;
-		debuggee->set_debug_state();
-
-		//vm_protect(debuggee->task, current_watchpoint->location, current_watchpoint->data_len, 0, VM_PROT_READ | VM_PROT_WRITE);
-		linkedlist_delete(debuggee->watchpoints, current_watchpoint);
-
+		
+		wp_delete_internal(current_watchpoint);
+		
 		current = current->next;
 	}
 }

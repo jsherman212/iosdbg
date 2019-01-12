@@ -64,8 +64,7 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	machthread_updatethreads(threads);
 
 	struct machthread *focused = machthread_getfocused();
-
-	// we have to set a focused thread first, so set it to the first thread
+	
 	if(!focused){
 		machthread_setfocused(threads[0]);
 		focused = machthread_getfocused();
@@ -191,7 +190,7 @@ cmd_error_t cmdfunc_continue(const char *args, int arg1){
 
 	debuggee->interrupted = 0;
 
-	rl_printf(RL_NO_REPROMPT, "Continuing.\n");
+	rl_printf(RL_NO_REPROMPT, "Process %d resuming\n", debuggee->pid);
 
 	return CMD_SUCCESS;
 }
@@ -214,14 +213,59 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 	
 	char *type = malloc(strlen(tok) + 1);
 	strcpy(type, tok);
-	
-	tok = strtok(NULL, " ");
 
-	if(!tok){
+	if(strcmp(type, "b") != 0 && strcmp(type, "w") != 0){
 		cmdfunc_help("delete", 0);
 		return CMD_FAILURE;
 	}
+
+	if(strcmp(type, "b") == 0 && debuggee->num_breakpoints == 0){
+		printf("No breakpoints to delete\n");
+		return CMD_SUCCESS;
+	}
+
+	if(strcmp(type, "w") == 0 && debuggee->num_watchpoints == 0){
+		printf("No watchpoints to delete\n");
+		return CMD_SUCCESS;
+	}
 	
+	tok = strtok(NULL, " ");
+
+	/* If there's nothing after type, give the user
+	 * an option to delete all.
+	 */
+	if(!tok){
+		const char *target = strcmp(type, "b") == 0 ? "breakpoints" : "watchpoints";
+		printf("Delete all %s? (y/n) ", target);
+		
+		char *choice = NULL;
+		size_t sz;
+		getline(&choice, &sz, stdin);
+		choice[strlen(choice) - 1] = '\0';
+
+		if(choice[0] == 'n'){
+			printf("Nothing deleted.\n");
+			return CMD_SUCCESS;
+		}
+
+		free(choice);
+
+		void (*delete_func)(void) = 
+			strcmp(target, "breakpoints") == 0 ? 
+			&breakpoint_delete_all :
+			&watchpoint_delete_all;
+
+		int num_deleted = strcmp(target, "breakpoints") == 0 ?
+			debuggee->num_breakpoints :
+			debuggee->num_watchpoints;
+
+		delete_func();
+
+		printf("All %s removed. (%d %s)\n", target, num_deleted, target);
+
+		return CMD_SUCCESS;
+	}
+
 	int id = atoi(tok);
 
 	if(strcmp(type, "b") == 0){
@@ -231,6 +275,8 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 			printf("Couldn't delete breakpoint\n");
 			return CMD_FAILURE;
 		}
+
+		printf("Breakpoint %d deleted\n", id);
 	}
 	else if(strcmp(type, "w") == 0){
 		wp_error_t error = watchpoint_delete(id);
@@ -239,6 +285,8 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 			printf("Couldn't delete watchpoint\n");
 			return CMD_FAILURE;
 		}
+
+		printf("Watchpoint %d deleted\n", id);
 	}
 	else{
 		cmdfunc_help("delete", 0);
@@ -256,6 +304,11 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	// TODO: instead of deleting them, maybe disable all of them and if we are attached to the same thing again re-enable them?
 	breakpoint_delete_all();
 	watchpoint_delete_all();
+
+	/* Disable hardware single stepping. */
+	debuggee->get_debug_state();
+	debuggee->debug_state.__mdscr_el1 = 0;
+	debuggee->set_debug_state();
 
 	if(!from_death){
 		debuggee->restore_exception_ports();
@@ -292,6 +345,9 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	
 	debuggee->last_hit_bkpt_ID = 0;
 	debuggee->last_hit_bkpt_hw = 0;
+	
+	debuggee->last_hit_wp_loc = 0;
+	debuggee->last_hit_wp_PC = 0;
 
 	return CMD_SUCCESS;
 }
@@ -363,8 +419,6 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
-	// x <location> <amount> {--no-aslr}
-	
 	char *tok = strtok((char *)args, " ");
 	
 	if(!tok){
@@ -431,6 +485,70 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		return CMD_FAILURE;
 	
 	return CMD_SUCCESS;
+}
+
+cmd_error_t cmdfunc_help(const char *args, int arg1){
+	if(!args){
+		printf("Need the command\n");
+		return CMD_FAILURE;
+	}
+	
+	// it does not make sense for the command to be autocompleted here
+	// so just search through the command table until we find the argument
+	int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
+	int cur_cmd_idx = 0;
+
+	while(cur_cmd_idx < num_cmds){
+		struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
+	
+		// must not be an ambigious command
+		if(strcmp(cmd->name, args) == 0 && cmd->function){
+			printf("\t%s\n", cmd->desc);
+			return CMD_SUCCESS;
+		}
+
+		cur_cmd_idx++;
+	}
+	
+	// not found
+	return CMD_FAILURE;
+}
+
+cmd_error_t cmdfunc_kill(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
+	if(!debuggee->debuggee_name)
+		return CMD_FAILURE;
+
+	char *saved_name = malloc(strlen(debuggee->debuggee_name) + 1);
+	strcpy(saved_name, debuggee->debuggee_name);
+
+	cmdfunc_detach(NULL, 0);
+	
+	// the kill system call panics all my devices
+	pid_t p;
+	char *argv[] = {"killall", "-9", saved_name, NULL};
+	int status = posix_spawnp(&p, "killall", NULL, NULL, (char * const *)argv, NULL);
+	
+	free(saved_name);
+
+	if(status == 0)
+		waitpid(p, &status, 0);
+	else{
+		printf("posix_spawnp failed\n");
+		return CMD_FAILURE;
+	}
+	
+	return CMD_SUCCESS;
+}
+
+cmd_error_t cmdfunc_quit(const char *args, int arg1){
+	if(debuggee->pid != -1)
+		cmdfunc_detach(NULL, 0);
+
+	free(debuggee);
+	exit(0);
 }
 
 cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
@@ -565,70 +683,6 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 	}
 	
 	return CMD_SUCCESS;
-}
-
-cmd_error_t cmdfunc_kill(const char *args, int arg1){
-	if(debuggee->pid == -1)
-		return CMD_FAILURE;
-
-	if(!debuggee->debuggee_name)
-		return CMD_FAILURE;
-
-	char *saved_name = malloc(strlen(debuggee->debuggee_name) + 1);
-	strcpy(saved_name, debuggee->debuggee_name);
-
-	cmdfunc_detach(NULL, 0);
-	
-	// the kill system call panics all my devices
-	pid_t p;
-	char *argv[] = {"killall", "-9", saved_name, NULL};
-	int status = posix_spawnp(&p, "killall", NULL, NULL, (char * const *)argv, NULL);
-	
-	free(saved_name);
-
-	if(status == 0)
-		waitpid(p, &status, 0);
-	else{
-		printf("posix_spawnp failed\n");
-		return CMD_FAILURE;
-	}
-	
-	return CMD_SUCCESS;
-}
-
-cmd_error_t cmdfunc_help(const char *args, int arg1){
-	if(!args){
-		printf("Need the command\n");
-		return CMD_FAILURE;
-	}
-	
-	// it does not make sense for the command to be autocompleted here
-	// so just search through the command table until we find the argument
-	int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
-	int cur_cmd_idx = 0;
-
-	while(cur_cmd_idx < num_cmds){
-		struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
-	
-		// must not be an ambigious command
-		if(strcmp(cmd->name, args) == 0 && cmd->function){
-			printf("	%s\n", cmd->desc);
-			return CMD_SUCCESS;
-		}
-
-		cur_cmd_idx++;
-	}
-	
-	// not found
-	return CMD_FAILURE;
-}
-
-cmd_error_t cmdfunc_quit(const char *args, int arg1){
-	if(debuggee->pid != -1)
-		cmdfunc_detach(NULL, 0);
-
-	free(debuggee);
-	exit(0);
 }
 
 cmd_error_t cmdfunc_set(const char *args, int arg1){
@@ -769,43 +823,37 @@ cmd_error_t cmdfunc_watch(const char *args, int arg1){
 		cmdfunc_help("watch", 0);
 		return CMD_FAILURE;
 	}
-
-	char *tok = strtok((char *)args, " ");
-
-	if(!tok){
-		cmdfunc_help("watch", 0);
-		return CMD_FAILURE;
-	}
-
-	unsigned long long location = strtoull(tok, NULL, 16);
-	
-	tok = strtok(NULL, " ");
-	
-	if(!tok){
-		cmdfunc_help("watch", 0);
-		return CMD_FAILURE;
-	}
-
-	// base doesn't matter here
-	// since watchpoint_at_address bails if data_len > sizeof(long long)
-	unsigned int data_len = strtol(tok, NULL, 16);
-
-	watchpoint_at_address(location, data_len);
-
-	return CMD_SUCCESS;
-}
-
-cmd_error_t cmdfunc_hwatch(const char *args, int arg1){
-	if(!args){
-		cmdfunc_help("watch", 0);
-		return CMD_FAILURE;
-	}
 	
 	char *tok = strtok((char *)args, " ");
 
 	if(!tok){
 		cmdfunc_help("watch", 0);
 		return CMD_FAILURE;
+	}
+
+	int LSC = WP_WRITE;
+
+	/* Check if the user specified a watchpoint type. If they didn't,
+	 * this watchpoint will match on reads and writes.
+	 */
+	if(!strstr(tok, "0x")){
+		if(strcmp(tok, "--r") == 0)
+			LSC = WP_READ;
+		else if(strcmp(tok, "--w") == 0)
+			LSC = WP_WRITE;
+		else if(strcmp(tok, "--rw") == 0)
+			LSC = WP_READ_WRITE;
+		else{
+			cmdfunc_help("watch", 0);
+			return CMD_FAILURE;
+		}
+		
+		tok = strtok(NULL, " ");
+
+		if(!tok){
+			cmdfunc_help("watch", 0);
+			return CMD_FAILURE;
+		}
 	}
 
 	long location = strtol(tok, NULL, 16);
@@ -817,14 +865,12 @@ cmd_error_t cmdfunc_hwatch(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
-	// base doesn't matter here
-	// since watchpoint_at_address bails if data_len > sizeof(long long)
+	/* Base does not matter since watchpoint_at_address
+	 * bails if data_len > sizeof(long)
+	 */
 	int data_len = strtol(tok, NULL, 16);
 
-	//printf("Location %#lx data_len %x\n", location, data_len);
-	//printf("%d hw bps, %d hw wps\n", debuggee->num_hw_bps, debuggee->num_hw_wps);
-
-	watchpoint_at_address(location, data_len);
+	watchpoint_at_address(location, data_len, LSC);
 
 	return CMD_SUCCESS;
 }

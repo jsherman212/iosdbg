@@ -54,7 +54,7 @@ If you're on iOS 11 and above you'll need to copy it to /usr/bin/:
 If all went well, you should be good to go. If you're below iOS 11, you can run it in your current working directory with `./iosdbg`. Otherwise, you'll have to run it with `iosdbg`. Attach to your program with its PID or executable name and have fun.
 
 ## Commands
-My goal with this project is to have a reliable debugger with basic functionality. Breakpoints, watchpoints, and little conveniences like command completion and ASLR being automatically accounted for. Commands implemented in this commit are:
+My goal with this project is to have a reliable debugger with basic functionality. Breakpoints, watchpoints, and little conveniences like command completion and ASLR being automatically accounted for. *You only need to type enough characters in the command for iosdbg to unambiguously identify it*. Commands implemented in this commit are:
 
 ### `attach`
 Attach to a program given its PID or executable name.
@@ -66,7 +66,7 @@ View the debuggee's ASLR slide.
 Unwind the stack.
 
 ### `break` (alias: `b`)
-Set a breakpoint. Pass `--no-aslr` to keep ASLR from being added.
+Set a breakpoint. After all hardware breakpoints have been used, iosdbg defaults to software breakpoints. Pass `--no-aslr` to keep ASLR from being added.
 
 ### `continue` (alias: `c`)
 Resume the debuggee's execution.
@@ -74,8 +74,8 @@ Resume the debuggee's execution.
 ### `disassemble` (alias: `dis`)
 Disassemble debuggee memory. Syntax: `(disassemble|dis) <location> <numlines>`
 
-### `delete <type> <ID>` (alias: `d`)
-Delete a breakpoint or a watchpoint by specifing its ID. Syntax: `(d|delete) <type> <ID>`. Type can be `b` for breakpoint or `w` for watchpoint.
+### `delete <type> <optional ID>` (alias: `d`)
+Delete a breakpoint or a watchpoint by specifing its ID. Syntax: `(d|delete) <type> {ID}`. Type can be `b` for breakpoint or `w` for watchpoint. If you do not include `ID`, you will be given an option to delete all breakpoints or watchpoints, depending on what you gave for `<type>`.
 
 ### `detach`
 Detach from the debuggee.
@@ -111,8 +111,8 @@ List threads belonging to the debuggee.
 ### `thread select <thread ID>`
 Select a different thread to focus on while debugging. Default focused thread is thread #1. If the focused thread goes away, the first available thread is selected automatically. When an exception is caused, focus goes to the thread that caused it.
 
-### `watch <location> <size>`
-Set a watchpoint. Syntax: `watch <addr> <size>`
+### `watch <optional type> <location> <size>`
+Set a read, write, or read-write watchpoint. Syntax: `watch {type} <addr> <size>`. Type can be `--r` (read), `--w` (write), or `--rw` (read/write). It is optional, so if nothing is given, iosdbg defaults to `--w`. ASLR is not accounted for.
 
 You can view what a command does with `help command`.
 

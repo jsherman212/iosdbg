@@ -21,7 +21,8 @@ int find_ready_bp_reg(void){
 	while(current){
 		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
 
-		bp_map[current_breakpoint->hw_bp_reg] = 0;
+		if(current_breakpoint->hw)
+			bp_map[current_breakpoint->hw_bp_reg] = 0;
 
 		current = current->next;
 	}
@@ -145,6 +146,8 @@ void breakpoint_hit(struct breakpoint *bp){
 }
 
 void enable_hw_bp(struct breakpoint *bp){
+	debuggee->get_debug_state();
+
 	debuggee->debug_state.__bcr[bp->hw_bp_reg] = 
 		BT | 
 		BAS | 
@@ -152,6 +155,41 @@ void enable_hw_bp(struct breakpoint *bp){
 		E;
 
 	debuggee->debug_state.__bvr[bp->hw_bp_reg] = (bp->location & ~0x3);
+
+	debuggee->set_debug_state();
+}
+
+void disable_hw_bp(struct breakpoint *bp){
+	debuggee->get_debug_state();
+	debuggee->debug_state.__bcr[bp->hw_bp_reg] = 0;
+	debuggee->set_debug_state();
+}
+
+/* Set whether or not a breakpoint is disabled or enabled,
+ * and take action accordingly.
+ */
+void bp_set_state_internal(struct breakpoint *bp, int disabled){
+	if(bp->hw){
+		if(disabled)
+			disable_hw_bp(bp);
+		else
+			enable_hw_bp(bp);
+	}
+	else{
+		if(disabled)
+			memutils_write_memory_to_location(bp->location, bp->old_instruction);	
+		else
+			memutils_write_memory_to_location(bp->location, CFSwapInt32(BRK));
+	}
+
+	bp->disabled = disabled;
+}
+
+void bp_delete_internal(struct breakpoint *bp){
+	bp_set_state_internal(bp, BP_DISABLED);
+	linkedlist_delete(debuggee->breakpoints, bp);
+	
+	debuggee->num_breakpoints--;
 }
 
 bp_error_t breakpoint_delete(int breakpoint_id){
@@ -167,21 +205,7 @@ bp_error_t breakpoint_delete(int breakpoint_id){
 		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
 
 		if(current_breakpoint->id == breakpoint_id){
-			if(current_breakpoint->hw){
-				debuggee->get_debug_state();
-				debuggee->debug_state.__bcr[current_breakpoint->hw_bp_reg] &= ~1;
-				debuggee->set_debug_state();
-			}
-			else
-				memutils_write_memory_to_location(current_breakpoint->location, current_breakpoint->old_instruction);
-			
-			linkedlist_delete(debuggee->breakpoints, current_breakpoint);
-
-			if(!current_breakpoint->temporary)
-				printf("Breakpoint %d deleted\n", current_breakpoint->id);
-			
-			debuggee->num_breakpoints--;
-
+			bp_delete_internal(current_breakpoint);
 			return BP_SUCCESS;
 		}
 
@@ -204,15 +228,7 @@ bp_error_t breakpoint_disable(int breakpoint_id){
 		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
 
 		if(current_breakpoint->id == breakpoint_id){
-			if(current_breakpoint->hw){
-				debuggee->get_debug_state();
-				debuggee->debug_state.__bcr[current_breakpoint->hw_bp_reg] &= ~1;
-				debuggee->set_debug_state();
-			}
-			else
-				memutils_write_memory_to_location(current_breakpoint->location, current_breakpoint->old_instruction);
-			
-			current_breakpoint->disabled = 1;
+			bp_set_state_internal(current_breakpoint, BP_DISABLED);
 			return BP_SUCCESS;
 		}
 
@@ -236,16 +252,7 @@ bp_error_t breakpoint_enable(int breakpoint_id){
 		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
 
 		if(current_breakpoint->id == breakpoint_id){
-			if(current_breakpoint->hw){
-				debuggee->get_debug_state();
-				enable_hw_bp(current_breakpoint);
-				debuggee->set_debug_state();
-			}
-			else
-				memutils_write_memory_to_location(current_breakpoint->location, CFSwapInt32(BRK));
-			
-			current_breakpoint->disabled = 0;
-
+			bp_set_state_internal(current_breakpoint, BP_ENABLED);
 			return BP_SUCCESS;
 		}
 
@@ -288,7 +295,7 @@ void breakpoint_delete_all(void){
 	while(current){
 		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
 
-		breakpoint_delete(current_breakpoint->id);
+		bp_delete_internal(current_breakpoint);
 
 		current = current->next;
 	}

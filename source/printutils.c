@@ -20,3 +20,11 @@ int rl_printf(int reprompt, const char *message, ...){
 	
 	return ret;
 }	
+
+/* Prevent double reprompts. */
+void safe_reprompt(void){
+	if(RL_ISSTATE(RL_STATE_READCMD)){
+		rl_on_new_line();
+		rl_forced_update_display();
+	}
+}

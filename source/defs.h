@@ -21,6 +21,8 @@ Hold important definitions for things being used everywhere.
 
 #include <armadillo.h>
 
+static const char *prompt = "(iosdbg) ";
+
 // General errors.
 typedef int gen_error_t;
 
@@ -55,6 +57,12 @@ struct debuggee {
 
 	/* Keeps track of the type of the last breakpoint hit. */
 	int last_hit_bkpt_hw;
+
+	/* Keeps track of the location of the data in the last watchpoint hit. */
+	unsigned long last_hit_wp_loc;
+
+	/* Keeps track of where the last watchpoint hit. */
+	unsigned long last_hit_wp_PC;
 
 	// How many breakpoints are set.
 	int num_breakpoints;

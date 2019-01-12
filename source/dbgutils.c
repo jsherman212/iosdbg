@@ -111,6 +111,7 @@ void setup_initial_debuggee(void){
 	debuggee->last_hit_bkpt_ID = 0;
 	debuggee->last_hit_bkpt_hw = 0;
 
+	/* Figure out how many hardware breakpoints/watchpoints are supported. */
 	size_t len = sizeof(int);
 
 	sysctlbyname("hw.optional.breakpoint", &debuggee->num_hw_bps, &len, NULL, 0);
@@ -153,6 +154,29 @@ const char *get_exception_code(exception_type_t exception){
 	}
 }
 
+void describe_hit_watchpoint(void *prev_data, void *cur_data, unsigned int sz){
+	long long old_val = memutils_buffer_to_number(prev_data, sz);
+	long long new_val = memutils_buffer_to_number(cur_data, sz);
+
+	/* I'd like output in hex, but %x specifies unsigned int, and data could be negative.
+	 * This is a hacky workaround.
+	 */
+	if(sz == sizeof(char))
+		printf("Old value: %s%#x\nNew value: %s%#x\n\n", (char)old_val < 0 ? "-" : "", (char)old_val < 0 ? (char)-old_val : (char)old_val, (char)new_val < 0 ? "-" : "", (char)new_val < 0 ? (char)-new_val : (char)new_val);
+	else if(sz == sizeof(short) || sz == sizeof(int)){
+		old_val = (int)CFSwapInt32(old_val);
+		new_val = (int)CFSwapInt32(new_val);
+
+		printf("Old value: %s%#x\nNew value: %s%#x\n\n", (int)old_val < 0 ? "-" : "", (int)old_val < 0 ? (int)-old_val : (int)old_val, (int)new_val < 0 ? "-" : "", (int)new_val < 0 ? (int)-new_val : (int)new_val);
+	}
+	else{
+		old_val = (long)CFSwapInt64(old_val);
+		new_val = (long)CFSwapInt64(new_val);
+
+		printf("Old value: %s%#lx\nNew value: %s%#lx\n\n", (long)old_val < 0 ? "-" : "", (long)old_val < 0 ? (long)-old_val : (long)old_val, (long)new_val < 0 ? "-" : "", (long)new_val < 0 ? (long)-new_val : (long)new_val);
+	}
+}
+
 kern_return_t catch_mach_exception_raise(
 		mach_port_t exception_port,
 		mach_port_t thread,
@@ -167,7 +191,7 @@ kern_return_t catch_mach_exception_raise(
 	
 	unsigned long long tid = get_tid_from_thread_port(thread);
 	
-	// give focus to the thread that caused this exception
+	/* Give focus to the thread that caused this exception. */
 	if(!curfocused || curfocused->port != thread){
 		printf("[Switching to thread %#llx]\n", tid);
 		machthread_setfocused(thread);
@@ -175,30 +199,76 @@ kern_return_t catch_mach_exception_raise(
 	
 	debuggee->get_thread_state();
 
-	if(exception != EXC_BREAKPOINT)
-		return KERN_SUCCESS;
-	
-	/* exception_type_t is typedef'ed as int *, which is
-	 * not enough space to hold the data break address.*/
+	/* exception_data_t is typedef'ed as int *, which is
+	 * not enough space to hold the data break address.
+	 */
 	long elem0 = ((long *)code)[0];
 	long break_loc = ((long *)code)[1];
 	
-	if(elem0 == EXC_ARM_BREAKPOINT){
+	if(exception == EXC_BREAKPOINT && elem0 == EXC_ARM_BREAKPOINT){
 		if(break_loc == 0){
+			/* When the exception caused by the single step happens,
+			 * we can re-enable the breakpoint last it if it was software,
+			 * or do nothing if it was hardware.
+			 */
 			if(!debuggee->last_hit_bkpt_hw)
 				breakpoint_enable(debuggee->last_hit_bkpt_ID);	
 			
-			debuggee->resume();
-			debuggee->interrupted = 0;
+			/* After we let the CPU single step, the instruction 
+			 * at the last watchpoint executes, so we can check
+			 * if there was a change in the data being watched.
+			 */
+			struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
+
+			/* If nothing was found, continue as normal. */
+			if(!hit){
+				debuggee->resume();
+				debuggee->interrupted = 0;
+				
+				return KERN_SUCCESS;
+			}
+
+			unsigned int sz = hit->data_len;
 			
+			/* Save previous data for comparision. */
+			void *prev_data = malloc(sz);
+			memcpy(prev_data, hit->data, sz);
+			
+			memutils_read_memory_at_location((void *)hit->location, hit->data, sz);
+			
+			/* Nothing has changed. However, I would like for a
+			 * watchpoint to report even if this is the case if 
+			 * the WP_READ bit is set in hit->LSC.
+			 */
+			if(memcmp(prev_data, hit->data, sz) == 0 && (hit->LSC & WP_READ)){
+				free(prev_data);
+
+				debuggee->resume();
+				debuggee->interrupted = 0;
+
+				return KERN_SUCCESS;
+			}
+
+			printf("\nWatchpoint %d hit:\n\n", hit->id);
+
+			describe_hit_watchpoint(prev_data, hit->data, sz);
+			memutils_disassemble_at_location(debuggee->last_hit_wp_PC + 4, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+
+			free(prev_data);
+			
+			debuggee->last_hit_wp_loc = 0;
+			debuggee->last_hit_wp_PC = 0;
+			
+			safe_reprompt();
+
 			return KERN_SUCCESS;
 		}
 
 		struct breakpoint *hit = find_bp_with_address(break_loc);
 		
 		if(!hit){
-			printf("Could not find hit breakpoint\n");			
-			return KERN_SUCCESS;
+			printf("Could not find hit breakpoint? Please open an issue on github\n");
+			return KERN_FAILURE;
 		}
 		
 		breakpoint_hit(hit);
@@ -225,16 +295,38 @@ kern_return_t catch_mach_exception_raise(
 		debuggee->debug_state.__mdscr_el1 |= 1;
 		debuggee->set_debug_state();
 
-		rl_on_new_line();
-		rl_forced_update_display();
+		safe_reprompt();		
 
 		return KERN_SUCCESS;
 	}
 	else if(elem0 == EXC_ARM_DA_DEBUG){
-		printf("Hardware watchpoint hit at %#lx, read/write occured at %#llx\n", break_loc, debuggee->thread_state.__pc);
+		/* A watchpoint hit. Log anything we need to compare data when
+		 * the single step exception occurs.
+		 */
+		debuggee->last_hit_wp_loc = break_loc;
+		debuggee->last_hit_wp_PC = debuggee->thread_state.__pc;
+		
+		/* Enable hardware single stepping so we can get past this watchpoint. */
+		debuggee->get_debug_state();
+		debuggee->debug_state.__mdscr_el1 |= 1;
+		debuggee->set_debug_state();
+
+		debuggee->resume();
+		debuggee->interrupted = 0;
+
+		return KERN_SUCCESS;
 	}
-	else
-		printf("some other thing?\n");
+
+	/* Some other exception occured. */
+	char *tname = get_thread_name_from_thread_port(thread);
+
+	printf("\n * Thread %#llx, '%s' received signal %d, %s. %#llx in debuggee.\n", tid, tname, exception, get_exception_code(exception), debuggee->thread_state.__pc);
+
+	free(tname);
+
+	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+
+	safe_reprompt();
 
 	return KERN_SUCCESS;
 }

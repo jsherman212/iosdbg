@@ -1,7 +1,6 @@
 #ifndef _WATCHPOINT_H_
 #define _WATCHPOINT_H_
 
-//#include "defs.h"
 #include "memutils.h"
 #include "linkedlist.h"
 
@@ -23,6 +22,9 @@ struct watchpoint {
 
 	// The watchpoint register we're using.
 	int hw_wp_reg;
+
+	/* Load/store control for this watchpoint. */
+	int LSC;
 };
 
 #define WT (0 << 20)
@@ -35,16 +37,18 @@ typedef int wp_error_t;
 #define WP_FAILURE (wp_error_t)1
 #define WP_LIMIT_REACHED (wp_error_t)2
 
-#define WP_DISABLE 0
-#define WP_ENABLE 1
+#define WP_ENABLED 0
+#define WP_DISABLED 1
+
+#define WP_READ (1)
+#define WP_WRITE (2)
+#define WP_READ_WRITE (3)
 
 static int current_watchpoint_id = 1;
-//static int last_used_wp_reg = -1;
 
-wp_error_t watchpoint_at_address(unsigned long, unsigned int);
+wp_error_t watchpoint_at_address(unsigned long, unsigned int, int);
 void watchpoint_hit(struct watchpoint *);
 wp_error_t watchpoint_delete(int);
-//wp_error_t watchpoint_set_state(int, int);
 void watchpoint_enable_all(void);
 void watchpoint_disable_all(void);
 void watchpoint_delete_all(void);

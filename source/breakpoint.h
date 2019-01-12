@@ -20,7 +20,6 @@ struct breakpoint {
 	int hit_count;
 
 	// Whether or not this breakpoint is disabled.
-	// Disabled does not mean deleted. It is still active, but it does not hit.
 	int disabled;
 
 	// Whether or not this breakpoint deletes itself after hitting.
@@ -46,12 +45,14 @@ typedef int bp_error_t;
 #define BP_NO_TEMP 0
 #define BP_TEMP 1
 
+#define BP_ENABLED 0
+#define BP_DISABLED 1
+
 static int current_breakpoint_id = 1;
 
 // BRK #0
 static const unsigned long long BRK = 0x000020D4;
 
-struct breakpoint *breakpoint_new(unsigned long, int);
 bp_error_t breakpoint_at_address(unsigned long, int);
 void breakpoint_hit(struct breakpoint *);
 bp_error_t breakpoint_delete(int);
