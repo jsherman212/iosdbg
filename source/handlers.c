@@ -73,3 +73,45 @@ kern_return_t update_threads(thread_act_port_array_t *threads){
 
 	return err;
 }
+
+kern_return_t get_debug_state(void){
+	mach_msg_type_number_t count = ARM_DEBUG_STATE64_COUNT;
+
+	struct machthread *focused = machthread_getfocused();
+
+	kern_return_t kret = thread_get_state(focused->port, ARM_DEBUG_STATE64, (thread_state_t)&debuggee->debug_state, &count);
+
+	return kret;
+}
+
+/* Must call get_debug_state before calling this. */
+kern_return_t set_debug_state(void){
+	mach_msg_type_number_t count = ARM_DEBUG_STATE64_COUNT;
+
+	struct machthread *focused = machthread_getfocused();
+	
+	kern_return_t kret = thread_set_state(focused->port, ARM_DEBUG_STATE64, (thread_state_t)&debuggee->debug_state, count);
+
+	return kret;
+}
+
+kern_return_t get_thread_state(void){
+	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+
+	struct machthread *focused = machthread_getfocused();
+
+	kern_return_t kret = thread_get_state(focused->port, ARM_THREAD_STATE64, (thread_state_t)&debuggee->thread_state, &count);
+
+	return kret;
+}
+
+/* Must call get_thread_state before calling this. */
+kern_return_t set_thread_state(void){
+	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+
+	struct machthread *focused = machthread_getfocused();
+	
+	kern_return_t kret = thread_set_state(focused->port, ARM_THREAD_STATE64, (thread_state_t)&debuggee->thread_state, count);
+
+	return kret;
+}

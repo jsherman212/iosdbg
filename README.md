@@ -66,7 +66,7 @@ View the debuggee's ASLR slide.
 Unwind the stack.
 
 ### `break` (alias: `b`)
-Set a breakpoint. ASLR will be accounted for.
+Set a breakpoint. Pass `--no-aslr` to keep ASLR from being added.
 
 ### `continue` (alias: `c`)
 Resume the debuggee's execution.

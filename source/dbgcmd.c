@@ -61,14 +61,22 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	thread_act_port_array_t threads;
 	debuggee->update_threads(&threads);
 	
-	// update PC
-	arm_thread_state64_t thread_state;
-	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-	err = thread_get_state(threads[0], ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
-	
-	debuggee->PC = thread_state.__pc;
+	machthread_updatethreads(threads);
 
-	memutils_disassemble_at_location(debuggee->PC, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+	struct machthread *focused = machthread_getfocused();
+
+	// we have to set a focused thread first, so set it to the first thread
+	if(!focused){
+		machthread_setfocused(threads[0]);
+		focused = machthread_getfocused();
+	}
+
+	if(focused)
+		machthread_updatestate(focused);
+
+	debuggee->get_thread_state();
+
+	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 
 	return CMD_SUCCESS;
 }
@@ -143,22 +151,27 @@ cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
 
 cmd_error_t cmdfunc_break(const char *args, int arg1){
 	if(!args){
-		printf("Location?\n");
+		cmdfunc_help("break", 0);
 		return CMD_FAILURE;
 	}
 
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
-	char *tok = strtok((char *)args, " ");
-
-	while(tok){
-		unsigned long long location = strtoul(tok, NULL, 16);
-		breakpoint_at_address(location + debuggee->aslr_slide, BP_NO_TEMP, BP_FOR_NONE);
-
-		tok = strtok(NULL, " ");
-	}
+	char *tok = strtok((char *)args, " ");	
 	
+	long location = strtol(tok, NULL, 16);
+
+	/* Check for --no-aslr. */
+	tok = strtok(NULL, " ");
+	
+	if(tok && strcmp(tok, "--no-aslr") == 0){
+		breakpoint_at_address(location, BP_NO_TEMP);
+		return CMD_SUCCESS;
+	}
+
+	breakpoint_at_address(location + debuggee->aslr_slide, BP_NO_TEMP);
+
 	return CMD_SUCCESS;
 }
 
@@ -276,11 +289,9 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 
 	free(debuggee->debuggee_name);
 	debuggee->debuggee_name = NULL;
-
-	debuggee->last_bkpt_PC = 0;
-	debuggee->last_wp_PC = 0;
-
-	debuggee->last_bkpt_ID = 0;
+	
+	debuggee->last_hit_bkpt_ID = 0;
+	debuggee->last_hit_bkpt_hw = 0;
 
 	return CMD_SUCCESS;
 }
@@ -778,6 +789,40 @@ cmd_error_t cmdfunc_watch(const char *args, int arg1){
 	// base doesn't matter here
 	// since watchpoint_at_address bails if data_len > sizeof(long long)
 	unsigned int data_len = strtol(tok, NULL, 16);
+
+	watchpoint_at_address(location, data_len);
+
+	return CMD_SUCCESS;
+}
+
+cmd_error_t cmdfunc_hwatch(const char *args, int arg1){
+	if(!args){
+		cmdfunc_help("watch", 0);
+		return CMD_FAILURE;
+	}
+	
+	char *tok = strtok((char *)args, " ");
+
+	if(!tok){
+		cmdfunc_help("watch", 0);
+		return CMD_FAILURE;
+	}
+
+	long location = strtol(tok, NULL, 16);
+	
+	tok = strtok(NULL, " ");
+	
+	if(!tok){
+		cmdfunc_help("watch", 0);
+		return CMD_FAILURE;
+	}
+
+	// base doesn't matter here
+	// since watchpoint_at_address bails if data_len > sizeof(long long)
+	int data_len = strtol(tok, NULL, 16);
+
+	//printf("Location %#lx data_len %x\n", location, data_len);
+	//printf("%d hw bps, %d hw wps\n", debuggee->num_hw_bps, debuggee->num_hw_wps);
 
 	watchpoint_at_address(location, data_len);
 

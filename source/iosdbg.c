@@ -39,7 +39,9 @@ void interrupt(int show_prompt){
 
 	printf("\n");
 
-	memutils_disassemble_at_location(debuggee->PC, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+	debuggee->get_thread_state();
+
+	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 
 	if(show_prompt)
 		rl_printf(RL_REPROMPT, "%s stopped.\n", debuggee->debuggee_name);
@@ -52,9 +54,18 @@ void install_handlers(void){
 	debuggee->setup_exception_handling = &setup_exception_handling;
 	debuggee->suspend = &suspend;
 	debuggee->update_threads = &update_threads;
+	debuggee->get_debug_state = &get_debug_state;
+	debuggee->set_debug_state = &set_debug_state;
+	debuggee->get_thread_state = &get_thread_state;
+	debuggee->set_thread_state = &set_thread_state;
 }
 
 int main(int argc, char **argv, const char **envp){
+	if(getuid() && geteuid()){
+		printf("iosdbg requires root to operate correctly\n");
+		return 1;
+	}
+	
 	debuggee = NULL;
 
 	setup_initial_debuggee();
@@ -91,10 +102,8 @@ int main(int argc, char **argv, const char **envp){
 				focused = machthread_getfocused();
 			}
 
-			if(focused){
+			if(focused)
 				machthread_updatestate(focused);
-				debuggee->PC = focused->thread_state.__pc;
-			}
 		}
 		
 		execute_command(line);

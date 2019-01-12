@@ -1,7 +1,10 @@
 #ifndef _MEMUTILS_H_
 #define _MEMUTILS_H_
 
-#include "defs.h"
+#include "breakpoint.h"
+#include <armadillo.h>
+#include <mach/mach.h>
+//#include "defs.h"
 
 #define DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER 0
 #define DISAS_SHOW_ARROW_AT_LOCATION_PARAMETER 1

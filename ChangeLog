@@ -1,3 +1,16 @@
+1-11-19
+- I realized I was interpreting the ARMv8 instruction set manual wrong and
+found out you can access debug registers in EL0 through kernel APIs
+(thread_get/set_state), so I implemented hardware breakpoints.
+iosdbg falls back to software breakpoints when there's no more debug registers available.
+- much better and cleaner mach_catch_exception_raise
+- no more temp breakpoints to re-enable a previously hit breakpoint thanks to
+MDSCR_EL1's single stepping bit
+- lots and lots of cleanup
+
+1-9-19
+- breakpointing on a branch works fully now
+
 1-8-19
 - fixed up watchpoints
 - greatly improved breakpoints, no more bp_manager_thread nonsense

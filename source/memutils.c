@@ -30,26 +30,38 @@ kern_return_t memutils_disassemble_at_location(unsigned long long location, int 
 		char *data = malloc(data_size);
 		kern_return_t err = memutils_read_memory_at_location(current_location, data, data_size);
 
-		// format the memory given back
-		// for NULL terminator
-		char *bigendian = malloc((data_size * 2) + 1);
-		memset(bigendian, '\0', (data_size * 2) + 1);
+		unsigned long instr;
 
-		for(int i=0; i<data_size; i++)
-			sprintf(bigendian, "%s%02x", bigendian, (unsigned char)data[i]);
+		/* Do not show any of the BRK #0 written by software breakpoints
+		 * when the user wants to disassemble memory.
+		 */
+		struct breakpoint *active = find_bp_with_address(current_location);
 
-		free(data);
+		if(active)
+			instr = CFSwapInt32(active->old_instruction);
+		else{
+			// format the memory given back
+			char *bigendian = malloc((data_size * 2) + 1);
+			memset(bigendian, '\0', (data_size * 2) + 1);
 
-		unsigned long long instr = strtoull(bigendian, NULL, 16);		
-		free(bigendian);
+			for(int i=0; i<data_size; i++)
+				sprintf(bigendian, "%s%02x", bigendian, (unsigned char)data[i]);
+
+			free(data);
+			
+			instr = strtoul(bigendian, NULL, 16);		
+			
+			free(bigendian);
+		}
 
 		char *disassembled = ArmadilloDisassembleB(instr, current_location);
+
+		debuggee->get_thread_state();
 
 		if(show_arrow_at_location_param)
 			printf("%s%#llx:  %s\n", location == current_location ? "->  " : "    ", current_location, disassembled);
 		else
-			printf("%s%#llx:  %s\n", debuggee->PC == current_location ? "->  " : "    ", current_location, disassembled);
-
+			printf("%s%#llx:  %s\n", debuggee->thread_state.__pc == current_location ? "->  " : "    ", current_location, disassembled);
 
 		free(disassembled);
 
