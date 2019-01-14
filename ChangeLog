@@ -1,3 +1,7 @@
+1-13-19
+- fix disassemble command alias
+- rewrite execute_command
+
 1-12-19
 - hardware watchpoints
 - optimized code inside breakpoint.c

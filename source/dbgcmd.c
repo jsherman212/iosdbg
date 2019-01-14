@@ -4,6 +4,15 @@ Implementation for every command.
 
 #include "dbgcmd.h"
 
+cmd_error_t cmdfunc_aslr(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
+	printf("%#llx\n", debuggee->aslr_slide);
+	
+	return CMD_SUCCESS;
+}
+
 cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	if(debuggee->pid != -1)
 		return CMD_FAILURE;
@@ -77,15 +86,6 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 
 	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 
-	return CMD_SUCCESS;
-}
-
-cmd_error_t cmdfunc_aslr(const char *args, int arg1){
-	if(debuggee->pid == -1)
-		return CMD_FAILURE;
-
-	printf("%#llx\n", debuggee->aslr_slide);
-	
 	return CMD_SUCCESS;
 }
 
@@ -875,233 +875,320 @@ cmd_error_t cmdfunc_watch(const char *args, int arg1){
 	return CMD_SUCCESS;
 }
 
-// Given user input, autocomplete their command and find the arguments.
-// If the command is valid, call the function pointer from the correct command struct.
-cmd_error_t execute_command(char *user_command){
-	int num_commands = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
+cmd_error_t execute_command(char *input){
+	/* Trim any whitespace at the beginning and the end of the command. */
+	while(isspace(*input))
+		input++;
 
-	// make a copy of the parameters so we don't modify them
-	char *user_command_copy = malloc(strlen(user_command) + 1);
-	strcpy(user_command_copy, user_command);
-
-	char *token = strtok(user_command_copy, " ");
-	if(!token)
+	if(!input)
 		return CMD_FAILURE;
 
-	// this string will hold all the arguments for the command passed in
-	// if it is still NULL by the time we exit the main loop, there were no commands
-	char *cmd_args = NULL;
+	const char *end = input + (strlen(input) - 1);
 
-	char *piece = malloc(128);
-	strcpy(piece, token);
+	while(end > input && isspace(*end))
+		end--;
 
-	struct cmd_match_result_t *current_result = malloc(sizeof(struct cmd_match_result_t));
-	current_result->num_matches = 0;
-	current_result->match = NULL;
-	current_result->matched_cmd = NULL;
-	current_result->matches = malloc(512);
-	current_result->ambigious = 0;
-	current_result->perfect = 0;
-
-	memset(current_result->matches, '\0', 512);
+	input[(end - input) + 1] = '\0';
 	
-	// will hold the best command we've found
-	// this compensates for command arguments being included
-	// in the command string we're testing for
-	struct cmd_match_result_t *final_result = NULL;
+	char *usercmd = malloc(strlen(input) + 1);
+	strcpy(usercmd, input);
+
+	char *token = strtok(usercmd, " ");
+
+	/* If there's nothing here, bail out. */
+	if(!token){
+		free(usercmd);
+		return CMD_FAILURE;
+	}
+	
+	/* This is the what function we will call when
+	 * we figure out what command the user wants.
+	 * If this is still NULL by the end of this function,
+	 * no suitable command was found.
+	 */
+	Function *finalfunc = NULL;
+
+	int numcmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
+	
+	/* First, check if the command is an alias. */
+	for(int i=0; i<numcmds; i++){
+		struct dbg_cmd_t *curcmd = &COMMANDS[i];
+
+		/* If there is an alias, there's nothing left to do
+		 * but to initialize finalfunc and call it.
+		 */
+		if(curcmd->alias && strcmp(curcmd->alias, token) == 0){
+			finalfunc = curcmd->function;
+			
+			/* Anything after token will be an argument
+			 * for this command. Add one to get past the
+			 * space.
+			 */
+			/* Assume there we no arguments entered for safety. */
+			char *args = NULL;
+
+			/* If there were, initialize args with them, and add
+			 * one to get past the space.
+			 */
+			size_t tokenlen = strlen(token);
+
+			if(strlen(input) > tokenlen)
+				args = (char *)input + tokenlen + 1;
+			
+			finalfunc(args, 0);
+
+			free(usercmd);
+			
+			return CMD_SUCCESS;
+		}
+	}
+
+	const int init_buf_sz = 16;
+	
+	/* This is what will hold the possible commands
+	 * that the user's input could be.
+	 */
+	char *possible_cmds = malloc(init_buf_sz);
+	memset(possible_cmds, '\0', init_buf_sz);
+
+	/* This is what the final command will be. */
+	char *finalcmd = malloc(init_buf_sz);
+	memset(finalcmd, '\0', init_buf_sz);
+	
+	/* If it was not an alias, do the command matching. */
+	int idx = 0;
+	
+	int ambiguous = 0;
+	int guaranteed = 0;
+	int num_matches = 0;
+	
+	/* The command will be parsed and appended to finalcmd when
+	 * there is no ambiguity.
+	 */
+	char *potcmd = malloc(init_buf_sz);
+	memset(potcmd, '\0', init_buf_sz);
+
+	/* Save the previous command to match a function with a non-guaranteed
+	 * ambiguous command.
+	 */
+	struct dbg_cmd_t *prevcmd = NULL;
+
+	size_t pclen;
 
 	while(token){
-		int cur_cmd_idx = 0;
-		struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
+		struct dbg_cmd_t *cmd = &COMMANDS[idx];
 
-		char *prev_piece = NULL;
+		char *tempbuf = NULL;
 
-		while(cur_cmd_idx < num_commands){
-			int use_prev_piece = prev_piece != NULL;
-			int piecelen = strlen(use_prev_piece ? prev_piece : piece);
+		/* Check if this command is guaranteed to be ambiguous. If it
+		 * is, tack it on and start back at the beginning.
+		 */
+		if(strlen(finalcmd) == 0 && !cmd->function && 
+				strncmp(cmd->name, token, strlen(token)) == 0){
+			/* Since this is guaranteed to be ambiguous, we don't know
+			 * how many bytes the resulting command will take up.
+			 */
+			potcmd = realloc(potcmd, init_buf_sz + 64);
+			sprintf(potcmd, "%s", cmd->name);
+
+			finalcmd = realloc(finalcmd, strlen(cmd->name) + 1 + 1);
+			sprintf(finalcmd, "%s", cmd->name);
 			
-			// check if the command is an alias
-			// check when a command is shorter than another command
-			if((cmd->function && strcmp(cmd->name, piece) == 0) || (cmd->alias && strcmp(cmd->alias, user_command_copy) == 0)){
-				final_result = malloc(sizeof(struct cmd_match_result_t));
+			tempbuf = malloc(strlen(finalcmd) + 1);
+			strcpy(tempbuf, finalcmd);
+			
+			guaranteed = 1;
+		}
+		else{
+			/* Append token to finalcmd in a temporary buffer 
+			 * so we can test for equality in cmd->name.
+			 */
+			if(guaranteed){
+				tempbuf = malloc(strlen(finalcmd) + strlen(token) + 1 + 1);
+				sprintf(tempbuf, "%s %s", finalcmd, token);
+			}
+			else{
+				tempbuf = malloc(strlen(finalcmd) + strlen(token) + 1);
+				sprintf(tempbuf, "%s%s", finalcmd, token);
+			}
+		}
+		
+		pclen = strlen(possible_cmds);
+		
+		/* Since tempbuf holds what we have so far + our token, now is a
+		 * good time to check for ambiguity for guaranteed ambiguous commands.
+		 */
+		if(guaranteed){
+			int idxcpy = idx;
+			struct dbg_cmd_t *cmdcpy = &COMMANDS[idxcpy];
+			
+			char *substr = strstr(cmdcpy->name, tempbuf);
 
-				final_result->num_matches = 1;
-				final_result->match = malloc(128);
-				strcpy(final_result->match, cmd->name);
-				final_result->matches = NULL;
-				final_result->matched_cmd = cmd;
-				final_result->perfect = 1;
+			if(substr){
+				/* Reset variables when we start a new ambiguity check. */
+				num_matches = 0;
+				memset(possible_cmds, '\0', strlen(possible_cmds));
+			}
 
+			while(substr){
+				num_matches++;
+
+				pclen = strlen(possible_cmds);
+				size_t cpylen = strlen(cmdcpy->name);
+
+				if(cmdcpy->function){
+					size_t bufsz = pclen + cpylen + 2 + 1;
+					
+					possible_cmds = realloc(possible_cmds, bufsz);
+					strcat(possible_cmds, cmdcpy->name);
+					strcat(possible_cmds, ", ");
+				}
+
+				cmdcpy = &COMMANDS[++idxcpy];
+				substr = strstr(cmdcpy->name, tempbuf);
+			}
+
+			/* We found a matching command, save its function. */
+			if(num_matches == 1){
+				finalfunc = cmd->function;
+				token = strtok(NULL, " ");
 				break;
 			}
-
-			if(strncmp(cmd->name, use_prev_piece ? prev_piece : piece, piecelen) == 0){
-				current_result->num_matches++;
-
-				// guaranteed ambigious command
-				if(!cmd->function){
-					if(current_result->match)
-						current_result->match = NULL;
-					
-					// strlen(cmd->name) + ' ' + '\0'
-					char *updated_piece = malloc(strlen(cmd->name) + 1 + 1);
-					strcpy(updated_piece, cmd->name);
-					strcat(updated_piece, " ");
-
-					strcpy(piece, updated_piece);
-
-					free(updated_piece);
-
-					current_result->ambigious = 1;
-				}
-				else
-					current_result->ambigious = current_result->num_matches > 1 ? 1 : 0;
-
-				// tack on any other matches we've found
-				if(cmd->function){
-					strcat(current_result->matches, cmd->name);
-					strcat(current_result->matches, ", ");
-				}
-
-				if(current_result->num_matches == 1){
-					// strlen(cmd->name) + ' ' + '\0'
-					char *updated_piece = malloc(strlen(cmd->name) + 1 + 1);
-					memset(updated_piece, '\0', strlen(cmd->name) + 1 + 1);
-					
-					// find the end of the current word in the command
-					char *cmdname_copy = (char *)cmd->name;
-
-					// advance to where piece leaves off
-					cmdname_copy += strlen(piece);
-
-					// find the nearest space after that
-					char *space = strchr(cmdname_copy, ' ');
-
-					if(space){
-						// if we found a space, we need to know how many bytes of cmd->name to copy
-						// because we aren't at the end of this command yet
-						int byte_amount = space - cmdname_copy;
-
-						strncpy(updated_piece, cmd->name, strlen(piece) + byte_amount);
-					}
-					else
-						// otherwise, we've reached the end of the command
-						// and it's safe to copy the entire thing
-						strcpy(updated_piece, cmd->name);
-					
-					strcat(updated_piece, " ");
-
-					// we need to check for ambiguity but we are modifing piece
-					// make a backup and use this in the strncmp call when it is not NULL
-					if(!prev_piece){
-						prev_piece = malloc(128);
-						memset(prev_piece, '\0', 128);
-					}
-
-					strcpy(prev_piece, piece);
-					strcpy(piece, updated_piece);
-
-					free(updated_piece);
-					
-					if(!current_result->match){
-						current_result->match = malloc(128);
-						memset(current_result->match, '\0', 128);
-					}
-
-					strcpy(current_result->match, cmd->name);
-					strcpy(current_result->matches, current_result->match);
-					strcat(current_result->matches, ", ");
-
-					final_result = current_result;
-					final_result->matched_cmd = cmd;
-				}
-
-				if(current_result->ambigious){
-					if(current_result->match){
-						free(current_result->match);
-						current_result->match = NULL;
-					}
-
-					if(final_result)
-						final_result->matched_cmd = NULL;
-				}
-			}
-
-			cur_cmd_idx++;
-			cmd = &COMMANDS[cur_cmd_idx];
 		}
 
-		cur_cmd_idx = 0;
-
-		token = strtok(NULL, " ");
-
-		if(token && (final_result && !final_result->perfect)){
-			if(!current_result->ambigious)
-				strcat(piece, token);
-			else if(token && current_result->ambigious){
-				// find the last space in the command string we're building
-				char *lastspace = strrchr(piece, ' ');
-
-				// append the next piece to the command string
-				if(lastspace){
-					char *updated_piece = malloc(strlen(piece) + strlen(token) + 1);
-					memset(updated_piece, '\0', strlen(piece) + strlen(token) + 1);
-					strcpy(updated_piece, piece);
-					strcat(updated_piece, token);
-					strcpy(piece, updated_piece);
-
-					free(updated_piece);
-				}
+		/* Check for any matches. If there are matches, update a few variables
+		 * so we can use them to see if we should append any part of `potcmd`
+		 * when there aren't.
+		*/
+		if(cmd->function && strncmp(cmd->name, tempbuf, strlen(tempbuf)) == 0){
+			/* We have different ways of checking for ambiguity for guaranteed
+			 * ambiguous commands and regular commands.
+			 */
+			if(!guaranteed){
+				num_matches++;
+				ambiguous = num_matches > 1;
 			}
-		}
-
-		// once final_result->match is not NULL, we've found a match
-		// this means we can assume anything `token` contains is an argument
-		if(token && final_result && final_result->match){
-			if(!cmd_args){
-				cmd_args = malloc(128);
-				memset(cmd_args, '\0', 128);
-			}
-
-			strcat(cmd_args, token);
-			strcat(cmd_args, " ");
-		}
-
-		current_result->num_matches = 0;
-	}
-
-	if(final_result){
-		// trim the extra comma and space from the ambiguous commands string
-		if(final_result->matches)
-			final_result->matches[strlen(final_result->matches) - 2] = '\0';
-
-		if(!final_result->match)
-			printf("Ambigious command '%s': %s\n", user_command, final_result->matches);
-
-		// do the same with the cmd_args string
-		if(cmd_args && strlen(cmd_args) > 0)
-			cmd_args[strlen(cmd_args) - 1] = '\0';
-
-		if(final_result->matched_cmd && final_result->matched_cmd->function){
-			cmd_error_t result = final_result->matched_cmd->function(cmd_args, 0);
 			
-			//DONE_PRINTING = 1;
+			size_t cmdlen = strlen(cmd->name);
+			
+			/* Keep track of possiblities from ambiguous input. */	
+			if(!guaranteed){
+				possible_cmds = realloc(possible_cmds, pclen + cmdlen + 3);
+				
+				strcat(possible_cmds, cmd->name);
+				strcat(possible_cmds, ", ");
+			}
 
-			//if(result == CMD_FAILURE)
-			//	printf("Could not carry out command\n");
+			/* Keep track of any potential matches. */
+			potcmd = realloc(potcmd, strlen(cmd->name) + 1);
+			strcpy(potcmd, cmd->name);
+			
+			/* If this command is guaranteed ambiguous, it will have more
+			 * than one word. Tack the next word of this command onto
+			 * finalcmd.
+			 */
+			if(guaranteed){
+				char *potcmd_copy = potcmd;
+				potcmd_copy += strlen(finalcmd) + 1;
+
+				char *space = strchr(potcmd_copy, ' ');
+
+				int bytes = space ? space - potcmd_copy : strlen(potcmd_copy);
+				potcmd_copy[bytes] = '\0';
+
+				finalcmd = realloc(finalcmd, strlen(finalcmd) + 1 + bytes + 1);
+				sprintf(finalcmd, "%s %s", finalcmd, potcmd_copy);
+				
+				token = strtok(NULL, " ");
+				
+				continue;
+			}
+		}
+		else{
+			if(ambiguous){
+				/* Chop off the ", " at the end of this string. */
+				possible_cmds[pclen - 2] = '\0';
+				
+				printf("Ambiguous command '%s': %s\n", input, possible_cmds);
+
+				free(usercmd);
+				free(possible_cmds);
+				free(finalcmd);
+				free(potcmd);
+
+				return CMD_FAILURE;
+			}
+
+			finalcmd = realloc(finalcmd, strlen(potcmd) + 1);
+			strcpy(finalcmd, potcmd);
+			
+			/* We found a matching command, save its function. */
+			if(!guaranteed && strlen(finalcmd) > 0){
+				finalfunc = prevcmd->function;
+				token = strtok(NULL, " ");
+				break;
+			}
 		}
 
-		if(cmd_args)
-			free(cmd_args);
+		free(tempbuf);
+
+		prevcmd = cmd;
+
+		idx++;
+		
+		if(idx == numcmds){
+			token = strtok(NULL, " ");
+			idx = 0;
+		}
 	}
-	else
-		printf("Unknown command '%s'\n", user_command);
 
-	free(current_result->match);
-	free(current_result->matches);
-	free(current_result);
-	free(piece);
-	free(user_command_copy);
+	free(finalcmd);
+	free(potcmd);
 
-	return CMD_SUCCESS;
+	pclen = strlen(possible_cmds);
+
+	/* We already handle ambiguity for commands that are not guaranteed
+	 * to be ambiguous in the loop.
+	 */
+	if(num_matches > 1){
+		if(pclen > 2)
+			possible_cmds[pclen - 2] = '\0';
+
+		printf("Ambiguous command '%s': %s\n", input, possible_cmds);
+		
+		return CMD_FAILURE;
+	}
+
+	free(possible_cmds);
+
+	if(!finalfunc){
+		printf("Unknown command '%s'\n", input);
+		return CMD_FAILURE;
+	}
+
+	/* If we've found a good command, call its function.
+	 * At this point, anything token contains is an argument. */
+	if(!token)
+		return finalfunc(NULL, 0);
+
+	char *args = malloc(init_buf_sz);
+	memset(args, '\0', init_buf_sz);
+
+	while(token){
+		args = realloc(args, strlen(args) + strlen(token) + 1 + 1);
+		strcat(args, token);
+		strcat(args, " ");
+		
+		token = strtok(NULL, " ");
+	}
+
+	/* Remove the trailing space from args. */
+	args[strlen(args) - 1] = '\0';
+
+	cmd_error_t result = finalfunc(args, 0);
+
+	free(args);
+	free(usercmd);
+	
+	return result;
 }
