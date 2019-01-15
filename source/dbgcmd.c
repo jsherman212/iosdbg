@@ -4,6 +4,53 @@ Implementation for every command.
 
 #include "dbgcmd.h"
 
+/* Allow the user to answer whatever
+ * question is given.
+ */
+char answer(const char *question, ...){
+	va_list args;
+	va_start(args, question);
+
+	vprintf(question, args);
+
+	va_end(args);
+	
+	char *answer = NULL;
+	size_t len;
+	
+	getline(&answer, &len, stdin);
+	answer[strlen(answer) - 1] = '\0';
+	
+	/* Allow the user to hit enter as another way
+	 * of saying yes.
+	 */
+	if(strlen(answer) == 0)
+		return 'y';
+
+	char ret = tolower(answer[0]);
+
+	while(ret != 'y' && ret != 'n'){
+		va_list args;
+		va_start(args, question);
+
+		vprintf(question, args);
+
+		va_end(args);
+
+		free(answer);
+		answer = NULL;
+
+		getline(&answer, &len, stdin);
+		answer[strlen(answer) - 1] = '\0';
+		
+		ret = tolower(answer[0]);
+	}
+	
+	free(answer);
+
+	return ret;
+}
+
 cmd_error_t cmdfunc_aslr(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
@@ -14,9 +61,6 @@ cmd_error_t cmdfunc_aslr(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_attach(const char *args, int arg1){
-	if(debuggee->pid != -1)
-		return CMD_FAILURE;
-
 	if(!args){
 		cmdfunc_help("attach", 0);
 		return CMD_FAILURE;
@@ -25,6 +69,21 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	if(strcmp(args, "iosdbg") == 0){
 		printf("Not so fast\n");
 		return CMD_FAILURE;
+	}
+
+	if(debuggee->pid != -1){
+		char ans = answer("Detach from %s and reattach to %s? (y/n) ", debuggee->debuggee_name, args);
+
+		if(ans == 'n')
+			return CMD_SUCCESS;
+		
+		/* Detach from what we are attached to
+		 * and call this function again.
+		 */		
+		cmdfunc_detach(NULL, 0);
+		cmdfunc_attach(args, 0);
+
+		return CMD_SUCCESS;
 	}
 
 	pid_t pid = pid_of_program((char *)args);
@@ -56,13 +115,13 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	memset(debuggee->debuggee_name, '\0', strlen(args) + 1);
 	strcpy(debuggee->debuggee_name, args);
 	
-	printf("Attached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
+	printf("\nAttached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
 	debuggee->breakpoints = linkedlist_new();
 	debuggee->watchpoints = linkedlist_new();
 	debuggee->threads = linkedlist_new();
 
-	setup_exceptions();
+	setup_servers();
 
 	debuggee->num_breakpoints = 0;
 	debuggee->num_watchpoints = 0;
@@ -70,17 +129,10 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	thread_act_port_array_t threads;
 	debuggee->update_threads(&threads);
 	
-	machthread_updatethreads(threads);
-
-	struct machthread *focused = machthread_getfocused();
+	resetmtid();
 	
-	if(!focused){
-		machthread_setfocused(threads[0]);
-		focused = machthread_getfocused();
-	}
-
-	if(focused)
-		machthread_updatestate(focused);
+	machthread_updatethreads(threads);
+	machthread_setfocused(threads[0]);
 
 	debuggee->get_thread_state();
 
@@ -236,19 +288,13 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 	 */
 	if(!tok){
 		const char *target = strcmp(type, "b") == 0 ? "breakpoints" : "watchpoints";
-		printf("Delete all %s? (y/n) ", target);
 		
-		char *choice = NULL;
-		size_t sz;
-		getline(&choice, &sz, stdin);
-		choice[strlen(choice) - 1] = '\0';
+		char ans = answer("Delete all %s? (y/n) ", target);
 
-		if(choice[0] == 'n'){
+		if(ans == 'n'){
 			printf("Nothing deleted.\n");
 			return CMD_SUCCESS;
 		}
-
-		free(choice);
 
 		void (*delete_func)(void) = 
 			strcmp(target, "breakpoints") == 0 ? 
@@ -334,7 +380,8 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	linkedlist_free(debuggee->threads);
 	debuggee->threads = NULL;
 
-	printf("Detached from %s (%d)\n", debuggee->debuggee_name, debuggee->pid);
+	if(!from_death)
+		printf("Detached from %s (%d)\n", debuggee->debuggee_name, debuggee->pid);
 
 	debuggee->pid = -1;
 	debuggee->num_breakpoints = 0;
@@ -348,6 +395,10 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	
 	debuggee->last_hit_wp_loc = 0;
 	debuggee->last_hit_wp_PC = 0;
+
+	debuggee->deallocate_ports();
+
+	current_machthread_id = 1;
 
 	return CMD_SUCCESS;
 }
@@ -1016,7 +1067,8 @@ cmd_error_t execute_command(char *input){
 		pclen = strlen(possible_cmds);
 		
 		/* Since tempbuf holds what we have so far + our token, now is a
-		 * good time to check for ambiguity for guaranteed ambiguous commands.
+		 * good time to check for ambiguity for guaranteed ambiguous commands,
+		 * as well as if we have a match.
 		 */
 		if(guaranteed){
 			int idxcpy = idx;

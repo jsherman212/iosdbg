@@ -1,3 +1,11 @@
+1-14-19
+- implement mach notifications correctly to check when debuggee dies
+- deallocate debuggee->exception_port upon detach
+- machthread implementation optimized
+- command won't be added to history if line is empty
+- repeat last command entered by hitting enter
+- now you can reattach without detaching first
+
 1-13-19
 - fix disassemble command alias
 - rewrite execute_command

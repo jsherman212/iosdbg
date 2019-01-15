@@ -1,23 +1,5 @@
 #include "iosdbg.h"
 
-void *death_server(void *arg){
-	while(1){
-		if(debuggee->pid != -1){
-			mach_port_type_t type;
-			kern_return_t err = mach_port_type(mach_task_self(), debuggee->task, &type);
-
-			if(type == MACH_PORT_TYPE_DEAD_NAME){
-				printf("\n[%d dead]\n", debuggee->pid);
-				cmdfunc_detach(NULL, 1);
-				rl_on_new_line();
-				rl_redisplay();
-			}
-		}
-
-		sleep(1);
-	}
-}
-
 // SIGINT handler
 void interrupt(int show_prompt){
 	if(debuggee->pid == -1)
@@ -52,6 +34,7 @@ void install_handlers(void){
 	debuggee->restore_exception_ports = &restore_exception_ports;
 	debuggee->resume = &resume;
 	debuggee->setup_exception_handling = &setup_exception_handling;
+	debuggee->deallocate_ports = &deallocate_ports;
 	debuggee->suspend = &suspend;
 	debuggee->update_threads = &update_threads;
 	debuggee->get_debug_state = &get_debug_state;
@@ -76,15 +59,18 @@ int main(int argc, char **argv, const char **envp){
 	signal(SIGINT, interrupt);
 
 	char *line = NULL;
-
-	// Until I can figure out how to correctly implement mach notifications, this will work fine.
-	// Spawn a thread to check for the termination of the debuggee.
-	pthread_t dt;
-	pthread_create(&dt, NULL, death_server, NULL);
-
+	char *prevline = NULL;
+	
 	while((line = readline(prompt)) != NULL){
-		// add the command to history
-		if(strlen(line) > 0)
+		/* If the user hits enter, repeat the last command,
+		 * and do not add to the command history if the length
+		 * of line is 0.
+		 */
+		if(strlen(line) == 0 && prevline){
+			line = realloc(line, strlen(prevline) + 1);
+			strcpy(line, prevline);
+		}
+		else if(strlen(line) > 0 && (!prevline || (prevline && strcmp(line, prevline) != 0)))
 			add_history(line);
 
 		// update the debuggee's linkedlist of threads
@@ -98,6 +84,7 @@ int main(int argc, char **argv, const char **envp){
 
 			// we have to set a focused thread first, so set it to the first thread
 			if(!focused){
+				printf("[Previously selected thread dead, selecting thread #1]\n\n");
 				machthread_setfocused(threads[0]);
 				focused = machthread_getfocused();
 			}
@@ -107,6 +94,10 @@ int main(int argc, char **argv, const char **envp){
 		}
 		
 		execute_command(line);
+		
+		prevline = realloc(prevline, strlen(line) + 1);
+		strcpy(prevline, line);
+		
 		free(line);
 	}
 

@@ -20,75 +20,73 @@ struct machthread *machthread_new(mach_port_t thread_port){
 		strcpy(mt->tname, (char *)n);
 	}
 	
-	machthread_updatestate(mt);	
+	machthread_updatestate(mt);
 	
 	mt->ID = current_machthread_id++;
 
 	return mt;	
 }
 
+/* Find a machthread with a given condition, defined in compway. */
+struct machthread *find_with_cond(enum comparison compway, void *comparingwith){
+	if(!debuggee->threads)
+		return NULL;
+
+	struct node_t *current = debuggee->threads->front;
+
+	while(current){
+		struct machthread *t = current->data;
+
+		int cond = 0;
+
+		if(compway == PORTS)
+			cond = t->port == *(mach_port_t *)comparingwith;
+		else if(compway == IDS)
+			cond = t->ID == *(int *)comparingwith;
+		else if(compway == FOCUSED)
+			cond = t->focused;
+
+		if(cond)
+			return t;
+
+		current = current->next;
+	}
+
+	/* Not found. */
+	return NULL;
+}
+
 struct machthread *machthread_fromport(mach_port_t thread_port){
 	if(thread_port == MACH_PORT_NULL)
 		return NULL;
 
-	if(!debuggee->threads)
-		return NULL;
+	mach_port_t *thread_port_ptr = malloc(sizeof(thread_port));
+	*thread_port_ptr = thread_port;
 
-	struct node_t *current = debuggee->threads->front;
+	struct machthread *ret = find_with_cond(PORTS, thread_port_ptr);
 
-	while(current){
-		struct machthread *t = current->data;
-
-		if(t->port == thread_port)
-			return t;
-
-		current = current->next;
-	}
-
-	// not found
-	return NULL;
+	free(thread_port_ptr);
+	
+	return ret;
 }
 
 struct machthread *machthread_find(int ID){
-	if(!debuggee->threads)
-		return NULL;
+	int *IDptr = malloc(sizeof(ID));
+	*IDptr = ID;
+	
+	struct machthread *ret = find_with_cond(IDS, IDptr);
 
-	struct node_t *current = debuggee->threads->front;
+	free(IDptr);
 
-	while(current){
-		struct machthread *t = current->data;
-
-		if(t->ID == ID)
-			return t;
-
-		current = current->next;
-	}
-
-	// not found
-	return NULL;
+	return ret;
 }
 
 struct machthread *machthread_getfocused(void){
-	if(!debuggee->threads)
-		return NULL;
-
-	struct node_t *current = debuggee->threads->front;
-
-	while(current){
-		struct machthread *t = current->data;
-
-		if(t->focused)
-			return t;
-
-		current = current->next;
-	}
-	
-	// we shouldn't reach here...
-	return NULL;
+	return find_with_cond(FOCUSED, NULL);
 }
 
 int machthread_setfocusgivenindex(int focus_index){
-	// we print out the thread list starting at 1
+	/* We print out the thread list starting at 1. */
 	focus_index--;
 	int counter = 0;
 
@@ -110,20 +108,6 @@ int machthread_setfocusgivenindex(int focus_index){
 	return 0;
 }
 
-void machthread_reassignall(void){
-	if(!debuggee->threads)
-		return;
-
-	current_machthread_id = 1;
-	struct node_t *current = debuggee->threads->front;
-
-	while(current){
-		struct machthread *t = current->data;
-		t->ID = current_machthread_id++;
-		current = current->next;
-	}
-}
-
 void machthread_updatestate(struct machthread *mt){
 	if(!mt)
 		return;
@@ -136,15 +120,8 @@ void machthread_updatestate(struct machthread *mt){
 
 	kern_return_t kret = thread_get_state(mt->port, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
 
-	// if there was a problem, delete this thread
-	if(kret){
-		if(mt->focused)
-			// switching will happen after machthread_updatethreads returns
-			printf("[Switching to thread 1, %llx, '%s']\n", ((struct machthread *)debuggee->threads->front->data)->tid, ((struct machthread *)debuggee->threads->front->data)->tname);
-		
-		linkedlist_delete(debuggee->threads, mt);
+	if(kret)
 		return;
-	}
 
 	mt->thread_state = thread_state;
 }
@@ -152,56 +129,83 @@ void machthread_updatestate(struct machthread *mt){
 void machthread_updatethreads(thread_act_port_array_t threads){
 	if(!debuggee->threads)
 		return;
-
-	// check if no threads are in this linked list, this is a special case
-	// after we intitially populate the linked list, add and remove from it
+	
+	/* Check if there are no threads in the linked list. This should only
+	 * be the case right after we attach to our target program.
+	 */
 	if(!debuggee->threads->front){
 		for(int i=0; i<debuggee->thread_count; i++){
 			struct machthread *add = machthread_new(threads[i]);
-
 			linkedlist_add(debuggee->threads, add);
 		}
 
 		return;
 	}
 
-	// add any new threads
-	// yes, this is terrible
-	for(int i=0; i<debuggee->thread_count; i++){
-		struct node_t *current = debuggee->threads->front;
-		int already_present = 0;
-
-		while(current){
-			struct machthread *t = current->data;
-
-			if(t->port == threads[i]){
-				already_present = 1;
-				break;
-			}
-
-			current = current->next;
-		}
-		
-		if(!already_present){
-			struct machthread *add = machthread_new(threads[i]);
-			linkedlist_add(debuggee->threads, add);
-		}
-	}
-
+	/* Before we add the new threads, go through our current list
+	 * and clean it up if necessary.
+	 */
 	struct node_t *current = debuggee->threads->front;
+
+	int tcnt = 0;
+	int ID_deduction = 0;
+	
+	int new_thread_start_ID = 1;
 
 	while(current){
 		struct machthread *t = current->data;
+		struct machthread *updated = machthread_new(threads[tcnt]);
 		
-		if(t->port == MACH_PORT_NULL)
-			linkedlist_delete(debuggee->threads, t);
-		else
-			machthread_updatestate(t);
+		mach_port_type_t type;
+		mach_port_type(mach_task_self(), t->port, &type);
 
+		if(type == MACH_PORT_TYPE_DEAD_NAME){
+			linkedlist_delete(debuggee->threads, t);
+			current = current->next;
+			ID_deduction++;
+			
+			/* If we've gotten to the end of our list of threads,
+			 * it's time to add the new ones. Otherwise, start over.
+			 */
+			if(!current)
+				break;
+			else
+				continue;
+
+			t = current->data;
+
+			mach_port_type(mach_task_self(), t->port, &type);
+			
+			/* Advance to the next "alive" thread. */
+			while(current && type == MACH_PORT_TYPE_DEAD_NAME){
+				mach_port_type(mach_task_self(), t->port, &type);
+				ID_deduction++;
+				current = current->next;
+				t = current->data;
+			}
+		}
+		else{
+			machthread_updatestate(t);
+			t->ID -= ID_deduction;
+		}
+		
+		new_thread_start_ID = t->ID;
 		current = current->next;
+		tcnt++;
+
+		free(updated);
 	}
-	
-	machthread_reassignall();
+
+	current_machthread_id = new_thread_start_ID + 1;
+
+	/* Now add any new threads to debuggee->threads.
+	 * debuggee->thread_count has already been updated before
+	 * calling this function.
+	 */
+	for(int i=new_thread_start_ID; i<debuggee->thread_count; i++){
+		struct machthread *add = machthread_new(threads[i]);
+		linkedlist_add(debuggee->threads, add);
+	}
 }
 
 void machthread_setfocused(mach_port_t thread_port){
@@ -220,13 +224,6 @@ void machthread_setfocused(mach_port_t thread_port){
 		prevfocus->focused = 0;
 }
 
-void machthread_free(struct machthread *mt){
-	//current_machthread_id = 1;
-
-	free(mt);
-}
-
-// Caller is responsible for freeing this
 char *get_thread_name_from_thread_port(mach_port_t thread_port){
 	if(thread_port == MACH_PORT_NULL)
 		return NULL;
@@ -255,4 +252,8 @@ kern_return_t get_tid_from_thread_port(mach_port_t thread_port){
 		return kret;
 
 	return ident.thread_id;
+}
+
+void resetmtid(void){
+	current_machthread_id = 1;
 }

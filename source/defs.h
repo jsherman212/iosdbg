@@ -21,6 +21,11 @@ Hold important definitions for things being used everywhere.
 
 #include <armadillo.h>
 
+#define CHECK_MACH_ERROR(err) if(err){ \
+	printf("%s: %s\n", __func__, mach_error_string(err)); \
+	return err; \
+	}
+
 static const char *prompt = "(iosdbg) ";
 
 // General errors.
@@ -117,6 +122,9 @@ struct debuggee {
 
 	// The function pointer to set up exception handling
 	kern_return_t (*setup_exception_handling)(void);
+
+	/* The function pointer to deallocate needed ports on detach. */
+	kern_return_t (*deallocate_ports)(void);
 
 	// The function pointer to task_suspend
 	kern_return_t (*suspend)(void);

@@ -86,13 +86,54 @@ void *_exception_server(void *arg){
 	return NULL;
 }
 
+void *death_server(void *arg){
+	typedef struct {
+    unsigned int	msgt_name : 8,
+					msgt_size : 8,
+					msgt_number : 12,
+					msgt_inline : 1,
+					msgt_longform : 1,
+					msgt_deallocate : 1,
+					msgt_unused : 1;
+	} mach_msg_type_t;
+
+	struct msg {
+		mach_msg_header_t head;
+		mach_msg_type_t type;
+		char misc[256];
+	};
+
+	while(1){
+		if(debuggee->pid == -1)
+			pthread_exit(NULL);
+
+		struct msg message;
+		
+		mach_msg(&message.head, MACH_RCV_MSG, 0, sizeof(message), debuggee->death_port, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+		
+		if(debuggee->pid == -1)
+			pthread_exit(NULL);
+		
+		printf("\n\n[%s (%d) dead]\n", debuggee->debuggee_name, debuggee->pid);
+		
+		cmdfunc_detach(NULL, 1);
+		safe_reprompt();
+	}
+
+	return NULL;
+}
+
 // setup our exception related stuff
-void setup_exceptions(void){
+void setup_servers(void){
 	debuggee->setup_exception_handling();
 
 	// start the exception server
 	pthread_t exception_server_thread;
 	pthread_create(&exception_server_thread, NULL, _exception_server, NULL);
+
+	/* Check if the debuggee dies. */
+	pthread_t death_server_thread;
+	pthread_create(&death_server_thread, NULL, death_server, NULL);
 }
 
 void setup_initial_debuggee(void){

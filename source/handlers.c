@@ -33,30 +33,57 @@ kern_return_t resume(void){
 kern_return_t setup_exception_handling(void){
 	// make an exception port for the debuggee
 	kern_return_t err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->exception_port);
+	
+	CHECK_MACH_ERROR(err);
+
 	// be able to send messages on that exception port
 	err = mach_port_insert_right(mach_task_self(), debuggee->exception_port, debuggee->exception_port, MACH_MSG_TYPE_MAKE_SEND);
-	/*
+	
+	CHECK_MACH_ERROR(err);
+
 	mach_port_t port_set;
 
 	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &port_set);
 
+	CHECK_MACH_ERROR(err);
+
 	err = mach_port_move_member(mach_task_self(), debuggee->exception_port, port_set);
+
+	CHECK_MACH_ERROR(err);
 
 	// allocate port to notify us of termination
 	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->death_port);
 
+	CHECK_MACH_ERROR(err);
+
 	err = mach_port_move_member(mach_task_self(), debuggee->death_port, port_set);
 	
+	CHECK_MACH_ERROR(err);
+
 	mach_port_t p;
 	err = mach_port_request_notification(mach_task_self(), debuggee->task, MACH_NOTIFY_DEAD_NAME, 0, debuggee->death_port, MACH_MSG_TYPE_MAKE_SEND_ONCE, &p);
-	*/
+	
+	CHECK_MACH_ERROR(err);
+
 	// save the old exception ports
 	err = task_get_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->original_exception_ports.masks, &debuggee->original_exception_ports.count, debuggee->original_exception_ports.ports, debuggee->original_exception_ports.behaviors, debuggee->original_exception_ports.flavors);
+
+	CHECK_MACH_ERROR(err);
 
 	// add the ability to get exceptions on the debuggee exception port
 	// OR EXCEPTION_DEFAULT with MACH_EXCEPTION_CODES so 64-bit safe exception messages will be provided 
 	err = task_set_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->exception_port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, THREAD_STATE_NONE);
 
+	CHECK_MACH_ERROR(err);
+
+	return err;
+}
+
+kern_return_t deallocate_ports(void){
+	kern_return_t err = mach_port_deallocate(mach_task_self(), debuggee->exception_port);
+
+	CHECK_MACH_ERROR(err);
+	
 	return err;
 }
 
