@@ -607,70 +607,100 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 		return CMD_FAILURE;
 
 	if(!args){
-		printf("Register?\n");
+		cmdfunc_help("regs float", 0);
 		return CMD_FAILURE;
 	}
 
-	// Iterate through and show all the registers the user asked for
+	/* If the user wants a quadword register,
+	 * the max string length would be 87
+	 */
+	const int sz = 90;
+
+	char *regstr = malloc(sz);
+
+	/* Iterate through and show all the registers the user asked for. */
 	char *tok = strtok((char *)args, " ");
 
 	while(tok){
-		char reg_type = tok[0];
-		// move up a byte for the register number
+		memset(regstr, '\0', sz);
+
+		char reg_type = tolower(tok[0]);
+		
+		/* Move up a byte for the register number. */
 		tok++;
+
+		debuggee->get_neon_state();
+		
 		int reg_num = atoi(tok);
 
-		if(reg_num < 0 || reg_num > 31)
+		int good_reg_num = (reg_num >= 0 && reg_num <= 31);
+		int good_reg_type = ((reg_type == 'q' || reg_type == 'v') || reg_type == 'd' || reg_type == 's');
+
+		if(!good_reg_num || !good_reg_type){
+			printf("Invalid register\n");
+
+			tok = strtok(NULL, " ");
 			continue;
-
-		arm_neon_state64_t neon_state;
-		mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
-		
-		struct machthread *focused = machthread_getfocused();
-
-		if(!focused){
-			printf("We are not focused on any thread.\n");
-			return CMD_FAILURE;
 		}
-
-		kern_return_t err = thread_get_state(focused->port, ARM_NEON_STATE64, (thread_state_t)&neon_state, &count);
-
-		if(err){
-			printf("show_neon_registers: thread_get_state failed: %s\n", mach_error_string(err));
-			return CMD_FAILURE;
-		}
-
-		union intfloat {
-			int i;
-			float f;
-		} IF;
-
-		if(reg_type == 'v'){
-			// TODO figure this out...
-			// print each byte in this 128 bit integer (16)
-		
-			//void *upper = neon_state.__v[reg_num] >> 64;
-			//void *lower = neon_state.__v[reg_num] << 64;
+		/* Quadword */
+		else if(reg_type == 'q' || reg_type == 'v'){
+			long *hi = malloc(sizeof(long));
+			long *lo = malloc(sizeof(long));
 			
-			//memutils_dump_memory_from_location(upper, 8, 8, 16);
-			//memutils_dump_memory_from_location(lower, 8, 8, 16);	
+			*hi = debuggee->neon_state.__v[reg_num] >> 64;
+			*lo = debuggee->neon_state.__v[reg_num];
+			
+			void *hi_data = (uint8_t *)hi;
+			void *lo_data = (uint8_t *)lo;
 
-		//	printf("%llx %llx\n", upper, lower);
+			sprintf(regstr, "v%d = {", reg_num);
 
+			for(int i=0; i<sizeof(long); i++)
+				sprintf(regstr, "%s0x%02x ", regstr, *(uint8_t *)(lo_data + i));
+			
+			for(int i=0; i<sizeof(long) - 1; i++)
+				sprintf(regstr, "%s0x%02x ", regstr, *(uint8_t *)(hi_data + i));
+
+			sprintf(regstr, "%s0x%02x}", regstr, *(uint8_t *)(hi_data + (sizeof(long) - 1)));
+
+			free(hi);
+			free(lo);
 		}
+		/* Doubleword */
 		else if(reg_type == 'd'){
-			// D registers, bottom 64 bits of each Q register
-			IF.i = neon_state.__v[reg_num] >> 32;
-			printf("D%d 				%f\n", reg_num, IF.f);
+			union longdouble {
+				long l;
+				double d;
+			} LD;
+
+			LD.l = debuggee->neon_state.__v[reg_num];
+
+			sprintf(regstr, "d%d = %f", reg_num, LD.d);
 		}
+		/* Word */
 		else if(reg_type == 's'){
-			// S registers, bottom 32 bits of each Q register
-			IF.i = neon_state.__v[reg_num] & 0xFFFFFFFF;
-			printf("S%d\t\t\t%f (0x%x)\n", reg_num, IF.f, IF.i);
+			union intfloat {
+				int i;
+				float f;
+			} IF;
+
+			IF.i = debuggee->neon_state.__v[reg_num];
+			
+			sprintf(regstr, "s%d = %f", reg_num, IF.f);
 		}
-	
+
+		/* Figure out how many bytes the register takes up in the string. */
+		char *space = strchr(regstr, ' ');
+		int bytes = space - regstr;
+
+		int add = 8 - bytes;
+		
+		printf("%*s\n", (int)(strlen(regstr) + add), regstr);
+		
 		tok = strtok(NULL, " ");
 	}
+
+	free(regstr);
 
 	return CMD_SUCCESS;
 }
@@ -679,48 +709,67 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 	
-	arm_thread_state64_t thread_state;
-	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-	
-	struct machthread *focused = machthread_getfocused();
+	debuggee->get_thread_state();
 
-	if(!focused){
-		printf("We are not focused on any thread.\n");
-		return CMD_FAILURE;
-	}
+	const int sz = 8;
 
-	kern_return_t err = thread_get_state(focused->port, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
-
-	if(err){
-		printf("Failed\n");
-		return CMD_FAILURE;
-	}
-	
-	// if there were no arguments, print every register
+	/* If there were no arguments, print every register. */
 	if(!args){
-		for(int i=0; i<29; i++)
-			printf("X%d\t\t\t%#llx\n", i, thread_state.__x[i]);
+		for(int i=0; i<29; i++){		
+			char *regstr = malloc(sz);
+			memset(regstr, '\0', sz);
+
+			sprintf(regstr, "x%d", i);
+
+			printf("%10s = 0x%16.16llx\n", regstr, debuggee->thread_state.__x[i]);
+
+			free(regstr);
+		}
 		
-		printf("FP\t\t\t%#llx\n", thread_state.__fp);
-		printf("LR\t\t\t%#llx\n", thread_state.__lr);
-		printf("SP\t\t\t%#llx\n", thread_state.__sp);
-		printf("PC\t\t\t%#llx\n", thread_state.__pc);
-		printf("CPSR\t\t\t%#x\n", thread_state.__cpsr);
+		printf("%10s = 0x%16.16llx\n", "fp", debuggee->thread_state.__fp);
+		printf("%10s = 0x%16.16llx\n", "lr", debuggee->thread_state.__lr);
+		printf("%10s = 0x%16.16llx\n", "sp", debuggee->thread_state.__sp);
+		printf("%10s = 0x%16.16llx\n", "pc", debuggee->thread_state.__pc);
+		printf("%10s = 0x%8.8x\n", "cpsr", debuggee->thread_state.__cpsr);
 
 		return CMD_SUCCESS;
 	}
 
-	// otherwise, print every register they asked for
+	/* Otherwise, print every register they asked for. */
 	char *tok = strtok((char *)args, " ");
 
 	while(tok){
-		if(tok[0] != 'x'){
+		char reg_type = tolower(tok[0]);
+
+		if(reg_type != 'x' && reg_type != 'w'){
+			char *tokcpy = strdup(tok);
+
+			/* We need to be able to free it. */
+			for(int i=0; i<strlen(tokcpy); i++)
+				tokcpy[i] = tolower(tokcpy[i]);
+
+			if(strcmp(tokcpy, "fp") == 0)
+				printf("%8s = 0x%16.16llx\n", "fp", debuggee->thread_state.__fp);
+			else if(strcmp(tokcpy, "lr") == 0)
+				printf("%8s = 0x%16.16llx\n", "lr", debuggee->thread_state.__lr);
+			else if(strcmp(tokcpy, "sp") == 0)
+				printf("%8s = 0x%16.16llx\n", "sp", debuggee->thread_state.__sp);
+			else if(strcmp(tokcpy, "pc") == 0)
+				printf("%8s = 0x%16.16llx\n", "pc", debuggee->thread_state.__pc);
+			else if(strcmp(tokcpy, "cpsr") == 0)
+				printf("%8s = 0x%8.8x\n", "cpsr", debuggee->thread_state.__cpsr);
+			else
+				printf("Invalid register\n");
+
+			free(tokcpy);
+
 			tok = strtok(NULL, " ");
 			continue;
 		}
 
-		// move up one byte to get to the "register number"
+		/* Move up one byte to get to the "register number". */
 		tok++;
+
 		int reg_num = atoi(tok);
 		
 		if(reg_num < 0 || reg_num > 29){
@@ -728,7 +777,24 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 			continue;
 		}
 
-		printf("x%d\t\t\t%#llx\n", reg_num, thread_state.__x[reg_num]);
+		char *regstr = malloc(sz);
+		memset(regstr, '\0', sz);
+
+		sprintf(regstr, "%c%d", reg_type, reg_num);
+
+		union regval {
+			unsigned int w;
+			unsigned long long x;
+		} rv;
+
+		rv.w = debuggee->thread_state.__x[reg_num];
+
+		if(reg_type == 'x')
+			printf("%8s = 0x%16.16llx\n", regstr, rv.x);
+		else
+			printf("%8s = 0x%8.8x\n", regstr, rv.w);
+
+		free(regstr);
 
 		tok = strtok(NULL, " ");
 	}
@@ -746,6 +812,7 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 	if(args[0] == '*'){
 		// move past the '*'
 		args++;
+		
 		args = strtok((char *)args, " ");
 	
 		// get the location, an equals sign follows it
@@ -795,6 +862,7 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 		location += debuggee->aslr_slide;
 
 		args = strtok(NULL, " ");
+		
 		if(args && strstr(args, "--no-aslr"))
 			location -= debuggee->aslr_slide;
 

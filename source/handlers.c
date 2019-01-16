@@ -142,3 +142,24 @@ kern_return_t set_thread_state(void){
 
 	return kret;
 }
+
+kern_return_t get_neon_state(void){
+	mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
+	
+	struct machthread *focused = machthread_getfocused();
+
+	kern_return_t kret = thread_get_state(focused->port, ARM_NEON_STATE64, (thread_state_t)&debuggee->neon_state, &count);
+
+	return kret;
+}
+
+/* Must call get_neon_state before calling this. */
+kern_return_t set_neon_state(void){
+	mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
+	
+	struct machthread *focused = machthread_getfocused();
+
+	kern_return_t kret = thread_set_state(focused->port, ARM_NEON_STATE64, (thread_state_t)&debuggee->neon_state, count);
+
+	return kret;
+}

@@ -15,5 +15,7 @@ kern_return_t get_debug_state(void);
 kern_return_t set_debug_state(void);
 kern_return_t get_thread_state(void);
 kern_return_t set_thread_state(void);
+kern_return_t get_neon_state(void);
+kern_return_t set_neon_state(void);
 
 #endif

@@ -96,11 +96,17 @@ Kill the debuggee.
 ### `quit` (alias: `q`)
 Quit iosdbg.
 
-### `regs gen <optional register arg0> ...`
-Show general purpose registers. If no arguments are given, all of them are shown. If you only want to show specific ones, list them.
+### `regs gen {reg1 reg2 ...}`
+Show general purpose registers. Syntax: `regs gen {reg1 reg2 ...}`
 
-### `regs float <register arg0> ...`
-Same as `regs gen` but shows a floating point register. Only supports single precision registers (`S` registers) for now. The argument is not optional.
+The argument is optional. All general purpose registers are dumped if there is no argument.
+
+You can list as many general purpose registers as you want.
+
+### `regs float <reg1 reg2 ...>`
+Same as `regs gen` but shows floating point register(s). Syntax: `regs float <reg1 reg2 ...>`
+
+You can list as many floating point registers as you want.
 
 ### `set <(*offset|variable)=value>`
 Modify debuggee memory or a configuration variable (TODO) for iosdbg.

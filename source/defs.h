@@ -96,6 +96,9 @@ struct debuggee {
 	// Debug state for the debuggee.
 	arm_debug_state64_t debug_state;
 
+	/* Neon state for the debuggee. */
+	arm_neon_state64_t neon_state;
+
 	// Count of threads for the debuggee.
 	mach_msg_type_number_t thread_count;
 
@@ -149,6 +152,12 @@ struct debuggee {
 
 	// The function pointer to set the thread state of the debuggee's focused thread.
 	kern_return_t (*set_thread_state)(void);
+
+	/* The function point to get the neon state of the debuggee's focused thread. */
+	kern_return_t (*get_neon_state)(void);
+
+	/* The function point to set the neon state of the debuggee's focused thread. */
+	kern_return_t (*set_neon_state)(void);
 };
 
 struct debuggee *debuggee;

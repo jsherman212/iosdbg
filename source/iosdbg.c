@@ -41,6 +41,8 @@ void install_handlers(void){
 	debuggee->set_debug_state = &set_debug_state;
 	debuggee->get_thread_state = &get_thread_state;
 	debuggee->set_thread_state = &set_thread_state;
+	debuggee->get_neon_state = &get_neon_state;
+	debuggee->set_neon_state = &set_neon_state;
 }
 
 int main(int argc, char **argv, const char **envp){
@@ -92,12 +94,17 @@ int main(int argc, char **argv, const char **envp){
 			if(focused)
 				machthread_updatestate(focused);
 		}
+
+		/* Make a copy of line in case the command function modifies it. */
+		char *linecopy = malloc(strlen(line) + 1);
+		strcpy(linecopy, line);
 		
 		execute_command(line);
 		
-		prevline = realloc(prevline, strlen(line) + 1);
-		strcpy(prevline, line);
-		
+		prevline = realloc(prevline, strlen(linecopy) + 1);
+		strcpy(prevline, linecopy);
+
+		free(linecopy);
 		free(line);
 	}
 
