@@ -1004,9 +1004,6 @@ cmd_error_t execute_command(char *input){
 			if(strlen(input) > tokenlen)
 				args = (char *)input + tokenlen + 1;
 		
-			//debuggee->is_single_stepping = 0;
-			//debuggee->want_single_step = 0;
-
 			finalfunc(args, 0);
 
 			free(usercmd);
@@ -1213,14 +1210,6 @@ cmd_error_t execute_command(char *input){
 			token = strtok(NULL, " ");
 			idx = 0;
 		}
-	}
-	
-	/* Turn off single stepping if the user does not want
-	 * to single step anymore.
-	 */
-	if(strcmp(finalcmd, "stepi") != 0){
-	//	debuggee->is_single_stepping = 0;
-	//	debuggee->want_single_step = 0;
 	}
 
 	free(finalcmd);
