@@ -107,6 +107,9 @@ Modify debuggee memory or a configuration variable (TODO) for iosdbg.
 
 You must prefix an offset with a `*`. If you want your value to be interpreted as hex, use `0x`. Pass `--no-aslr` to prevent ASLR from being added.
 
+### `stepi`
+Step into the next machine instruction. The debuggee must be suspended.
+
 ### `thread list`
 List threads belonging to the debuggee.
 

@@ -84,6 +84,12 @@ struct debuggee {
 	// How many hardware watchpoints the device supports.
 	int num_hw_wps;
 
+	/* Whether or not the debuggee is single stepping. */
+	int is_single_stepping;
+
+	/* Whether or not the user wants to single step. */
+	int want_single_step;
+	
 	// Thread state for the debuggee.
 	arm_thread_state64_t thread_state;
 

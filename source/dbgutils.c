@@ -152,6 +152,9 @@ void setup_initial_debuggee(void){
 	debuggee->last_hit_bkpt_ID = 0;
 	debuggee->last_hit_bkpt_hw = 0;
 
+	debuggee->is_single_stepping = 0;
+	debuggee->want_single_step = 0;
+
 	/* Figure out how many hardware breakpoints/watchpoints are supported. */
 	size_t len = sizeof(int);
 
@@ -218,6 +221,10 @@ void describe_hit_watchpoint(void *prev_data, void *cur_data, unsigned int sz){
 	}
 }
 
+void describe_hit_breakpoint(unsigned long long tid, char *tname, struct breakpoint *hit){
+	printf("\n * Thread %#llx: '%s': breakpoint %d at %#lx hit %d time(s).\n", tid, tname, hit->id, hit->location, hit->hit_count);
+}
+
 kern_return_t catch_mach_exception_raise(
 		mach_port_t exception_port,
 		mach_port_t thread,
@@ -245,16 +252,66 @@ kern_return_t catch_mach_exception_raise(
 	 */
 	long elem0 = ((long *)code)[0];
 	long break_loc = ((long *)code)[1];
-	
+
 	if(exception == EXC_BREAKPOINT && elem0 == EXC_ARM_BREAKPOINT){
+		char *tname = get_thread_name_from_thread_port(thread);
+		
 		if(break_loc == 0){
 			/* When the exception caused by the single step happens,
 			 * we can re-enable the breakpoint last it if it was software,
 			 * or do nothing if it was hardware.
 			 */
 			if(!debuggee->last_hit_bkpt_hw)
-				breakpoint_enable(debuggee->last_hit_bkpt_ID);	
+				breakpoint_enable(debuggee->last_hit_bkpt_ID);
 			
+			if(debuggee->is_single_stepping && debuggee->want_single_step){
+				/* Assume the user only wants to single step once
+				 * so we don't have to deal with finding every place
+				 * to reset this variable.
+				 */
+				debuggee->want_single_step = 0;
+
+				debuggee->get_debug_state();
+				debuggee->debug_state.__mdscr_el1 |= 1;
+				debuggee->set_debug_state();
+
+				/* Check if we a hit a breakpoint while single stepping,
+				 * and if we do, report it.
+				 */
+				struct breakpoint *hit = find_bp_with_address(debuggee->thread_state.__pc);
+
+				if(hit && !hit->ss){
+					breakpoint_hit(hit);
+					describe_hit_breakpoint(tid, tname, hit);
+				}
+				else
+					printf("\n");
+
+				free(tname);
+
+				memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+				
+				safe_reprompt();
+
+				return KERN_SUCCESS;
+			}
+			else{
+				debuggee->is_single_stepping = 0;
+
+				debuggee->get_debug_state();
+				debuggee->debug_state.__mdscr_el1 = 0;
+				debuggee->set_debug_state();
+			}
+
+			/* Wait until we are not on a breakpoint to start single stepping. */
+			struct breakpoint *bp = find_bp_with_address(debuggee->thread_state.__pc);
+
+			if(!bp && !debuggee->is_single_stepping && debuggee->want_single_step){
+				breakpoint_at_address(debuggee->thread_state.__pc, BP_TEMP, BP_SS);
+				
+				debuggee->is_single_stepping = 1;
+			}
+
 			/* After we let the CPU single step, the instruction 
 			 * at the last watchpoint executes, so we can check
 			 * if there was a change in the data being watched.
@@ -302,40 +359,61 @@ kern_return_t catch_mach_exception_raise(
 			
 			safe_reprompt();
 
+			free(tname);
+
 			return KERN_SUCCESS;
 		}
 
 		struct breakpoint *hit = find_bp_with_address(break_loc);
-		
+
 		if(!hit){
 			printf("Could not find hit breakpoint? Please open an issue on github\n");
 			return KERN_FAILURE;
 		}
-		
-		breakpoint_hit(hit);
-
-		/* Record the ID and type of this breakpoint so we can
-		 * enable it later if it's a software breakpoint.
-		 */
-		debuggee->last_hit_bkpt_ID = hit->id;
-		debuggee->last_hit_bkpt_hw = hit->hw;
-		
-		char *tname = get_thread_name_from_thread_port(thread);
-
-		printf("\n * Thread %#llx: '%s': breakpoint %d at %#lx hit %d time(s). %#llx in debuggee.\n", tid, tname, hit->id, hit->location, hit->hit_count, debuggee->thread_state.__pc);
-		
-		free(tname);
-
-		if(!hit->hw)
-			breakpoint_disable(hit->id);
-
-		memutils_disassemble_at_location(hit->location, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 		
 		/* Enable hardware single stepping so we can get past this instruction. */
 		debuggee->get_debug_state();
 		debuggee->debug_state.__mdscr_el1 |= 1;
 		debuggee->set_debug_state();
 
+		/* Record the ID and type of this breakpoint so we can
+		 * enable it later if it's a software breakpoint.
+		 */
+		if(!hit->ss)
+			debuggee->last_hit_bkpt_ID = hit->id;
+
+		debuggee->last_hit_bkpt_hw = hit->hw;
+
+		/* If we're single stepping and we encounter a
+		 * software breakpoint, an exception will be
+		 * thrown no matter what. This results in stepping
+		 * the same instruction twice, so just disable it
+		 * and re-enable it when the single step exception occurs.
+		 */
+		if(!hit->hw && !hit->ss && debuggee->is_single_stepping){
+			breakpoint_disable(hit->id);
+
+			debuggee->resume();
+			debuggee->interrupted = 0;
+
+			return KERN_SUCCESS;
+		}
+
+		breakpoint_hit(hit);
+
+		if(!debuggee->is_single_stepping)
+			describe_hit_breakpoint(tid, tname, hit);
+		
+		free(tname);
+
+		/* Disable this software breakpoint to prevent
+		 * an exception from being thrown over and over.
+		 */
+		if(!hit->hw)
+			breakpoint_disable(hit->id);
+
+		memutils_disassemble_at_location(hit->location, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+		
 		safe_reprompt();		
 
 		return KERN_SUCCESS;

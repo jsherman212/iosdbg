@@ -217,11 +217,11 @@ cmd_error_t cmdfunc_break(const char *args, int arg1){
 	tok = strtok(NULL, " ");
 	
 	if(tok && strcmp(tok, "--no-aslr") == 0){
-		breakpoint_at_address(location, BP_NO_TEMP);
+		breakpoint_at_address(location, BP_NO_TEMP, BP_NO_SS);
 		return CMD_SUCCESS;
 	}
 
-	breakpoint_at_address(location + debuggee->aslr_slide, BP_NO_TEMP);
+	breakpoint_at_address(location + debuggee->aslr_slide, BP_NO_TEMP, BP_NO_SS);
 
 	return CMD_SUCCESS;
 }
@@ -812,6 +812,24 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 	return CMD_SUCCESS;
 }
 
+cmd_error_t cmdfunc_stepi(const char *args, int arg1){
+	if(!debuggee->interrupted){
+		printf("Debuggee must be suspended\n");
+		return CMD_FAILURE;
+	}
+
+	debuggee->get_debug_state();
+	debuggee->debug_state.__mdscr_el1 |= 1;
+	debuggee->set_debug_state();
+	
+	debuggee->want_single_step = 1;
+
+	debuggee->resume();
+	debuggee->interrupted = 0;
+
+	return CMD_SUCCESS;
+}
+
 cmd_error_t cmdfunc_threadlist(const char *args, int arg1){
 	if(!debuggee)
 		return CMD_FAILURE;
@@ -985,7 +1003,10 @@ cmd_error_t execute_command(char *input){
 
 			if(strlen(input) > tokenlen)
 				args = (char *)input + tokenlen + 1;
-			
+		
+			//debuggee->is_single_stepping = 0;
+			//debuggee->want_single_step = 0;
+
 			finalfunc(args, 0);
 
 			free(usercmd);
@@ -1192,6 +1213,14 @@ cmd_error_t execute_command(char *input){
 			token = strtok(NULL, " ");
 			idx = 0;
 		}
+	}
+	
+	/* Turn off single stepping if the user does not want
+	 * to single step anymore.
+	 */
+	if(strcmp(finalcmd, "stepi") != 0){
+	//	debuggee->is_single_stepping = 0;
+	//	debuggee->want_single_step = 0;
 	}
 
 	free(finalcmd);

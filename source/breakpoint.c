@@ -16,7 +16,8 @@ int find_ready_bp_reg(void){
 	/* -1 means the hardware breakpoint register representing that spot
 	 * in the array has not been used. 0 means the opposite.
 	 */
-	memset(bp_map, (int)-1, debuggee->num_hw_bps);
+	for(int i=0; i<debuggee->num_hw_bps; i++)
+		bp_map[i] = -1;
 
 	while(current){
 		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
@@ -41,8 +42,7 @@ int find_ready_bp_reg(void){
 	return -1;
 }
 
-// Create a new breakpoint.
-struct breakpoint *breakpoint_new(unsigned long location, int temporary){
+struct breakpoint *breakpoint_new(unsigned long location, int temporary, int single_step){
 	if(location < 0x100000000)
 		return NULL;
 
@@ -103,7 +103,8 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary){
 	bp->disabled = 0;
 
 	bp->temporary = temporary;
-	
+	bp->ss = single_step;
+
 	debuggee->num_breakpoints++;
 	
 	bp->id = current_breakpoint_id;
@@ -115,17 +116,18 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary){
 }
 
 // Set a breakpoint at address.
-bp_error_t breakpoint_at_address(unsigned long address, int temporary){
-	struct breakpoint *bp = breakpoint_new(address, temporary);
+bp_error_t breakpoint_at_address(unsigned long address, int temporary, int single_step){
+	struct breakpoint *bp = breakpoint_new(address, temporary, single_step);
 
 	if(!bp)
 		return BP_FAILURE;
 
-	// write BRK #0 to the address we're breakpointing at
+	/* If we ran out of hardware breakpoints, set a software breakpoint
+	 * by writing BRK #0 to bp->location.
+	 */
 	if(!bp->hw)
 		memutils_write_memory_to_location(bp->location, CFSwapInt32(BRK));
 
-	// add this breakpoint to the debuggee's linked list of breakpoints
 	linkedlist_add(debuggee->breakpoints, bp);
 
 	if(!temporary)
@@ -137,13 +139,13 @@ bp_error_t breakpoint_at_address(unsigned long address, int temporary){
 void breakpoint_hit(struct breakpoint *bp){
 	if(!bp)
 		return;
-	
+
 	if(bp->temporary)
 		breakpoint_delete(bp->id);
 	else
-		// increment hit count
 		bp->hit_count++;
 }
+
 
 void enable_hw_bp(struct breakpoint *bp){
 	debuggee->get_debug_state();
