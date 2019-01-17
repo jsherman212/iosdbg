@@ -53,6 +53,8 @@ If you're on iOS 11 and above you'll need to copy it to /usr/bin/:
 
 If all went well, you should be good to go. If you're below iOS 11, you can run it in your current working directory with `./iosdbg`. Otherwise, you'll have to run it with `iosdbg`. Attach to your program with its PID or executable name and have fun.
 
+I have been developing this on an iPhone 6s running iOS 9.3.3 and on an iPhone 5s running iOS 10.3.2.
+
 ## Commands
 My goal with this project is to have a reliable debugger with basic functionality. Breakpoints, watchpoints, and little conveniences like command completion and ASLR being automatically accounted for. **You only need to type enough characters in the command for iosdbg to unambiguously identify it**. Commands implemented in this commit are:
 

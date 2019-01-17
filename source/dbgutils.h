@@ -12,6 +12,7 @@
 extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
 
 pid_t pid_of_program(char *);
+char *progname_from_pid(pid_t);
 void setup_servers(void);
 void setup_initial_debuggee(void);
 

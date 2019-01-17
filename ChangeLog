@@ -2,6 +2,9 @@
 - fix last command repeat functionality
 - proper floating point register viewing
 - the output when viewing registers is much nicer
+- now you can actually use a PID to attach
+- dim LLDB-like prompt, so you can focus better
+- compiler warnings fixed
 
 1-15-19
 - single stepping

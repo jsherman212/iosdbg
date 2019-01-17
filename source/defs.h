@@ -26,7 +26,7 @@ Hold important definitions for things being used everywhere.
 	return err; \
 	}
 
-static const char *prompt = "(iosdbg) ";
+static const char *prompt = "\e[2m(iosdbg) ";
 
 // General errors.
 typedef int gen_error_t;

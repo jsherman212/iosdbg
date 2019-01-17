@@ -1,30 +1,38 @@
 #include "dbgutils.h"
 
-// pidof implementation
-// Get the pid of a program based on the program name provided
-// Return: pid on success, -1 on error
-pid_t pid_of_program(char *progname){
+struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length){
 	int err;
 	struct kinfo_proc *result = NULL;
 
 	static const int name[] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
 
-	size_t length = 0;
+	*length = 0;
 
-	err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, NULL, &length, NULL, 0);
+	err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, NULL, length, NULL, 0);
 	
 	if(err){
 		printf("Couldn't get the size of our kinfo_proc buffer: %s\n", strerror(errno));
-		return -1;
+		return NULL;
 	}
 	
-	result = malloc(length);
-	err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, result, &length, NULL, 0);
+	result = malloc(*length);
+	err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, result, length, NULL, 0);
 	
 	if(err){
 		printf("Second sysctl call failed: %s\n", strerror(errno));
-		return -1;
+		return NULL;
 	}
+
+	return result;
+}
+
+// pidof implementation
+// Get the pid of a program based on the program name provided
+// Return: pid on success, -1 on error
+pid_t pid_of_program(char *progname){
+	size_t length;
+
+	struct kinfo_proc *result = fill_kinfo_proc_buffer(&length);
 
 	int num_procs = length / sizeof(struct kinfo_proc);
 	int matches = 0;
@@ -69,6 +77,25 @@ pid_t pid_of_program(char *progname){
 		return final_pid;
 	
 	return -1;
+}
+
+char *progname_from_pid(pid_t pid){
+	size_t length;
+
+	struct kinfo_proc *result = fill_kinfo_proc_buffer(&length);
+
+	int num_procs = length / sizeof(struct kinfo_proc);
+
+	for(int i=0; i<num_procs; i++){
+		struct kinfo_proc *current = &result[i];
+
+		if(current){
+			if(current->kp_proc.p_pid == pid)
+				return strdup(current->kp_proc.p_comm);
+		}
+	}
+
+	return NULL;
 }
 
 void *_exception_server(void *arg){
@@ -232,6 +259,9 @@ kern_return_t catch_mach_exception_raise(
 		exception_type_t exception,
 		exception_data_t code,
 		mach_msg_type_number_t code_count){
+	//rl_already_prompted = 1;
+	//rl_num_chars_to_read = 0;
+	
 	debuggee->suspend();
 	debuggee->interrupted = 1;
 	
@@ -413,7 +443,7 @@ kern_return_t catch_mach_exception_raise(
 			breakpoint_disable(hit->id);
 
 		memutils_disassemble_at_location(hit->location, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
-		
+			
 		safe_reprompt();		
 
 		return KERN_SUCCESS;

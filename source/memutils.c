@@ -28,7 +28,7 @@ kern_return_t memutils_disassemble_at_location(unsigned long long location, int 
 
 	while(current_location < (location + (num_instrs * data_size))){
 		char *data = malloc(data_size);
-		kern_return_t err = memutils_read_memory_at_location(current_location, data, data_size);
+		kern_return_t err = memutils_read_memory_at_location((void *)current_location, data, data_size);
 
 		unsigned long instr;
 
@@ -200,11 +200,12 @@ long long memutils_buffer_to_number(void *buffer, int length){
 }
 
 // Test a location to see if it's out of bounds or invalid
-kern_return_t memutils_valid_location(unsigned long long location){
+kern_return_t memutils_valid_location(unsigned long location){
 	vm_region_basic_info_data_64_t info;
+	vm_address_t loc = location;
 	vm_size_t region_size;
 	mach_port_t object_name;
 	mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
 	
-	return vm_region_64(debuggee->task, (vm_address_t)&location, &region_size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
+	return vm_region_64(debuggee->task, &loc, &region_size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
 }

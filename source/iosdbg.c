@@ -29,6 +29,18 @@ void interrupt(int show_prompt){
 		rl_printf(RL_REPROMPT, "%s stopped.\n", debuggee->debuggee_name);
 }
 
+int reset_colors(void){
+	printf("\e[0m");
+
+	return 0;
+}
+
+void reset_colors_void(void){
+	printf("\e[0m");
+
+	rl_redisplay();
+}
+
 void install_handlers(void){
 	debuggee->find_slide = &find_slide;
 	debuggee->restore_exception_ports = &restore_exception_ports;
@@ -45,18 +57,26 @@ void install_handlers(void){
 	debuggee->set_neon_state = &set_neon_state;
 }
 
+void initialize_readline(void){
+	rl_catch_signals = 0;
+	rl_erase_empty_line = 1;
+	
+	/* Our prompt is colored, so we need to reset colors
+	 * when Readline is ready for input.
+	 */
+	rl_pre_input_hook = &reset_colors;
+	rl_redisplay_function = &reset_colors_void;
+}
+
 int main(int argc, char **argv, const char **envp){
 	if(getuid() && geteuid()){
 		printf("iosdbg requires root to operate correctly\n");
 		return 1;
 	}
 	
-	debuggee = NULL;
-
 	setup_initial_debuggee();
 	install_handlers();
-
-	rl_catch_signals = 0;
+	initialize_readline();
 
 	signal(SIGINT, interrupt);
 

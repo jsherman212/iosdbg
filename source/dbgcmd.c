@@ -51,6 +51,21 @@ char answer(const char *question, ...){
 	return ret;
 }
 
+int is_number(char *str){
+	size_t len = strlen(str);
+
+	for(int i=0; i<len; i++){
+		if(!isdigit(str[i]))
+			return 0;
+	}
+
+	return 1;
+}
+
+pid_t parse_pid(char *pidstr){
+	return is_number(pidstr) ? strtol(pidstr, NULL, 10) : pid_of_program(pidstr);
+}
+
 cmd_error_t cmdfunc_aslr(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
@@ -86,7 +101,12 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 		return CMD_SUCCESS;
 	}
 
-	pid_t pid = pid_of_program((char *)args);
+	pid_t pid = parse_pid((char *)args);
+	
+	if(pid == 0){
+		printf("No kernel debugging\n");
+		return CMD_FAILURE;
+	}
 
 	if(pid == -1)
 		return CMD_FAILURE;
@@ -111,11 +131,25 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	
 	debuggee->aslr_slide = debuggee->find_slide();
 	
-	debuggee->debuggee_name = malloc(strlen(args) + 1);
-	memset(debuggee->debuggee_name, '\0', strlen(args) + 1);
-	strcpy(debuggee->debuggee_name, args);
-	
-	printf("\nAttached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
+	if(is_number((char *)args)){
+		char *name = progname_from_pid(debuggee->pid);
+
+		if(!name){
+			printf("Could not get the debuggee's name\n");
+			cmdfunc_detach(NULL, 0);
+			return CMD_FAILURE;
+		}
+
+		debuggee->debuggee_name = malloc(strlen(name) + 1);
+		strcpy(debuggee->debuggee_name, name);
+
+		free(name);
+	}
+	else{
+		debuggee->debuggee_name = malloc(strlen(args) + 1);
+		memset(debuggee->debuggee_name, '\0', strlen(args) + 1);
+		strcpy(debuggee->debuggee_name, args);
+	}
 
 	debuggee->breakpoints = linkedlist_new();
 	debuggee->watchpoints = linkedlist_new();
@@ -136,6 +170,8 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 
 	debuggee->get_thread_state();
 
+	printf("\nAttached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
+
 	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 
 	return CMD_SUCCESS;
@@ -145,29 +181,13 @@ cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 	
-	// get FP register
-	arm_thread_state64_t thread_state;
-	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-
-	struct machthread *focused = machthread_getfocused();
-	
-	if(!focused){
-		printf("We are not focused on any thread.\n");
-		return CMD_FAILURE;
-	}
-
-	kern_return_t err = thread_get_state(focused->port, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
-
-	if(err){
-		printf("cmdfunc_backtrace: thread_get_state failed: %s\n", mach_error_string(err));
-		return CMD_FAILURE;
-	}
+	debuggee->get_thread_state();
 
 	// print frame 0, which is where we are currently at
-	printf("  * frame #0: %#llx\n", thread_state.__pc);
+	printf("  * frame #0: 0x%16.16llx\n", debuggee->thread_state.__pc);
 	
 	// frame 1 is what is in LR
-	printf("     frame #1: %#llx\n", thread_state.__lr);
+	printf("    frame #1: 0x%16.16llx\n", debuggee->thread_state.__lr);
 
 	int frame_counter = 2;
 
@@ -179,7 +199,7 @@ cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
 	};
 
 	struct frame_t *current_frame = malloc(sizeof(struct frame_t));
-	err = memutils_read_memory_at_location((void *)thread_state.__fp, current_frame, sizeof(struct frame_t));
+	kern_return_t err = memutils_read_memory_at_location((void *)debuggee->thread_state.__fp, current_frame, sizeof(struct frame_t));
 	
 	if(err){
 		printf("Backtrace failed\n");
@@ -187,13 +207,13 @@ cmd_error_t cmdfunc_backtrace(const char *args, int arg1){
 	}
 
 	while(current_frame->next){
-		printf("     frame #%d: %#llx\n", frame_counter, current_frame->frame);
+		printf("    frame #%d: 0x%16.16llx\n", frame_counter, current_frame->frame);
 
 		memutils_read_memory_at_location((void *)current_frame->next, (void *)current_frame, sizeof(struct frame_t));	
 		frame_counter++;
 	}
 
-	printf(" - cannot unwind past frame %d -\n", frame_counter);
+	printf(" - cannot unwind past frame %d -\n", frame_counter - 1);
 
 	free(current_frame);
 
@@ -380,16 +400,9 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	linkedlist_free(debuggee->threads);
 	debuggee->threads = NULL;
 
-	if(!from_death)
-		printf("Detached from %s (%d)\n", debuggee->debuggee_name, debuggee->pid);
-
-	debuggee->pid = -1;
 	debuggee->num_breakpoints = 0;
 	debuggee->num_watchpoints = 0;
 
-	free(debuggee->debuggee_name);
-	debuggee->debuggee_name = NULL;
-	
 	debuggee->last_hit_bkpt_ID = 0;
 	debuggee->last_hit_bkpt_hw = 0;
 	
@@ -398,7 +411,13 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 
 	debuggee->deallocate_ports();
 
-	current_machthread_id = 1;
+	if(!from_death)
+		printf("Detached from %s (%d)\n", debuggee->debuggee_name, debuggee->pid);
+
+	debuggee->pid = -1;
+
+	free(debuggee->debuggee_name);
+	debuggee->debuggee_name = NULL;
 
 	return CMD_SUCCESS;
 }
@@ -612,7 +631,7 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 	}
 
 	/* If the user wants a quadword register,
-	 * the max string length would be 87
+	 * the max string length would be 87.
 	 */
 	const int sz = 90;
 
@@ -881,6 +900,9 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_stepi(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
 	if(!debuggee->interrupted){
 		printf("Debuggee must be suspended\n");
 		return CMD_FAILURE;
