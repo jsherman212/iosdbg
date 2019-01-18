@@ -1,3 +1,12 @@
+1-17-19
+- can view memory at a general purpose register
+- can write to a general purpose register or a floating point register
+- can now view FPSR and FPCR
+- ask user if they really want to kill debuggee
+- fixed bug where resizing your terminal would constantly print duplicate
+(iosdbg) prompt
+- fixed up Readme
+
 1-16-19
 - fix last command repeat functionality
 - proper floating point register viewing

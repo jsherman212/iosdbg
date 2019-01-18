@@ -34,10 +34,10 @@ void safe_reprompt(void){
 	if(RL_ISSTATE(RL_STATE_READCMD)){
 		rl_on_new_line();
 		rl_forced_update_display();
+
+		printf("\e[0m");
+
+		rl_insert_text(linecopy);
+		rl_redisplay();
 	}
-
-	printf("\e[0m");
-
-	rl_insert_text(linecopy);
-	rl_redisplay();
 }

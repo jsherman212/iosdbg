@@ -496,18 +496,58 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
-	// first thing will be the location
-	char *loc_str = malloc(strlen(tok) + 1);
-	strcpy(loc_str, tok);
+	unsigned long long location;
 	
-	int base = 10;
+	int wantsreg = 0;
 
-	if(strstr(loc_str, "0x"))
-		base = 16;
+	/* Check for a register. */
+	if(tok[0] == '$'){
+		wantsreg = 1;
 
-	unsigned long long location = strtoull(loc_str, NULL, base);
+		debuggee->get_thread_state();
 
-	free(loc_str);
+		for(int i=0; i<strlen(tok); i++)
+			tok[i] = tolower(tok[i]);
+
+		tok++;
+
+		if(strcmp(tok, "fp") == 0)
+			location = debuggee->thread_state.__fp;
+		else if(strcmp(tok, "lr") == 0)
+			location = debuggee->thread_state.__lr;
+		else if(strcmp(tok, "sp") == 0)
+			location = debuggee->thread_state.__sp;
+		else if(strcmp(tok, "pc") == 0)
+			location = debuggee->thread_state.__pc;
+		else{
+			/* Figure out what register we were given. */
+			char reg_type = tolower(tok[0]);
+
+			if(reg_type != 'x'){
+				cmdfunc_help("examine", 0);
+				return CMD_FAILURE;
+			}
+
+			tok++;
+
+			int reg_num = strtol(tok, NULL, 10);
+
+			if(reg_num < 0 || reg_num > 31){
+				cmdfunc_help("examine", 0);
+				return CMD_FAILURE;
+			}
+			
+			location = debuggee->thread_state.__x[reg_num];
+		}
+	}
+	else{
+		int base = 10;
+
+		if(strstr(tok, "0x"))
+			base = 16;
+
+		location  = strtoull(tok, NULL, base);
+	}
 
 	// next thing will be however many bytes is wanted
 	tok = strtok(NULL, " ");
@@ -520,7 +560,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 	char *amount_str = malloc(strlen(tok) + 1);
 	strcpy(amount_str, tok);
 
-	base = 10;
+	int base = 10;
 
 	if(strstr(amount_str, "0x"))
 		base = 16;
@@ -531,10 +571,18 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 
 	// check if --no-aslr was given
 	tok = strtok(NULL, " ");
-
+	
 	kern_return_t ret;
+	
+	if(!tok || wantsreg){
+		kern_return_t ret = memutils_dump_memory_new(location, amount);
 
-	if(tok){
+		if(ret)
+			return CMD_FAILURE;
+
+		return CMD_SUCCESS;
+	}
+	else{
 		if(strcmp(tok, "--no-aslr") == 0){
 			ret = memutils_dump_memory_new(location, amount);
 			
@@ -553,7 +601,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 
 	if(ret)
 		return CMD_FAILURE;
-	
+
 	return CMD_SUCCESS;
 }
 
@@ -590,6 +638,11 @@ cmd_error_t cmdfunc_kill(const char *args, int arg1){
 
 	if(!debuggee->debuggee_name)
 		return CMD_FAILURE;
+
+	char ans = answer("Do you really want to kill %s? (y/n) ", debuggee->debuggee_name);
+
+	if(ans == 'n')
+		return CMD_SUCCESS;
 
 	char *saved_name = malloc(strlen(debuggee->debuggee_name) + 1);
 	strcpy(saved_name, debuggee->debuggee_name);
@@ -641,6 +694,19 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 	char *tok = strtok((char *)args, " ");
 
 	while(tok){
+		debuggee->get_neon_state();
+
+		if(strcmp(tok, "fpsr") == 0){
+			tok = strtok(NULL, " ");
+			printf("%10s = 0x%8.8x\n", "fpsr", debuggee->neon_state.__fpsr);
+			continue;
+		}
+		else if(strcmp(tok, "fpcr") == 0){
+			tok = strtok(NULL, " ");
+			printf("%10s = 0x%8.8x\n", "fpcr", debuggee->neon_state.__fpcr);
+			continue;
+		}
+		
 		memset(regstr, '\0', sz);
 
 		char reg_type = tolower(tok[0]);
@@ -648,8 +714,6 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 		/* Move up a byte for the register number. */
 		tok++;
 
-		debuggee->get_neon_state();
-		
 		int reg_num = atoi(tok);
 
 		int good_reg_num = (reg_num >= 0 && reg_num <= 31);
@@ -694,7 +758,7 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 
 			LD.l = debuggee->neon_state.__v[reg_num];
 
-			sprintf(regstr, "d%d = %f", reg_num, LD.d);
+			sprintf(regstr, "d%d = %.15g", reg_num, LD.d);
 		}
 		/* Word */
 		else if(reg_type == 's'){
@@ -705,7 +769,7 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 
 			IF.i = debuggee->neon_state.__v[reg_num];
 			
-			sprintf(regstr, "s%d = %f", reg_num, IF.f);
+			sprintf(regstr, "s%d = %g", reg_num, IF.f);
 		}
 
 		/* Figure out how many bytes the register takes up in the string. */
@@ -806,7 +870,7 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 			unsigned long long x;
 		} rv;
 
-		rv.w = debuggee->thread_state.__x[reg_num];
+		rv.x = debuggee->thread_state.__x[reg_num];
 
 		if(reg_type == 'x')
 			printf("%8s = 0x%16.16llx\n", regstr, rv.x);
@@ -822,80 +886,233 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_set(const char *args, int arg1){
+	if(debuggee->pid == -1){
+		cmdfunc_help("set", 0);
+		return CMD_FAILURE;
+	}
+
 	if(!args){
 		cmdfunc_help("set", 0);
 		return CMD_FAILURE;
 	}
-	
-	// check for offset
-	if(args[0] == '*'){
-		// move past the '*'
-		args++;
+
+	char specifier = args[0];
+
+	char *argcpy = malloc(strlen(args + 1) + 1);
+	strcpy(argcpy, args + 1);
+
+	char *equals = strchr(argcpy, '=');
+
+	if(!equals){
+		cmdfunc_help("set", 0);
+		return CMD_FAILURE;
+	}
+
+	int cpylen = equals - argcpy;
+
+	char *target = malloc(cpylen + 1);
+	memset(target, '\0', cpylen + 1);
+
+	strncpy(target, argcpy, cpylen);
+
+	char *value_str = malloc(strlen(equals + 1) + 1);
+	strcpy(value_str, equals + 1);
+
+	if(strlen(value_str) == 0){
+		cmdfunc_help("set", 0);
+		return CMD_FAILURE;
+	}
+
+	int value_base = 16;
+
+	if(!strstr(value_str, "0x"))
+		value_base = 10;
+
+	/* If we are writing to an offset, we've done everything needed. */
+	if(specifier == '*'){
+		unsigned long long value = strtoull(value_str, NULL, value_base);
+
+		free(value_str);
 		
-		args = strtok((char *)args, " ");
-	
-		// get the location, an equals sign follows it
-		char *location_str = malloc(64);
-		char *equals = strchr(args, '=');
-
-		if(!equals){
-			printf("\t * No new value\n\n");
-			cmdfunc_help("set", 0);
-			return CMD_FAILURE;
-		}
-
-		strncpy(location_str, args, equals - args);
-
-		char *zero_x = strstr(location_str, "0x");
-		if(!zero_x){
-			printf("\t * Need '0x' before location\n\n");
-			cmdfunc_help("set", 0);
-			return CMD_FAILURE;
-		}
-
-		// TODO allow math on the location and the value
-
-		int base = 16;
-		unsigned long long location = strtoll(location_str, NULL, base);
-
-		// find out what they want the location set to
-		char *value_str = malloc(64);
-
-		// equals + 1 to get past the actual equals sign
-		strcpy(value_str, equals + 1);
-		
-		if(strlen(value_str) == 0){
-			printf("Need a value\n");
-			return CMD_FAILURE;
-		}
-
-		// see how they want their new value interpreted
-		int value_base = 16;
-
-		// no "0x", so base 10
-		if(!strstr(value_str, "0x"))
-			value_base = 10;
-
-		unsigned long long value = strtoll(value_str, NULL, value_base);
+		unsigned long long location = strtoull(target, NULL, 16);
 
 		location += debuggee->aslr_slide;
 
-		args = strtok(NULL, " ");
+		/* Check for no ASLR. */
+		char *tok = strtok(argcpy, " ");
+		tok = strtok(NULL, " ");
 		
-		if(args && strstr(args, "--no-aslr"))
-			location -= debuggee->aslr_slide;
-
-		kern_return_t result = memutils_write_memory_to_location((vm_address_t)location, (vm_offset_t)value);
-		
-		if(result){
-			printf("Error: %s\n", mach_error_string(result));
-			return CMD_FAILURE;
+		if(tok){
+			if(strcmp(tok, "--no-aslr") == 0)
+				location -= debuggee->aslr_slide;
+			else{
+				free(argcpy);
+				cmdfunc_help("set", 0);
+				return CMD_FAILURE;
+			}
 		}
+
+		free(argcpy);
+
+		kern_return_t ret = memutils_write_memory_to_location((vm_address_t)location, (vm_offset_t)value);
+
+		if(ret)
+			return CMD_FAILURE;
+
+		return CMD_SUCCESS;
+	}
+	else if(specifier == '$'){
+		free(argcpy);
+
+		for(int i=0; i<strlen(target); i++)
+			target[i] = tolower(target[i]);
+
+		char reg_type = target[0];
+		char *reg_num_s = malloc(strlen(target + 1) + 1);
+		strcpy(reg_num_s, target + 1);
+
+		int reg_num = strtol(reg_num_s, NULL, 10);
+
+		free(reg_num_s);
+
+		int gpr = reg_type == 'x' || reg_type == 'w';
+		int fpr = (reg_type == 'q' || reg_type == 'v') || 
+				reg_type == 'd' || reg_type == 's';
+
+		int good_reg_num = (reg_num >= 0 && reg_num <= 31);
+		int good_reg_type = gpr || fpr;
+
+		debuggee->get_thread_state();
+		debuggee->get_neon_state();
+
+		/* Various representations of our value string. */
+		unsigned int valued = strtol(value_str, NULL, value_base);
+		unsigned long long valuellx = strtoull(value_str, NULL, value_base);
+		float valuef = strtof(value_str, NULL);
+		double valuedf = strtod(value_str, NULL);
+
+		union intfloat {
+			unsigned int w;
+			float s;
+		} IF;
+
+		IF.s = valuef;
+
+		union longdouble {
+			unsigned long long x;
+			double d;
+		} LD;
+
+		LD.d = valuedf;
+
+		/* Take care of any special registers. */
+		if(strcmp(target, "fp") == 0)
+			debuggee->thread_state.__fp = valuellx;
+		else if(strcmp(target, "lr") == 0)
+			debuggee->thread_state.__lr = valuellx;
+		else if(strcmp(target, "sp") == 0)
+			debuggee->thread_state.__sp = valuellx;
+		else if(strcmp(target, "pc") == 0)
+			debuggee->thread_state.__pc = valuellx;
+		else if(strcmp(target, "cpsr") == 0)
+			debuggee->thread_state.__cpsr = valued;
+		else if(strcmp(target, "fpsr") == 0)
+			debuggee->neon_state.__fpsr = valued;
+		else if(strcmp(target, "fpcr") == 0)
+			debuggee->neon_state.__fpcr = valued;
+		else{
+			if(!good_reg_num || !good_reg_type){
+				cmdfunc_help("set", 0);
+				return CMD_FAILURE;
+			}
+
+			if(gpr){
+				if(reg_type == 'x')
+					debuggee->thread_state.__x[reg_num] = valuellx;
+				else{
+					debuggee->thread_state.__x[reg_num] &= ~0xFFFFFFFFULL;
+					debuggee->thread_state.__x[reg_num] |= valued;
+				}
+			}
+			else{
+				if(reg_type == 'q' || reg_type == 'v'){
+					if(value_str[0] != '{' || value_str[strlen(value_str) - 1] != '}'){
+						cmdfunc_help("set", 0);
+						return CMD_FAILURE;
+					}
+
+					if(strlen(value_str) == 2){
+						cmdfunc_help("set", 0);
+						return CMD_FAILURE;
+					}
+					
+					/* Remove the brackets. */
+					value_str[strlen(value_str) - 1] = '\0';
+					memmove(value_str, value_str + 1, strlen(value_str));
+
+					size_t value_str_len = strlen(value_str);
+
+					char *hi_str = malloc(value_str_len + 1);
+					char *lo_str = malloc(value_str_len + 1);
+
+					memset(hi_str, '\0', value_str_len);
+					memset(lo_str, '\0', value_str_len);
+
+					for(int i=0; i<sizeof(long)*2; i++){
+						char *space = strrchr(value_str, ' ');
+						char *curbyte = NULL;
+
+						if(space){
+							curbyte = strdup(space + 1);
+							
+							/* Truncate what we've already processed. */
+							space[0] = '\0';
+						}
+						else
+							curbyte = strdup(value_str);
+						
+						unsigned int byte = strtol(curbyte, NULL, 0);
+
+						if(i < sizeof(long)){
+							lo_str = realloc(lo_str, strlen(lo_str) + strlen(curbyte) + 3);
+							sprintf(lo_str, "%s%02x", lo_str, byte);
+						}
+						else{
+							hi_str = realloc(hi_str, strlen(hi_str) + strlen(curbyte) + 3);
+							sprintf(hi_str, "%s%02x", hi_str, byte);
+						}
+
+						free(curbyte);
+					}
+
+					long hi = strtoul(hi_str, NULL, 16);
+					long lo = strtoul(lo_str, NULL, 16);
+
+					/* Since this is a 128 bit "number", we have to split it
+					 * up into two 64 bit pointers to correctly modify it.
+					 */
+					long *H = (long *)(&debuggee->neon_state.__v[reg_num]);
+					long *L = (long *)(&debuggee->neon_state.__v[reg_num]) + 1;
+
+					*H = hi;
+					*L = lo;
+
+					free(hi_str);
+					free(lo_str);
+				}
+				else if(reg_type == 'd')
+					debuggee->neon_state.__v[reg_num] = LD.x;
+				else
+					debuggee->neon_state.__v[reg_num] = IF.w;
+			}
+		}
+
+		free(value_str);
+
+		debuggee->set_thread_state();
+		debuggee->set_neon_state();
 	}
 
-	// if they're not modifing an offset, they're setting a config variable
-	// to be implemented
-	
 	return CMD_SUCCESS;
 }
 

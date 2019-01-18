@@ -259,9 +259,6 @@ kern_return_t catch_mach_exception_raise(
 		exception_type_t exception,
 		exception_data_t code,
 		mach_msg_type_number_t code_count){
-	//rl_already_prompted = 1;
-	//rl_num_chars_to_read = 0;
-	
 	debuggee->suspend();
 	debuggee->interrupted = 1;
 	
@@ -442,9 +439,13 @@ kern_return_t catch_mach_exception_raise(
 		if(!hit->hw)
 			breakpoint_disable(hit->id);
 
+		/* Fix up the output if a single step breakpoint hit. */
+		if(hit->ss)
+			printf("\n");
+
 		memutils_disassemble_at_location(hit->location, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 			
-		safe_reprompt();		
+		safe_reprompt();
 
 		return KERN_SUCCESS;
 	}

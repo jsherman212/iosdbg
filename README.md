@@ -53,13 +53,13 @@ If you're on iOS 11 and above you'll need to copy it to /usr/bin/:
 
 If all went well, you should be good to go. If you're below iOS 11, you can run it in your current working directory with `./iosdbg`. Otherwise, you'll have to run it with `iosdbg`. Attach to your program with its PID or executable name and have fun.
 
-I have been developing this on an iPhone 6s running iOS 9.3.3 and on an iPhone 5s running iOS 10.3.2.
+I have been developing iosdbg on an iPhone 6s running iOS 9.3.3 and on an iPhone 5s running iOS 10.3.2.
 
 ## Commands
 My goal with this project is to have a reliable debugger with basic functionality. Breakpoints, watchpoints, and little conveniences like command completion and ASLR being automatically accounted for. **You only need to type enough characters in the command for iosdbg to unambiguously identify it**. Commands implemented in this commit are:
 
 ### `attach`
-Attach to a program given its PID or executable name.
+Attach to a program given its PID or executable name. Syntax: `attach <(progname|PID)>`
 
 ### `aslr`
 View the debuggee's ASLR slide.
@@ -68,15 +68,19 @@ View the debuggee's ASLR slide.
 Unwind the stack.
 
 ### `break` (alias: `b`)
-Set a breakpoint. After all hardware breakpoints have been used, iosdbg defaults to software breakpoints. Pass `--no-aslr` to keep ASLR from being added.
+Set a breakpoint. After all hardware breakpoints have been used, iosdbg defaults to software breakpoints. Syntax: `(b|break) <location>`
+
+Pass `--no-aslr` to keep ASLR from being added.
 
 ### `continue` (alias: `c`)
 Resume the debuggee's execution.
 
 ### `disassemble` (alias: `dis`)
-Disassemble debuggee memory. Syntax: `(disassemble|dis) <location> <numlines>`
+Disassemble debuggee memory. Syntax: `(dis|disassemble) <location> <numlines>`
 
-### `delete <type> <optional ID>` (alias: `d`)
+Pass `--no-aslr` to keep ASLR from being added.
+
+### `delete` (alias: `d`)
 Delete a breakpoint or a watchpoint by specifing its ID. Syntax: `(d|delete) <type> {ID}`
 
 Type can be `b` for breakpoint or `w` for watchpoint. If you do not include `ID`, you will be given an option to delete all breakpoints or watchpoints, depending on what you gave for `<type>`.
@@ -85,12 +89,16 @@ Type can be `b` for breakpoint or `w` for watchpoint. If you do not include `ID`
 Detach from the debuggee.
 
 ### `examine` (alias: `x`)
-Examine memory at a location. Syntax: `(examine|x) <location> <count>`
+Examine memory at a location. Syntax: `(x|examine) (location|$register) <count>`
+
+If you want to view a register, prefix it with '$'. In this case, ASLR will never be accounted for.
 
 If you want your amount interpreted as hex, use `0x`. Pass `--no-aslr` to keep ASLR from being added.
 
-### `help <command name>`
-View command description. Does not auto-complete the argument.
+### `help`
+View command description. Syntax: `help <command name>`
+
+Does not auto-complete the argument.
 
 ### `kill`
 Kill the debuggee.
@@ -98,22 +106,26 @@ Kill the debuggee.
 ### `quit` (alias: `q`)
 Quit iosdbg.
 
-### `regs gen {reg1 reg2 ...}`
+### `regs gen`
 Show general purpose registers. Syntax: `regs gen {reg1 reg2 ...}`
 
 The argument is optional. All general purpose registers are dumped if there is no argument.
 
 You can list as many general purpose registers as you want.
 
-### `regs float <reg1 reg2 ...>`
+### `regs float`
 Same as `regs gen` but shows floating point register(s). Syntax: `regs float <reg1 reg2 ...>`
 
 You can list as many floating point registers as you want.
 
-### `set <(*offset|variable)=value>`
-Modify debuggee memory or a configuration variable (TODO) for iosdbg.
+### `set`
+Modify debuggee memory, registers, or a configuration variable (TODO) for iosdbg. Syntax: `set <(*offset|$register|variable)=value>`
 
-You must prefix an offset with a `*`. If you want your value to be interpreted as hex, use `0x`. Pass `--no-aslr` to prevent ASLR from being added.
+You must prefix an offset with a `*` and a register with `$`.
+
+If you want to modify one of the 128 bit V registers, format value as follows: `"{byte1 byte2 byte3 byte4 byte5 byte6 byte7 byte8 byte9 byte10 byte11 byte12 byte13 byte14 byte15 byte16}"`. Bytes do not have to be in hex.
+
+If you want your value to be interpreted as hex, use `0x`. Pass `--no-aslr` to prevent ASLR from being added.
 
 ### `stepi`
 Step into the next machine instruction. The debuggee must be suspended.
@@ -121,11 +133,13 @@ Step into the next machine instruction. The debuggee must be suspended.
 ### `thread list`
 List threads belonging to the debuggee.
 
-### `thread select <thread ID>`
-Select a different thread to focus on while debugging. Default focused thread is thread #1. If the focused thread goes away, the first available thread is selected automatically. When an exception is caused, focus goes to the thread that caused it.
+### `thread select`
+Select a different thread to focus on while debugging. Syntax: `thread select <thread ID>`
 
-### `watch <optional type> <location> <size>`
-Set a read, write, or read-write watchpoint. Syntax: `watch {type} <addr> <size>`
+Default focused thread is thread #1. If the focused thread goes away, the first available thread is selected automatically. When an exception is caused, focus goes to the thread that caused it.
+
+### `watch` (alias: `w`)
+Set a read, write, or read-write watchpoint. Syntax: `(w|watch) {type} <addr> <size>`
 
 Type can be `--r` (read), `--w` (write), or `--rw` (read/write). It is optional, so if nothing is given, iosdbg defaults to `--w`. ASLR is not accounted for.
 

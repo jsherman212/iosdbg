@@ -1,6 +1,5 @@
 #include "iosdbg.h"
 
-// SIGINT handler
 void interrupt(int show_prompt){
 	if(debuggee->pid == -1)
 		return;
@@ -24,21 +23,9 @@ void interrupt(int show_prompt){
 	debuggee->get_thread_state();
 
 	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
-
+	
 	if(show_prompt)
 		rl_printf(RL_REPROMPT, "%s stopped.\n", debuggee->debuggee_name);
-}
-
-int reset_colors(void){
-	printf("\e[0m");
-
-	return 0;
-}
-
-void reset_colors_void(void){
-	printf("\e[0m");
-
-	rl_redisplay();
 }
 
 void install_handlers(void){
@@ -57,6 +44,12 @@ void install_handlers(void){
 	debuggee->set_neon_state = &set_neon_state;
 }
 
+int reset_colors(void){
+	printf("\e[0m");
+
+	return 0;
+}
+
 void initialize_readline(void){
 	rl_catch_signals = 0;
 	rl_erase_empty_line = 1;
@@ -65,7 +58,12 @@ void initialize_readline(void){
 	 * when Readline is ready for input.
 	 */
 	rl_pre_input_hook = &reset_colors;
-	rl_redisplay_function = &reset_colors_void;
+	
+	/* rl_event_hook is used to reset colors on SIGINT and
+	 * enter button press to repeat the previous command.
+	 */	
+	rl_event_hook = &reset_colors;
+	rl_input_available_hook = &reset_colors;
 }
 
 int main(int argc, char **argv, const char **envp){
@@ -94,7 +92,7 @@ int main(int argc, char **argv, const char **envp){
 		}
 		else if(strlen(line) > 0 && (!prevline || (prevline && strcmp(line, prevline) != 0)))
 			add_history(line);
-
+		
 		// update the debuggee's linkedlist of threads
 		if(debuggee->pid != -1){
 			thread_act_port_array_t threads;
