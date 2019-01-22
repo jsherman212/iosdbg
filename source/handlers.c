@@ -18,10 +18,10 @@ unsigned long long find_slide(void){
 kern_return_t restore_exception_ports(void){
 	for(mach_msg_type_number_t i=0; i<debuggee->original_exception_ports.count; i++)
 		task_set_exception_ports(debuggee->task, 
-								debuggee->original_exception_ports.masks[i], 
-								debuggee->original_exception_ports.ports[i], 
-								debuggee->original_exception_ports.behaviors[i], 
-								debuggee->original_exception_ports.flavors[i]);
+				debuggee->original_exception_ports.masks[i], 
+				debuggee->original_exception_ports.ports[i], 
+				debuggee->original_exception_ports.behaviors[i], 
+				debuggee->original_exception_ports.flavors[i]);
 
 	return KERN_SUCCESS;
 }
@@ -40,31 +40,7 @@ kern_return_t setup_exception_handling(void){
 	err = mach_port_insert_right(mach_task_self(), debuggee->exception_port, debuggee->exception_port, MACH_MSG_TYPE_MAKE_SEND);
 	
 	CHECK_MACH_ERROR(err);
-
-	mach_port_t port_set;
-
-	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &port_set);
-
-	CHECK_MACH_ERROR(err);
-
-	err = mach_port_move_member(mach_task_self(), debuggee->exception_port, port_set);
-
-	CHECK_MACH_ERROR(err);
-
-	// allocate port to notify us of termination
-	err = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &debuggee->death_port);
-
-	CHECK_MACH_ERROR(err);
-
-	err = mach_port_move_member(mach_task_self(), debuggee->death_port, port_set);
 	
-	CHECK_MACH_ERROR(err);
-
-	mach_port_t p;
-	err = mach_port_request_notification(mach_task_self(), debuggee->task, MACH_NOTIFY_DEAD_NAME, 0, debuggee->death_port, MACH_MSG_TYPE_MAKE_SEND_ONCE, &p);
-	
-	CHECK_MACH_ERROR(err);
-
 	// save the old exception ports
 	err = task_get_exception_ports(debuggee->task, EXC_MASK_ALL, debuggee->original_exception_ports.masks, &debuggee->original_exception_ports.count, debuggee->original_exception_ports.ports, debuggee->original_exception_ports.behaviors, debuggee->original_exception_ports.flavors);
 
@@ -106,6 +82,9 @@ kern_return_t get_debug_state(void){
 
 	struct machthread *focused = machthread_getfocused();
 
+	if(!focused)
+		return KERN_FAILURE;
+
 	kern_return_t kret = thread_get_state(focused->port, ARM_DEBUG_STATE64, (thread_state_t)&debuggee->debug_state, &count);
 
 	return kret;
@@ -117,6 +96,9 @@ kern_return_t set_debug_state(void){
 
 	struct machthread *focused = machthread_getfocused();
 	
+	if(!focused)
+		return KERN_FAILURE;
+
 	kern_return_t kret = thread_set_state(focused->port, ARM_DEBUG_STATE64, (thread_state_t)&debuggee->debug_state, count);
 
 	return kret;
@@ -137,6 +119,9 @@ kern_return_t set_thread_state(void){
 	mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 
 	struct machthread *focused = machthread_getfocused();
+
+	if(!focused)
+		return KERN_FAILURE;
 	
 	kern_return_t kret = thread_set_state(focused->port, ARM_THREAD_STATE64, (thread_state_t)&debuggee->thread_state, count);
 
@@ -148,6 +133,9 @@ kern_return_t get_neon_state(void){
 	
 	struct machthread *focused = machthread_getfocused();
 
+	if(!focused)
+		return KERN_FAILURE;
+
 	kern_return_t kret = thread_get_state(focused->port, ARM_NEON_STATE64, (thread_state_t)&debuggee->neon_state, &count);
 
 	return kret;
@@ -158,6 +146,9 @@ kern_return_t set_neon_state(void){
 	mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
 	
 	struct machthread *focused = machthread_getfocused();
+
+	if(!focused)
+		return KERN_FAILURE;
 
 	kern_return_t kret = thread_set_state(focused->port, ARM_NEON_STATE64, (thread_state_t)&debuggee->neon_state, count);
 

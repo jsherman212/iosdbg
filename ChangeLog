@@ -1,3 +1,12 @@
+1-21-19
+- iosdbg can now catch Unix signals sent to debuggee
+- replace mach messages with kqueues to tell if debuggee has died
+- better exit messages for debuggee
+- remove dead code in machthread
+- tons and tons of bug fixes related to Unix signals
+- changing focused thread while single stepping doesn't mess everything up now
+- some cleanup
+
 1-17-19
 - can view memory at a general purpose register
 - can write to a general purpose register or a floating point register

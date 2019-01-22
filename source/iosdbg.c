@@ -1,6 +1,6 @@
 #include "iosdbg.h"
 
-void interrupt(int show_prompt){
+void interrupt(int x1){
 	if(debuggee->pid == -1)
 		return;
 
@@ -24,8 +24,9 @@ void interrupt(int show_prompt){
 
 	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
 	
-	if(show_prompt)
-		rl_printf(RL_REPROMPT, "%s stopped.\n", debuggee->debuggee_name);
+	printf("%s stopped.\n", debuggee->debuggee_name);
+	
+	safe_reprompt();
 }
 
 void install_handlers(void){

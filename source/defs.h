@@ -16,10 +16,11 @@ Hold important definitions for things being used everywhere.
 #include <pthread/pthread.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <sys/types.h>
+#include <sys/semaphore.h>
+#include <armadillo.h>
 
 #include "printutils.h" // rl_printf
-
-#include <armadillo.h>
 
 #define CHECK_MACH_ERROR(err) if(err){ \
 	printf("%s: %s\n", __func__, mach_error_string(err)); \
@@ -27,12 +28,6 @@ Hold important definitions for things being used everywhere.
 	}
 
 static const char *prompt = "\e[2m(iosdbg) ";
-
-// General errors.
-typedef int gen_error_t;
-
-#define GEN_SUCCESS (gen_error_t)0
-#define GEN_FAILURE (gen_error_t)1
 
 #define MAX_EXCEPTION_PORTS 16
 
@@ -42,6 +37,11 @@ struct original_exception_ports_t {
 	exception_handler_t ports[MAX_EXCEPTION_PORTS];
 	exception_behavior_t behaviors[MAX_EXCEPTION_PORTS];
 	thread_state_flavor_t flavors[MAX_EXCEPTION_PORTS];
+};
+
+struct msg {
+	mach_msg_header_t head;
+	char data[256];
 };
 
 struct debuggee {
@@ -89,6 +89,15 @@ struct debuggee {
 
 	/* Whether or not the user wants to single step. */
 	int want_single_step;
+
+	/* Whether or not the debuggee wants to detach. */
+	int want_detach;
+
+	/* What the last UNIX signal caught was. */
+	int last_unix_signal;
+
+	/* If we enountered a soft signal. */
+	int soft_signal_exc;
 	
 	// Thread state for the debuggee.
 	arm_thread_state64_t thread_state;
@@ -98,6 +107,9 @@ struct debuggee {
 
 	/* Neon state for the debuggee. */
 	arm_neon_state64_t neon_state;
+
+	/* The reply message for exceptions. */
+	struct msg exc_rpl;
 
 	// Count of threads for the debuggee.
 	mach_msg_type_number_t thread_count;

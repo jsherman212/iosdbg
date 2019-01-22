@@ -320,3 +320,22 @@ struct breakpoint *find_bp_with_address(unsigned long addr){
 
 	return NULL;
 }
+
+void delete_ss_bps(void){
+	if(!debuggee->breakpoints)
+		return;
+
+	if(!debuggee->breakpoints->front)
+		return;
+
+	struct node_t *current = debuggee->breakpoints->front;
+
+	while(current){
+		struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
+
+		if(current_breakpoint->ss)
+			bp_delete_internal(current_breakpoint);
+
+		current = current->next;
+	}
+}

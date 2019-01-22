@@ -1,6 +1,7 @@
 #ifndef _DBGCMD_H_
 #define _DBGCMD_H_
 
+#include <dlfcn.h>
 #include "breakpoint.h"
 #include "watchpoint.h"
 #include "defs.h"
@@ -11,6 +12,11 @@ typedef int cmd_error_t;
 
 #define CMD_SUCCESS (cmd_error_t)0
 #define CMD_FAILURE (cmd_error_t)1
+
+#define PT_DETACH   11
+#define PT_SIGEXC   12
+#define PT_ATTACHEXC    14
+#define PT_THUPDATE 13
 
 struct dbg_cmd_t {
 	const char *name;
@@ -50,7 +56,7 @@ static struct dbg_cmd_t COMMANDS[] = {
 	{ "delete", "d", cmdfunc_delete, "Delete a breakpoint or a watchpoint via its ID. Syntax:\n\t(d|delete) <type> {id}\n\n\ttype: 'b' for breakpoint or 'w' for watchpoint.\n\tid: the *optional* id of the breakpoint or watchpoint you want to delete.\n\tIf you don't include it, you'll be given the option to delete all breakpoints or watchpoints." },
 	{ "detach", NULL, cmdfunc_detach, "Detach from the debuggee." },
 	{ "disassemble", "dis", cmdfunc_disassemble, "Disassemble memory from the debuggee. Syntax:\n\tdisassemble <location> <numlines>.\n\n\tPass --no-aslr to keep ASLR from being added to the location." },
-	{ "examine", "x", cmdfunc_examine, "Examine debuggee memory. Syntax:\n\t(examine|x) (location|register) <count>\n\n\tIf you want to view a register, prefix it with '$'. ASLR will not be accounted for.\n\n\tPass --no-aslr to keep ASLR from being added to the location." },
+	{ "examine", "x", cmdfunc_examine, "Examine debuggee memory. Syntax:\n\t(examine|x) (location|$register) <count>\n\n\tIf you want to view a register, prefix it with '$'. ASLR will not be accounted for.\n\n\tPass --no-aslr to keep ASLR from being added to the location." },
 	{ "help", NULL, cmdfunc_help, "Get help for a specific command." },
 	{ "kill", NULL, cmdfunc_kill, "Kill the debuggee." },
 	{ "quit", "q", cmdfunc_quit, "Quit iosdbg." },

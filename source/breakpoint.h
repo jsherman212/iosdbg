@@ -67,5 +67,6 @@ bp_error_t breakpoint_enable(int);
 int breakpoint_disabled(int);
 void breakpoint_delete_all(void);
 struct breakpoint *find_bp_with_address(unsigned long);
+void delete_ss_bps(void);
 
 #endif

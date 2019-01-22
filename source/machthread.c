@@ -167,22 +167,7 @@ void machthread_updatethreads(thread_act_port_array_t threads){
 			/* If we've gotten to the end of our list of threads,
 			 * it's time to add the new ones. Otherwise, start over.
 			 */
-			if(!current)
-				break;
-			else
-				continue;
-
-			t = current->data;
-
-			mach_port_type(mach_task_self(), t->port, &type);
-			
-			/* Advance to the next "alive" thread. */
-			while(current && type == MACH_PORT_TYPE_DEAD_NAME){
-				mach_port_type(mach_task_self(), t->port, &type);
-				ID_deduction++;
-				current = current->next;
-				t = current->data;
-			}
+			continue;
 		}
 		else{
 			machthread_updatestate(t);

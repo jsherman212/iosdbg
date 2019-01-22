@@ -1,5 +1,12 @@
 #include "dbgutils.h"
 
+/* Both unused. */
+kern_return_t catch_mach_exception_raise_state(mach_port_t exception_port, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
+
+kern_return_t catch_mach_exception_raise_state_identity(mach_port_t exception_port, mach_port_t thread, mach_port_t task, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
+
+extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
+
 struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length){
 	int err;
 	struct kinfo_proc *result = NULL;
@@ -26,9 +33,6 @@ struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length){
 	return result;
 }
 
-// pidof implementation
-// Get the pid of a program based on the program name provided
-// Return: pid on success, -1 on error
 pid_t pid_of_program(char *progname){
 	size_t length;
 
@@ -98,75 +102,105 @@ char *progname_from_pid(pid_t pid){
 	return NULL;
 }
 
-void *_exception_server(void *arg){
+void *exception_server(void *arg){
 	while(1){
-		// shut down this thread once we detach
 		if(debuggee->pid == -1)
 			pthread_exit(NULL);
 
-		kern_return_t err = mach_msg_server_once(mach_exc_server, 4096, debuggee->exception_port, 0);
+		struct msg req;
+		kern_return_t err = mach_msg(&req.head, MACH_RCV_MSG, 0, sizeof(req), debuggee->exception_port, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
 
 		if(err)
-			printf("\nmach_msg_server_once: error: %s\n", mach_error_string(err));
+			printf("exception_server: %s\n", mach_error_string(err));
+
+		boolean_t parsed = mach_exc_server(&req.head, &debuggee->exc_rpl.head);
+
+		if(!parsed)
+			printf("exception_server: our request could not be parsed\n");
+
+		/* If a fatal UNIX signal is encountered and we reply
+		 * to this exception right away, the debuggee will be killed
+		 * before the user can inspect it.
+		 * Solution: if we had this kind of exception, reply to it
+		 * when the user wants to continue.
+		 */
+		if(!debuggee->soft_signal_exc){
+			err = mach_msg(&debuggee->exc_rpl.head, MACH_SEND_MSG, debuggee->exc_rpl.head.msgh_size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+
+			if(err)
+				printf("exception_server: %s\n", mach_error_string(err));
+		}
 	}
 
 	return NULL;
 }
 
 void *death_server(void *arg){
-	typedef struct {
-    unsigned int	msgt_name : 8,
-					msgt_size : 8,
-					msgt_number : 12,
-					msgt_inline : 1,
-					msgt_longform : 1,
-					msgt_deallocate : 1,
-					msgt_unused : 1;
-	} mach_msg_type_t;
-
-	struct msg {
-		mach_msg_header_t head;
-		mach_msg_type_t type;
-		char misc[256];
-	};
+	int kqid = *(int *)arg;
 
 	while(1){
+		struct kevent death_event;
+
+		/* Provide a struct for the kernel to write to if any changes occur. */
+		int changes = kevent(kqid, NULL, 0, &death_event, 1, NULL);
+
+		/* Don't report if we detached earlier. */
 		if(debuggee->pid == -1)
 			pthread_exit(NULL);
 
-		struct msg message;
-		
-		mach_msg(&message.head, MACH_RCV_MSG, 0, sizeof(message), debuggee->death_port, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
-		
-		if(debuggee->pid == -1)
+		if(changes < 0){
+			printf("kevent: %s\n", strerror(errno));
 			pthread_exit(NULL);
-		
-		printf("\n\n[%s (%d) dead]\n", debuggee->debuggee_name, debuggee->pid);
-		
+		}
+
+		/* Figure out how the debuggee exited. */
+		int status;
+		waitpid(debuggee->pid, &status, 0);
+
+		if(WIFEXITED(status))
+			printf("\n[%s (%d) exited normally (status = 0x%8.8x)]\n", debuggee->debuggee_name, debuggee->pid, WEXITSTATUS(status));
+		else if(WIFSIGNALED(status))
+			printf("\n[%s (%d) terminated due to signal %d]\n", debuggee->debuggee_name, debuggee->pid, WTERMSIG(status));
+
 		cmdfunc_detach(NULL, 1);
+		close(kqid);
 		safe_reprompt();
+		pthread_exit(NULL);
 	}
 
 	return NULL;
 }
 
-// setup our exception related stuff
 void setup_servers(void){
 	debuggee->setup_exception_handling();
 
-	// start the exception server
+	/* Start the exception server. */
 	pthread_t exception_server_thread;
-	pthread_create(&exception_server_thread, NULL, _exception_server, NULL);
+	pthread_create(&exception_server_thread, NULL, exception_server, NULL);
+
+	int kqid = kqueue();
+
+	if(kqid == -1){
+		printf("Could not create kernel event queue\n");
+		return;
+	}
+
+	struct kevent kev;
+
+	EV_SET(&kev, debuggee->pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
+	
+	/* Tell the kernel to add this event to the monitored list. */
+	kevent(kqid, &kev, 1, NULL, 0, NULL);
 
 	/* Check if the debuggee dies. */
 	pthread_t death_server_thread;
-	pthread_create(&death_server_thread, NULL, death_server, NULL);
+	pthread_create(&death_server_thread, NULL, death_server, (void *)&kqid);
 }
 
 void setup_initial_debuggee(void){
 	debuggee = malloc(sizeof(struct debuggee));
 
-	// if we aren't attached to anything, debuggee's pid is -1
+	/* If we aren't attached to anything, debuggee's pid is -1. */
 	debuggee->pid = -1;
 	debuggee->interrupted = 0;
 	debuggee->breakpoints = linkedlist_new();
@@ -182,6 +216,11 @@ void setup_initial_debuggee(void){
 	debuggee->is_single_stepping = 0;
 	debuggee->want_single_step = 0;
 
+	debuggee->want_detach = 0;
+
+	debuggee->last_unix_signal = -1;
+	debuggee->soft_signal_exc = 0;
+
 	/* Figure out how many hardware breakpoints/watchpoints are supported. */
 	size_t len = sizeof(int);
 
@@ -192,7 +231,7 @@ void setup_initial_debuggee(void){
 	sysctlbyname("hw.optional.watchpoint", &debuggee->num_hw_wps, &len, NULL, 0);
 }
 
-const char *get_exception_code(exception_type_t exception){
+const char *get_exception_name(exception_type_t exception){
 	switch(exception){
 	case EXC_BAD_ACCESS:
 		return "EXC_BAD_ACCESS";
@@ -252,38 +291,74 @@ void describe_hit_breakpoint(unsigned long long tid, char *tname, struct breakpo
 	printf("\n * Thread %#llx: '%s': breakpoint %d at %#lx hit %d time(s).\n", tid, tname, hit->id, hit->location, hit->hit_count);
 }
 
+void clear_signal(mach_port_t thread){
+	void *h = dlopen(0, RTLD_GLOBAL | RTLD_NOW);
+	int (*ptrace)(int, pid_t, caddr_t, int) = dlsym(h, "ptrace");
+
+	ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
+
+	dlclose(h);
+}
+
 kern_return_t catch_mach_exception_raise(
 		mach_port_t exception_port,
 		mach_port_t thread,
 		mach_port_t task,
 		exception_type_t exception,
-		exception_data_t code,
+		exception_data_t _code,
 		mach_msg_type_number_t code_count){
-	debuggee->suspend();
-	debuggee->interrupted = 1;
+	if(debuggee->task != task)
+		return KERN_FAILURE;
 	
+	/* If this is called two times in a row, make sure
+	 * to not increment the suspend count for our task
+	 * more than once.
+	 */
+	if(!debuggee->interrupted){
+		debuggee->suspend();
+		debuggee->interrupted = 1;
+	}
+
+	debuggee->soft_signal_exc = 0;
+
 	struct machthread *curfocused = machthread_getfocused();
 	
 	unsigned long long tid = get_tid_from_thread_port(thread);
-	
+
+	/* exception_data_t is typedef'ed as int *, which is
+	 * not enough space to hold the data break address.
+	 */
+	long code = ((long *)_code)[0];
+	long subcode = ((long *)_code)[1];
+
+	/* Like LLDB, ignore signals when we aren't on the
+	 * main thread and single stepping. 
+	 */
+	if(debuggee->is_single_stepping && exception == EXC_SOFTWARE && code == EXC_SOFT_SIGNAL){
+		struct machthread *main = machthread_find(1);
+
+		if(main && main->port != curfocused->port){
+			rl_clear_visible_line();
+			safe_reprompt();
+			clear_signal(thread);
+
+			return KERN_SUCCESS;
+		}
+	}
+
 	/* Give focus to the thread that caused this exception. */
 	if(!curfocused || curfocused->port != thread){
 		printf("[Switching to thread %#llx]\n", tid);
 		machthread_setfocused(thread);
 	}
-	
+
 	debuggee->get_thread_state();
 
-	/* exception_data_t is typedef'ed as int *, which is
-	 * not enough space to hold the data break address.
-	 */
-	long elem0 = ((long *)code)[0];
-	long break_loc = ((long *)code)[1];
-
-	if(exception == EXC_BREAKPOINT && elem0 == EXC_ARM_BREAKPOINT){
+	if(exception == EXC_BREAKPOINT && code == EXC_ARM_BREAKPOINT){
 		char *tname = get_thread_name_from_thread_port(thread);
 		
-		if(break_loc == 0){
+		/* Hardware single step exception. */
+		if(subcode == 0){
 			/* When the exception caused by the single step happens,
 			 * we can re-enable the breakpoint last it if it was software,
 			 * or do nothing if it was hardware.
@@ -391,7 +466,7 @@ kern_return_t catch_mach_exception_raise(
 			return KERN_SUCCESS;
 		}
 
-		struct breakpoint *hit = find_bp_with_address(break_loc);
+		struct breakpoint *hit = find_bp_with_address(subcode);
 
 		if(!hit){
 			printf("Could not find hit breakpoint? Please open an issue on github\n");
@@ -449,11 +524,11 @@ kern_return_t catch_mach_exception_raise(
 
 		return KERN_SUCCESS;
 	}
-	else if(elem0 == EXC_ARM_DA_DEBUG){
+	else if(code == EXC_ARM_DA_DEBUG){
 		/* A watchpoint hit. Log anything we need to compare data when
 		 * the single step exception occurs.
 		 */
-		debuggee->last_hit_wp_loc = break_loc;
+		debuggee->last_hit_wp_loc = subcode;
 		debuggee->last_hit_wp_PC = debuggee->thread_state.__pc;
 		
 		/* Enable hardware single stepping so we can get past this watchpoint. */
@@ -470,11 +545,54 @@ kern_return_t catch_mach_exception_raise(
 	/* Some other exception occured. */
 	char *tname = get_thread_name_from_thread_port(thread);
 
-	printf("\n * Thread %#llx, '%s' received signal %d, %s. %#llx in debuggee.\n", tid, tname, exception, get_exception_code(exception), debuggee->thread_state.__pc);
+	char *whathappened;
 
+	asprintf(&whathappened, "\n * Thread %#llx, '%s' received signal ", tid, tname);
+
+	/* A Unix signal was caught. */
+	if(exception == EXC_SOFTWARE && code == EXC_SOFT_SIGNAL){
+		/* If we sent SIGSTOP to correct the debuggee's process
+		 * state, ignore it and resume execution.
+		 */
+		if(debuggee->want_detach){
+			free(whathappened);
+
+			debuggee->resume();
+			debuggee->interrupted = 0;
+
+			return KERN_SUCCESS;
+		}
+
+		debuggee->last_unix_signal = subcode;
+		debuggee->soft_signal_exc = 1;
+
+		char *sigstr = strdup(sys_signame[subcode]);
+		size_t sigstrlen = strlen(sigstr);
+
+		for(int i=0; i<sigstrlen; i++)
+			sigstr[i] = toupper(sigstr[i]);
+
+		asprintf(&whathappened, "%s%ld, SIG%s. ", whathappened, subcode, sigstr);
+
+		free(sigstr);
+		
+		/* Ignore SIGINT and SIGTRAP. */
+		if(subcode == SIGINT || subcode == SIGTRAP)
+			clear_signal(thread);
+	}
+	else
+		asprintf(&whathappened, "%s%d, %s. ", whathappened, exception, get_exception_name(exception));
+
+	asprintf(&whathappened, "%s%#llx in debuggee.\n", whathappened, debuggee->thread_state.__pc);
+
+	printf("%s", whathappened);
+
+	free(whathappened);
 	free(tname);
 
 	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+
+	rl_already_prompted = 0;
 
 	safe_reprompt();
 

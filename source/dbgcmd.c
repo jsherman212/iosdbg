@@ -114,21 +114,12 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	kern_return_t err = task_for_pid(mach_task_self(), pid, &debuggee->task);
 
 	if(err){
-		printf("attach: couldn't get task port for pid %d: %s\n", pid, mach_error_string(err));
+		printf("Couldn't get task port for %s (pid: %d): %s\n", args, pid, mach_error_string(err));
 		printf("Did you forget to sign iosdbg with entitlements?\n");
 		return CMD_FAILURE;
 	}
-	
-	err = debuggee->suspend();
 
-	if(err){
-		printf("attach: task_suspend call failed: %s\n", mach_error_string(err));
-		return CMD_FAILURE;
-	}
-	
 	debuggee->pid = pid;
-	debuggee->interrupted = 1;
-	
 	debuggee->aslr_slide = debuggee->find_slide();
 	
 	if(is_number((char *)args)){
@@ -170,9 +161,24 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 
 	debuggee->get_thread_state();
 
-	printf("\nAttached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
+	debuggee->want_detach = 0;
 
-	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+	printf("Attached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
+
+	/* ptrace.h is unavailable on iOS. */
+	void *h = dlopen(0, RTLD_GLOBAL | RTLD_NOW);
+	int (*ptrace)(int, pid_t, caddr_t, int) = dlsym(h, "ptrace");
+
+	/* Have Unix signals be sent as Mach exceptions. */
+	ptrace(PT_ATTACHEXC, debuggee->pid, 0, 0);
+	ptrace(PT_SIGEXC, debuggee->pid, 0, 0);
+	
+	dlclose(h);
+
+	/* Since SIGSTOP is going to be caught right after
+	 * this function, don't reprint the (iosdbg) prompt.
+	 */
+	rl_already_prompted = 1;
 
 	return CMD_SUCCESS;
 }
@@ -246,23 +252,31 @@ cmd_error_t cmdfunc_break(const char *args, int arg1){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_continue(const char *args, int arg1){
+cmd_error_t cmdfunc_continue(const char *args, int do_not_print_msg){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
-
+	
 	if(!debuggee->interrupted)
 		return CMD_FAILURE;
+	
+	if(debuggee->soft_signal_exc){
+		kern_return_t err = mach_msg(&debuggee->exc_rpl.head, MACH_SEND_MSG, debuggee->exc_rpl.head.msgh_size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+
+		if(err)
+			printf("Replying to the Unix soft signal failed: %s\n", mach_error_string(err));
+
+		debuggee->soft_signal_exc = 0;
+	}
 
 	kern_return_t err = debuggee->resume();
 
-	if(err){
-		printf("continue: %s\n", mach_error_string(err));
+	if(err)
 		return CMD_FAILURE;
-	}
 
 	debuggee->interrupted = 0;
 
-	rl_printf(RL_NO_REPROMPT, "Process %d resuming\n", debuggee->pid);
+	if(!do_not_print_msg)
+		printf("Process %d resuming\n", debuggee->pid);
 
 	return CMD_SUCCESS;
 }
@@ -335,6 +349,8 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 	int id = atoi(tok);
 
 	if(strcmp(type, "b") == 0){
+		free(type);
+
 		bp_error_t error = breakpoint_delete(id);
 
 		if(error == BP_FAILURE){
@@ -345,6 +361,8 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 		printf("Breakpoint %d deleted\n", id);
 	}
 	else if(strcmp(type, "w") == 0){
+		free(type);
+		
 		wp_error_t error = watchpoint_delete(id);
 
 		if(error == WP_FAILURE){
@@ -365,6 +383,8 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
+	
+	debuggee->want_detach = 1;
 
 	// delete all breakpoints on detach so the original instruction is written back to prevent a crash
 	// TODO: instead of deleting them, maybe disable all of them and if we are attached to the same thing again re-enable them?
@@ -376,18 +396,53 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	debuggee->debug_state.__mdscr_el1 = 0;
 	debuggee->set_debug_state();
 
+	/* Send SIGSTOP to set debuggee's process status to
+	 * SSTOP so we can detach. Calling ptrace with PT_THUPDATE
+	 * to handle Unix signals sets this status to SRUN, and ptrace 
+	 * bails if this status is SRUN. See bsd/kern/mach_process.c
+	 */
+	/* BSD PID_MAX is 99999, and NO_PID is 100000.
+	 * 8 bytes is enough space for a PID.
+	 */
 	if(!from_death){
-		debuggee->restore_exception_ports();
+		char *pidstr = malloc(8);
+		memset(pidstr, '\0', 8);
+		sprintf(pidstr, "%d", debuggee->pid);
 
-		if(debuggee->interrupted){
-			cmd_error_t result = cmdfunc_continue(NULL, 0);
-
-			if(result != CMD_SUCCESS){
-				printf("detach: couldn't resume execution before we detach?\n");
-				return CMD_FAILURE;
-			}
+		pid_t p;
+		char *stop_argv[] = {"kill", "-STOP", pidstr, NULL};
+		int status = posix_spawnp(&p, "kill", NULL, NULL, (char * const *)stop_argv, NULL);
+			
+		if(status == 0)
+			waitpid(p, &status, 0);
+		else{
+			printf("posix_spawnp for SIGSTOP failed\n");
+			return CMD_FAILURE;
 		}
+
+		void *h = dlopen(0, RTLD_GLOBAL | RTLD_NOW);
+		int (*ptrace)(int, pid_t, caddr_t, int) = dlsym(h, "ptrace");
+		
+		int err_ = ptrace(PT_DETACH, debuggee->pid, 0, 0);
+		printf("err %s errno %s\n", strerror(err_), strerror(errno));
+		dlclose(h);
+
+		/* Send SIGCONT so the process is running again. */
+		char *cont_argv[] = {"kill", "-CONT", pidstr, NULL};
+		status = posix_spawnp(&p, "kill", NULL, NULL, (char * const *)cont_argv, NULL);
+
+		if(status == 0)
+			waitpid(p, &status, 0);
+		else{
+			printf("posix_spawnp for SIGCONT failed\n");
+			return CMD_FAILURE;
+		}
+
+		free(pidstr);
 	}
+	
+	debuggee->restore_exception_ports();
+	cmdfunc_continue(NULL, 1);
 
 	debuggee->interrupted = 0;
 
@@ -418,6 +473,11 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 
 	free(debuggee->debuggee_name);
 	debuggee->debuggee_name = NULL;
+
+	debuggee->want_detach = 0;
+	
+	debuggee->last_unix_signal = -1;
+	debuggee->soft_signal_exc = 0;
 
 	return CMD_SUCCESS;
 }
@@ -667,8 +727,7 @@ cmd_error_t cmdfunc_kill(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_quit(const char *args, int arg1){
-	if(debuggee->pid != -1)
-		cmdfunc_detach(NULL, 0);
+	cmdfunc_detach(NULL, 0);
 
 	free(debuggee);
 	exit(0);
@@ -1131,8 +1190,7 @@ cmd_error_t cmdfunc_stepi(const char *args, int arg1){
 	
 	debuggee->want_single_step = 1;
 
-	debuggee->resume();
-	debuggee->interrupted = 0;
+	cmdfunc_continue(NULL, 1);
 
 	return CMD_SUCCESS;
 }
@@ -1182,6 +1240,19 @@ cmd_error_t cmdfunc_threadselect(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
+	/* Delete any single step breakpoints belonging to
+	 * the other thread.
+	 */
+	if(debuggee->is_single_stepping){
+		delete_ss_bps();
+
+		debuggee->is_single_stepping = 0;
+
+		debuggee->get_debug_state();
+		debuggee->debug_state.__mdscr_el1 = 0;
+		debuggee->set_debug_state();
+	}
+
 	int result = machthread_setfocusgivenindex(thread_id);
 	
 	if(result){
@@ -1189,7 +1260,7 @@ cmd_error_t cmdfunc_threadselect(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
-	printf("Selected thread %d\n", thread_id);
+	printf("Selected thread #%d\n", thread_id);
 	
 	return CMD_SUCCESS;
 }
@@ -1311,11 +1382,11 @@ cmd_error_t execute_command(char *input){
 			if(strlen(input) > tokenlen)
 				args = (char *)input + tokenlen + 1;
 		
-			finalfunc(args, 0);
+			cmd_error_t result = finalfunc(args, 0);
 
 			free(usercmd);
 			
-			return CMD_SUCCESS;
+			return result;
 		}
 	}
 
