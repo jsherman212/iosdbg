@@ -423,8 +423,8 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death){
 		void *h = dlopen(0, RTLD_GLOBAL | RTLD_NOW);
 		int (*ptrace)(int, pid_t, caddr_t, int) = dlsym(h, "ptrace");
 		
-		int err_ = ptrace(PT_DETACH, debuggee->pid, 0, 0);
-		printf("err %s errno %s\n", strerror(err_), strerror(errno));
+		ptrace(PT_DETACH, debuggee->pid, 0, 0);
+
 		dlclose(h);
 
 		/* Send SIGCONT so the process is running again. */
@@ -728,6 +728,30 @@ cmd_error_t cmdfunc_kill(const char *args, int arg1){
 
 cmd_error_t cmdfunc_quit(const char *args, int arg1){
 	cmdfunc_detach(NULL, 0);
+
+	/* Free the arrays made from the trace.codes file. */
+	if(!debuggee->tracing_disabled){
+		for(int i=0; i<bsd_syscalls_arr_len; i++){
+			if(bsd_syscalls[i])
+				free(bsd_syscalls[i]);
+		}
+
+		free(bsd_syscalls);
+
+		for(int i=0; i<mach_traps_arr_len; i++){
+			if(mach_traps[i])
+				free(mach_traps[i]);
+		}
+
+		free(mach_traps);
+
+		for(int i=0; i<mach_messages_arr_len; i++){
+			if(mach_messages[i])
+				free(mach_messages[i]);
+		}
+
+		free(mach_messages);
+	}
 
 	free(debuggee);
 	exit(0);
@@ -1261,6 +1285,25 @@ cmd_error_t cmdfunc_threadselect(const char *args, int arg1){
 	}
 
 	printf("Selected thread #%d\n", thread_id);
+	
+	return CMD_SUCCESS;
+}
+
+cmd_error_t cmdfunc_trace(const char *args, int arg1){
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
+	if(debuggee->tracing_disabled){
+		printf("Tracing is not supported\n");
+		return CMD_FAILURE;
+	}
+	
+	if(debuggee->currently_tracing){
+		printf("Already tracing\n");
+		return CMD_FAILURE;
+	}
+
+	start_trace();
 	
 	return CMD_SUCCESS;
 }

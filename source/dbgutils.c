@@ -145,11 +145,14 @@ void *death_server(void *arg){
 		int changes = kevent(kqid, NULL, 0, &death_event, 1, NULL);
 
 		/* Don't report if we detached earlier. */
-		if(debuggee->pid == -1)
+		if(debuggee->pid == -1){
+			free(arg);
 			pthread_exit(NULL);
+		}
 
 		if(changes < 0){
 			printf("kevent: %s\n", strerror(errno));
+			free(arg);
 			pthread_exit(NULL);
 		}
 
@@ -162,6 +165,7 @@ void *death_server(void *arg){
 		else if(WIFSIGNALED(status))
 			printf("\n[%s (%d) terminated due to signal %d]\n", debuggee->debuggee_name, debuggee->pid, WTERMSIG(status));
 
+		free(arg);
 		cmdfunc_detach(NULL, 1);
 		close(kqid);
 		safe_reprompt();
@@ -192,9 +196,12 @@ void setup_servers(void){
 	/* Tell the kernel to add this event to the monitored list. */
 	kevent(kqid, &kev, 1, NULL, 0, NULL);
 
+	int *intptr = malloc(sizeof(int));
+	*intptr = kqid;
+
 	/* Check if the debuggee dies. */
 	pthread_t death_server_thread;
-	pthread_create(&death_server_thread, NULL, death_server, (void *)&kqid);
+	pthread_create(&death_server_thread, NULL, death_server, intptr);
 }
 
 void setup_initial_debuggee(void){
@@ -220,6 +227,9 @@ void setup_initial_debuggee(void){
 
 	debuggee->last_unix_signal = -1;
 	debuggee->soft_signal_exc = 0;
+
+	debuggee->tracing_disabled = 0;
+	debuggee->currently_tracing = 0;
 
 	/* Figure out how many hardware breakpoints/watchpoints are supported. */
 	size_t len = sizeof(int);

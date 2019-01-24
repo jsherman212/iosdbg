@@ -138,6 +138,9 @@ Select a different thread to focus on while debugging. Syntax: `thread select <t
 
 Default focused thread is thread #1. If the focused thread goes away, the first available thread is selected automatically. When an exception is caused, focus goes to the thread that caused it.
 
+### `trace`
+Trace system calls, mach system calls, and mach traps of the debuggee. Press Ctrl+C to stop.
+
 ### `watch` (alias: `w`)
 Set a read, write, or read-write watchpoint. Syntax: `(w|watch) {type} <addr> <size>`
 

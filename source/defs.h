@@ -16,11 +16,11 @@ Hold important definitions for things being used everywhere.
 #include <pthread/pthread.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <sys/sysctl.h>
 #include <sys/types.h>
-#include <sys/semaphore.h>
 #include <armadillo.h>
 
-#include "printutils.h" // rl_printf
+#include "printutils.h"
 
 #define CHECK_MACH_ERROR(err) if(err){ \
 	printf("%s: %s\n", __func__, mach_error_string(err)); \
@@ -28,6 +28,14 @@ Hold important definitions for things being used everywhere.
 	}
 
 static const char *prompt = "\e[2m(iosdbg) ";
+
+extern char **bsd_syscalls;
+extern char **mach_traps;
+extern char **mach_messages;
+
+extern int bsd_syscalls_arr_len;
+extern int mach_traps_arr_len;
+extern int mach_messages_arr_len;
 
 #define MAX_EXCEPTION_PORTS 16
 
@@ -53,6 +61,12 @@ struct debuggee {
 
 	// Port to notify us upon debuggee's termination.
 	mach_port_t death_port;
+
+	/* If this variable is non-zero, tracing is not supported. */
+	int tracing_disabled;
+
+	/* Whether or not we are currently tracing. */
+	int currently_tracing;
 
 	// Whether execution has been suspended or not.
 	int interrupted;

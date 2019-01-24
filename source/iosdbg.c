@@ -1,5 +1,13 @@
 #include "iosdbg.h"
 
+char **bsd_syscalls;
+char **mach_traps;
+char **mach_messages;
+
+int bsd_syscalls_arr_len;
+int mach_traps_arr_len;
+int mach_messages_arr_len;
+
 void interrupt(int x1){
 	if(debuggee->pid == -1)
 		return;
@@ -17,6 +25,14 @@ void interrupt(int x1){
 	}
 
 	debuggee->interrupted = 1;
+
+	stop_trace();
+	
+	if(debuggee->currently_tracing)
+		printf("\nShutting down trace...\n");
+
+	/* The trace won't be stopped immediately, so wait until it is. */
+	while(debuggee->currently_tracing){}
 
 	printf("\n");
 
@@ -67,16 +83,191 @@ void initialize_readline(void){
 	rl_input_available_hook = &reset_colors;
 }
 
+void get_code_and_event_from_line(char *line, char **code, char **event, char **freethis){
+	char *linecopy = strdup(line);
+	size_t linelen = strlen(line);
+
+	int idx = 0;
+
+	while(idx < linelen && !isblank(line[idx]))
+		idx++;
+
+	linecopy[idx] = '\0';
+
+	*code = linecopy;
+
+	while(idx < linelen && isblank(line[idx]))
+		idx++;
+
+	*event = &linecopy[idx];
+
+	/* Strip any whitespace from the end. */
+	while(idx < linelen && !isblank(line[idx]))
+		idx++;
+
+	linecopy[idx] = '\0';
+	
+	*freethis = linecopy;
+}
+
+int setup_tracing(void){
+	FILE *tracecodes = fopen("/usr/share/misc/trace.codes", "r");
+
+	if(!tracecodes){
+		printf("Could not read /usr/share/misc/trace.codes. Tracing is disabled.\n");
+		
+		debuggee->tracing_disabled = 1;
+
+		return 1;
+	}
+
+	int largest_mach_msg_entry = 0;
+	int curline = 0;
+
+	/* For safety, allocate everything and set first element to NULL. */
+	bsd_syscalls = malloc(sizeof(char *));
+	mach_traps = malloc(sizeof(char *));
+	mach_messages = malloc(sizeof(char *));
+
+	bsd_syscalls[0] = NULL;
+	mach_traps[0] = NULL;
+	mach_messages[0] = NULL;
+
+	char *line = NULL;
+	size_t len;
+
+	/* Get the sizes of each array before allocating so we can
+	 * set every element to NULL so there are no problems with freeing.
+	 */
+	while(getline(&line, &len, tracecodes) != -1){
+		line[strlen(line) - 1] = '\0';
+
+		char *code = NULL, *event = NULL, *freethis = NULL;
+
+		get_code_and_event_from_line(line, &code, &event, &freethis);
+
+		unsigned long codenum = strtol(code, NULL, 16);
+
+		if(strnstr(event, "BSC", 3)){
+			int eventidx = (codenum & 0xfff) / 4;
+
+			/* There's a couple more not following the "increment by 4" code pattern. */
+			if(codenum > 0x40c0824){
+				eventidx = (codenum & ~0xff00000) / 4;
+
+				bsd_syscalls = realloc(bsd_syscalls, sizeof(char *) * (curline + eventidx));
+			}
+			else
+				bsd_syscalls = realloc(bsd_syscalls, sizeof(char *) * (curline + 1));
+
+			bsd_syscalls_arr_len = eventidx;
+		}
+		else if(strnstr(event, "MSC", 3)){
+			int eventidx = (codenum & 0xfff) / 4;
+
+			mach_traps = realloc(mach_traps, sizeof(char *) * (curline + 1));
+
+			mach_traps_arr_len = eventidx;
+		}
+		else if(strnstr(event, "MSG", 3)){
+			int eventidx = (codenum & ~0xff000000) / 4;
+
+			if(eventidx > largest_mach_msg_entry){
+				int num_ptrs_to_allocate = eventidx - largest_mach_msg_entry;
+				int cur_array_size = largest_mach_msg_entry;
+
+				mach_messages = realloc(mach_messages, sizeof(char *) * (cur_array_size + num_ptrs_to_allocate + 1));
+
+				largest_mach_msg_entry = eventidx + 1;
+			}
+
+			mach_messages_arr_len = largest_mach_msg_entry;
+		}
+
+		free(freethis);
+
+		curline++;
+	}
+
+	/* Set every element in each array to NULL. */
+	for(int i=0; i<bsd_syscalls_arr_len; i++)
+		bsd_syscalls[i] = NULL;
+
+	for(int i=0; i<mach_traps_arr_len; i++)
+		mach_traps[i] = NULL;
+
+	for(int i=0; i<mach_messages_arr_len; i++)
+		mach_messages[i] = NULL;
+
+	rewind(tracecodes);
+
+	/* Go again and fill up the array. */
+	while(getline(&line, &len, tracecodes) != -1){
+		line[strlen(line) - 1] = '\0';
+
+		char *code = NULL, *event = NULL, *freethis = NULL;
+
+		get_code_and_event_from_line(line, &code, &event, &freethis);
+
+		unsigned long codenum = strtol(code, NULL, 16);
+
+		if(strnstr(event, "BSC", 3)){
+			int eventidx = (codenum & 0xfff) / 4;
+
+			if(codenum > 0x40c0824)
+				eventidx = (codenum & ~0xff00000) / 4;
+
+			/* Get rid of the prefix. */
+			bsd_syscalls[eventidx] = malloc(strlen(event + 4) + 1);
+			strcpy(bsd_syscalls[eventidx], event + 4);
+		}
+		else if(strnstr(event, "MSC", 3)){
+			int eventidx = (codenum & 0xfff) / 4;
+
+			mach_traps[eventidx] = malloc(strlen(event + 4) + 1);
+			strcpy(mach_traps[eventidx], event + 4);
+		}
+		else if(strnstr(event, "MSG", 3)){
+			int eventidx = (codenum & ~0xff000000) / 4;
+
+			mach_messages[eventidx] = malloc(strlen(event + 4) + 1);
+			strcpy(mach_messages[eventidx], event + 4);
+		}
+
+		free(freethis);
+	}
+
+	if(line)
+		free(line);
+
+	fclose(tracecodes);
+
+	return 0;
+}
+
 int main(int argc, char **argv, const char **envp){
 	if(getuid() && geteuid()){
 		printf("iosdbg requires root to operate correctly\n");
 		return 1;
-	}
-	
+	}	
+
 	setup_initial_debuggee();
 	install_handlers();
 	initialize_readline();
+	
+	bsd_syscalls = NULL;
+	mach_traps = NULL;
+	mach_messages = NULL;
 
+	bsd_syscalls_arr_len = 0;
+	mach_traps_arr_len = 0;
+	mach_messages_arr_len = 0;
+
+	int err = setup_tracing();
+
+	if(err)
+		printf("Could not setup for future tracing. Tracing is disabled.\n");
+	
 	signal(SIGINT, interrupt);
 
 	char *line = NULL;

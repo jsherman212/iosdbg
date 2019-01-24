@@ -1,7 +1,7 @@
 SDK=/var/theos/sdks/iPhoneOS11.2.sdk
 CC=clang
 CFLAGS=-arch arm64 -isysroot $(SDK)
-LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo 
+LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo
 SRCDIR=source
 
 OBJECT_FILES = $(SRCDIR)/breakpoint.o \
@@ -15,6 +15,7 @@ OBJECT_FILES = $(SRCDIR)/breakpoint.o \
 	$(SRCDIR)/machthread.o \
 	$(SRCDIR)/memutils.o \
 	$(SRCDIR)/printutils.o \
+	$(SRCDIR)/trace.o \
 	$(SRCDIR)/watchpoint.o
 
 iosdbg : $(OBJECT_FILES)

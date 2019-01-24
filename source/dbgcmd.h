@@ -3,10 +3,11 @@
 
 #include <dlfcn.h>
 #include "breakpoint.h"
-#include "watchpoint.h"
-#include "defs.h"
 #include "dbgutils.h"
+#include "defs.h"
 #include "machthread.h"
+#include "trace.h"
+#include "watchpoint.h"
 
 typedef int cmd_error_t;
 
@@ -43,6 +44,7 @@ cmd_error_t cmdfunc_set(const char *, int);
 cmd_error_t cmdfunc_stepi(const char *, int);
 cmd_error_t cmdfunc_threadlist(const char *, int);
 cmd_error_t cmdfunc_threadselect(const char *, int);
+cmd_error_t cmdfunc_trace(const char *, int);
 cmd_error_t cmdfunc_watch(const char *, int);
 
 cmd_error_t execute_command(char *);
@@ -68,6 +70,7 @@ static struct dbg_cmd_t COMMANDS[] = {
 	{ "thread", NULL, NULL, NULL },
 	{ "thread list", NULL, cmdfunc_threadlist, "List threads from the debuggee." },
 	{ "thread select", NULL, cmdfunc_threadselect, "Select a thread to focus on." },
+	{ "trace", NULL, cmdfunc_trace, "Trace system calls, mach system calls, and mach messages from the debuggee. Press Ctrl+C to quit." },
 	{ "watch", "w", cmdfunc_watch, "Set a watchpoint. Syntax:\n\twatch {type} <addr> <size>\n\n\ttype: what kind of access to <location> you want to watch for.\n\n\tvalid values: --r (read), --w (write), --rw (read/write).\n\n\tif no type is given, iosdbg defaults to --w.\n\n\taddr: the location to watch\n\tsize: the size, in bytes, of the data at location to watch" },
 	{ "", NULL, NULL, ""}
 };
