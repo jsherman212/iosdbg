@@ -1,8 +1,6 @@
-/*
-Implementation for every command.
-*/
-
 #include "dbgcmd.h"
+
+int keep_checking_for_process;
 
 /* Allow the user to answer whatever
  * question is given.
@@ -62,15 +60,15 @@ int is_number(char *str){
 	return 1;
 }
 
-pid_t parse_pid(char *pidstr){
-	return is_number(pidstr) ? strtol(pidstr, NULL, 10) : pid_of_program(pidstr);
+pid_t parse_pid(char *pidstr, char **err){
+	return is_number(pidstr) ? strtol(pidstr, NULL, 10) : pid_of_program(pidstr, err);
 }
 
 cmd_error_t cmdfunc_aslr(const char *args, int arg1){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
-	printf("%#llx\n", debuggee->aslr_slide);
+	printf("%7s%#llx\n", "", debuggee->aslr_slide);
 	
 	return CMD_SUCCESS;
 }
@@ -87,7 +85,12 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	}
 
 	if(debuggee->pid != -1){
-		char ans = answer("Detach from %s and reattach to %s? (y/n) ", debuggee->debuggee_name, args);
+		char *target = NULL;
+
+		if(strstr(args, "--waitfor"))
+			target = (char *)args + strlen("--waitfor ");
+
+		char ans = answer("Detach from %s and reattach to %s? (y/n) ", debuggee->debuggee_name, !target ? args : target);
 
 		if(ans == 'n')
 			return CMD_SUCCESS;
@@ -101,15 +104,67 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 		return CMD_SUCCESS;
 	}
 
-	pid_t pid = parse_pid((char *)args);
+	pid_t pid;
+	char *piderr = NULL;
+
+	char *target = NULL;
+
+	/* Constantly check if this process has been launched. */
+	if(strstr(args, "--waitfor")){
+		target = (char *)args + strlen("--waitfor ");
+
+		if(strlen(target) == 0){
+			cmdfunc_help("attach", 0);
+			return CMD_FAILURE;
+		}
+
+		if(is_number(target)){
+			printf("Cannot wait for PIDs\n");
+			return CMD_FAILURE;
+		}
+
+		printf("Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", target);
+
+		pid = parse_pid(target, &piderr);
+
+		if(piderr)
+			free(piderr);
+		
+		piderr = NULL;
+
+		keep_checking_for_process = 1;
+
+		while(pid == -1 && keep_checking_for_process){
+			pid = parse_pid(target, &piderr);
+
+			if(piderr)
+				free(piderr);
+
+			piderr = NULL;
+
+			usleep(400);
+		}
+
+		keep_checking_for_process = 0;
+	}
+	else{
+		target = (char *)args;
+		pid = parse_pid((char *)args, &piderr);
+	}
 	
 	if(pid == 0){
 		printf("No kernel debugging\n");
 		return CMD_FAILURE;
 	}
 
-	if(pid == -1)
+	if(pid == -1){
+		if(piderr){
+			printf("%s", piderr);
+			free(piderr);
+		}
+		
 		return CMD_FAILURE;
+	}
 
 	kern_return_t err = task_for_pid(mach_task_self(), pid, &debuggee->task);
 
@@ -122,7 +177,7 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 	debuggee->pid = pid;
 	debuggee->aslr_slide = debuggee->find_slide();
 	
-	if(is_number((char *)args)){
+	if(is_number(target)){
 		char *name = progname_from_pid(debuggee->pid);
 
 		if(!name){
@@ -137,9 +192,8 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1){
 		free(name);
 	}
 	else{
-		debuggee->debuggee_name = malloc(strlen(args) + 1);
-		memset(debuggee->debuggee_name, '\0', strlen(args) + 1);
-		strcpy(debuggee->debuggee_name, args);
+		debuggee->debuggee_name = malloc(strlen(target) + 1);
+		strcpy(debuggee->debuggee_name, target);
 	}
 
 	debuggee->breakpoints = linkedlist_new();
@@ -278,6 +332,12 @@ cmd_error_t cmdfunc_continue(const char *args, int do_not_print_msg){
 	if(!do_not_print_msg)
 		printf("Process %d resuming\n", debuggee->pid);
 
+	/* Make output look nicer. */
+	if(debuggee->currently_tracing){
+		rl_already_prompted = 1;
+		printf("\n");
+	}
+
 	return CMD_SUCCESS;
 }
 
@@ -383,6 +443,9 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1){
 cmd_error_t cmdfunc_detach(const char *args, int from_death){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
+
+	if(!debuggee->tracing_disabled)
+		stop_trace();
 	
 	debuggee->want_detach = 1;
 
@@ -731,6 +794,8 @@ cmd_error_t cmdfunc_quit(const char *args, int arg1){
 
 	/* Free the arrays made from the trace.codes file. */
 	if(!debuggee->tracing_disabled){
+		stop_trace();
+		
 		for(int i=0; i<bsd_syscalls_arr_len; i++){
 			if(bsd_syscalls[i])
 				free(bsd_syscalls[i]);
@@ -754,6 +819,7 @@ cmd_error_t cmdfunc_quit(const char *args, int arg1){
 	}
 
 	free(debuggee);
+	
 	exit(0);
 }
 
@@ -1290,8 +1356,8 @@ cmd_error_t cmdfunc_threadselect(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_trace(const char *args, int arg1){
-	if(debuggee->pid == -1)
-		return CMD_FAILURE;
+	//if(debuggee->pid == -1)
+	//	return CMD_FAILURE;
 
 	if(debuggee->tracing_disabled){
 		printf("Tracing is not supported\n");

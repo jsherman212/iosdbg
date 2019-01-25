@@ -2,7 +2,6 @@
 
 /* Both unused. */
 kern_return_t catch_mach_exception_raise_state(mach_port_t exception_port, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
-
 kern_return_t catch_mach_exception_raise_state_identity(mach_port_t exception_port, mach_port_t thread, mach_port_t task, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
 
 extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
@@ -33,7 +32,7 @@ struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length){
 	return result;
 }
 
-pid_t pid_of_program(char *progname){
+pid_t pid_of_program(char *progname, char **errorstring){
 	size_t length;
 
 	struct kinfo_proc *result = fill_kinfo_proc_buffer(&length);
@@ -65,7 +64,7 @@ pid_t pid_of_program(char *progname){
 	free(result);
 	
 	if(matches > 1){
-		printf("Multiple instances of '%s': \n%s\n", progname, matchstr);
+		asprintf(errorstring, "Multiple instances of '%s': \n%s\n", progname, matchstr);
 		free(matchstr);
 		return -1;
 	}
@@ -73,7 +72,7 @@ pid_t pid_of_program(char *progname){
 	free(matchstr);
 
 	if(matches == 0){
-		printf("%s not found\n", progname);
+		asprintf(errorstring, "%s not found\n", progname);
 		return -1;
 	}
 
@@ -155,7 +154,9 @@ void *death_server(void *arg){
 			free(arg);
 			pthread_exit(NULL);
 		}
-
+		
+		wait_for_trace();
+		
 		/* Figure out how the debuggee exited. */
 		int status;
 		waitpid(debuggee->pid, &status, 0);
@@ -317,6 +318,11 @@ kern_return_t catch_mach_exception_raise(
 		exception_type_t exception,
 		exception_data_t _code,
 		mach_msg_type_number_t code_count){
+	/* Finish printing everything while tracing so
+	 * we don't get caught in the middle of it.
+	 */
+	wait_for_trace();
+
 	if(debuggee->task != task)
 		return KERN_FAILURE;
 	

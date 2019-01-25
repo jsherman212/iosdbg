@@ -1,4 +1,5 @@
 #include "defs.h"
+#include "printutils.h"
 
 typedef struct {
 	/* number of events that can fit in the buffers */
@@ -54,4 +55,7 @@ typedef struct {
 void start_trace(void);
 void stop_trace(void);
 
-static int stop = 0;
+/* Wait for the trace thread to be finished with
+ * processing everything before this function returns.
+ */
+void wait_for_trace(void);

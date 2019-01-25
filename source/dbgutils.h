@@ -8,7 +8,7 @@
 #include "dbgcmd.h"
 #include "machthread.h"
 
-pid_t pid_of_program(char *);
+pid_t pid_of_program(char *, char **);
 char *progname_from_pid(pid_t);
 void setup_servers(void);
 void setup_initial_debuggee(void);

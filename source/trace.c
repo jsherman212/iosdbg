@@ -1,5 +1,8 @@
 #include "trace.h"
 
+static int stop = 0;
+static int done_processing = 0;
+
 int initialize_ktrace_buffer(void){
 	int mib[3];
 
@@ -112,13 +115,21 @@ void cleanup(void){
 	set_kdebug_enabled(0);
 
 	debuggee->currently_tracing = 0;
+
+	done_processing = 1;
 }
 
 void *trace(void *arg){
 	while(1){
+		/* Spin until we are attached to something. */
+		while(debuggee->pid == -1 && !stop)
+			done_processing = 1;
+		
+		done_processing = 0;
+
 		initialize_ktrace_buffer();
 
-		if(debuggee->pid == -1 || stop){
+		if(stop){
 			cleanup();
 			pthread_exit(NULL);
 		}
@@ -134,7 +145,7 @@ void *trace(void *arg){
 		/* Don't want the kernel tracing the above events. */
 		set_kdebug_enabled(1);
 
-		if(debuggee->pid == -1 || stop){
+		if(stop){
 			cleanup();
 			pthread_exit(NULL);
 		}
@@ -144,7 +155,7 @@ void *trace(void *arg){
 		 */
 		kdebug_wait();
 
-		if(debuggee->pid == -1 || stop){
+		if(stop){
 			cleanup();
 			pthread_exit(NULL);
 		}
@@ -160,6 +171,10 @@ void *trace(void *arg){
 		read_ktrace_buffer(&kdbuf, &numbuffers);
 
 		for(int i=0; i<numbuffers; i++){
+			/* Wait until we're not suspended to continue printing. */
+			while(debuggee->interrupted)
+				usleep(400);
+			
 			kd_buf current = kdbuf[i];
 
 			/* bsd/kern/kdebug.c: kernel_debug_internal */
@@ -222,6 +237,8 @@ void *trace(void *arg){
 			free(arg4desc);
 		}
 
+		done_processing = 1;
+
 		/* Reset the kernel buffers and go again. */
 		reset_ktrace_buffers();
 		initialize_ktrace_buffer();
@@ -243,6 +260,14 @@ void start_trace(void){
 
 	printf("Press Ctrl+C to stop tracing\n");
 	
+	if(debuggee->pid == -1){
+		printf("Waiting for attach before we start tracing...\n");
+		
+		/* Bring back the prompt so user knows to attach to something. */
+		rl_already_prompted = 0;
+		safe_reprompt();
+	}
+
 	if(debuggee->interrupted)
 		printf("Warning: debuggee is currently suspended, type c and hit enter to continue\n");
 
@@ -251,7 +276,26 @@ void start_trace(void){
 }
 
 void stop_trace(void){
+	if(!debuggee->currently_tracing)
+		return;
+
 	rl_already_prompted = 0;
 
 	stop = 1;
+
+	/* The trace won't be stopped immediately, so wait until it is. */
+	printf("\nShutting down trace...\n");
+
+	while(debuggee->currently_tracing){}
+}
+
+void wait_for_trace(void){
+	/* We cannot wait if we aren't attached to anything. */
+	if(debuggee->pid == -1)
+		return;
+
+	if(!debuggee->currently_tracing)
+		return;
+
+	while(!done_processing){}
 }

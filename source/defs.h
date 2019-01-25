@@ -5,22 +5,21 @@ Hold important definitions for things being used everywhere.
 #ifndef _DEFS_H_
 #define _DEFS_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <signal.h>
-#include <unistd.h>
+#include <armadillo.h>
 #include <ctype.h>
 #include <errno.h>
 #include <mach/mach.h>
 #include <mach/arm/exception.h>
 #include <pthread/pthread.h>
-#include <readline/readline.h>
-#include <readline/history.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
-#include <armadillo.h>
+#include <unistd.h>
 
-#include "printutils.h"
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #define CHECK_MACH_ERROR(err) if(err){ \
 	printf("%s: %s\n", __func__, mach_error_string(err)); \

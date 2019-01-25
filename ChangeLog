@@ -1,3 +1,9 @@
+1-24-19
+- new argument to attach command, '--waitfor'
+- can have a trace wait for iosdbg to be attached to something before starting
+- fix use after free if we iosdbg quits while a trace is active
+- other bug fixes
+
 1-23-19
 - added trace command and its functionality
 - fixed a bug with passing kqid to death_server

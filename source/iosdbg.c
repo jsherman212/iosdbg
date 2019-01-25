@@ -9,40 +9,40 @@ int mach_traps_arr_len;
 int mach_messages_arr_len;
 
 void interrupt(int x1){
-	if(debuggee->pid == -1)
-		return;
+	if(keep_checking_for_process)
+		printf("\n");
 
-	if(debuggee->interrupted)
-		return;
+	keep_checking_for_process = 0;
+	
+	if(debuggee->pid != -1){
+		if(debuggee->interrupted)
+			return;
 
-	kern_return_t err = debuggee->suspend();
+		kern_return_t err = debuggee->suspend();
 
-	if(err){
-		printf("Cannot suspend: %s\n", mach_error_string(err));
-		debuggee->interrupted = 0;
+		if(err){
+			printf("Cannot suspend: %s\n", mach_error_string(err));
+			debuggee->interrupted = 0;
 
-		return;
+			return;
+		}
+
+		debuggee->interrupted = 1;
 	}
-
-	debuggee->interrupted = 1;
 
 	stop_trace();
 	
-	if(debuggee->currently_tracing)
-		printf("\nShutting down trace...\n");
+	if(debuggee->pid != -1){
+		printf("\n");
 
-	/* The trace won't be stopped immediately, so wait until it is. */
-	while(debuggee->currently_tracing){}
+		debuggee->get_thread_state();
 
-	printf("\n");
+		memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+		
+		printf("%s stopped.\n", debuggee->debuggee_name);
 
-	debuggee->get_thread_state();
-
-	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
-	
-	printf("%s stopped.\n", debuggee->debuggee_name);
-	
-	safe_reprompt();
+		safe_reprompt();
+	}
 }
 
 void install_handlers(void){

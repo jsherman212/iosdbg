@@ -19,6 +19,9 @@ typedef int cmd_error_t;
 #define PT_ATTACHEXC    14
 #define PT_THUPDATE 13
 
+/* When --waitfor is included as an argument for 'attach'. */
+extern int keep_checking_for_process;
+
 struct dbg_cmd_t {
 	const char *name;
 	const char *alias;
@@ -51,7 +54,7 @@ cmd_error_t execute_command(char *);
 
 static struct dbg_cmd_t COMMANDS[] = {
 	{ "aslr", NULL, cmdfunc_aslr, "Show the ASLR slide." },
-	{ "attach", NULL, cmdfunc_attach, "Attach to a program with its PID or executable name." },
+	{ "attach", NULL, cmdfunc_attach, "Attach to a program with its PID or executable name. Syntax: attach <(PID|{--waitfor} progname)>\n\n\tInclude '--waitfor' to wait for the target process to launch." },
 	{ "backtrace", "bt", cmdfunc_backtrace, "Unwind the stack." },
 	{ "break", "b", cmdfunc_break, "Set a breakpoint.\n\n\tPass --no-aslr to keep ASLR from being added." },
 	{ "continue", "c", cmdfunc_continue, "Resume debuggee execution." },
