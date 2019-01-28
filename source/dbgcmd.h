@@ -5,6 +5,7 @@
 #include "breakpoint.h"
 #include "dbgutils.h"
 #include "defs.h"
+#include "expr.h"
 #include "machthread.h"
 #include "trace.h"
 #include "watchpoint.h"

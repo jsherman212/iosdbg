@@ -290,8 +290,18 @@ cmd_error_t cmdfunc_break(const char *args, int arg1){
 		return CMD_FAILURE;
 
 	char *tok = strtok((char *)args, " ");	
-	
-	long location = strtol(tok, NULL, 16);
+
+	char *expression = strdup(tok);
+	char *error = NULL;
+
+	long location = parse_expr(expression, &error);
+
+	if(error){
+		printf("Could not parse expression: %s\n", error);
+		free(error);
+		
+		return CMD_FAILURE;
+	}
 
 	/* Check for --no-aslr. */
 	tok = strtok(NULL, " ");
@@ -562,9 +572,16 @@ cmd_error_t cmdfunc_disassemble(const char *args, int arg1){
 	char *loc_str = malloc(strlen(tok) + 1);
 	strcpy(loc_str, tok);
 
-	unsigned long long location = strtoull(loc_str, NULL, 16);
+	char *error = NULL;
 
-	free(loc_str);
+	unsigned long location = parse_expr(loc_str, &error);
+
+	if(error){
+		printf("Could not parse expression: %s\n", error);
+		free(error);
+
+		return CMD_FAILURE;
+	}
 
 	// then the amount of instructions to disassemble
 	tok = strtok(NULL, " ");
@@ -669,7 +686,16 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		if(strstr(tok, "0x"))
 			base = 16;
 
-		location  = strtoull(tok, NULL, base);
+		char *error = NULL;
+
+		location = parse_expr(tok, &error);
+
+		if(error){
+			printf("Could not parse expression: %s\n", error);
+			free(error);
+
+			return CMD_FAILURE;
+		}
 	}
 
 	// next thing will be however many bytes is wanted
@@ -1082,8 +1108,17 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 		unsigned long long value = strtoull(value_str, NULL, value_base);
 
 		free(value_str);
-		
-		unsigned long long location = strtoull(target, NULL, 16);
+
+		char *error = NULL;
+
+		unsigned long location = parse_expr(target, &error);
+
+		if(error){
+			printf("Could not parse expression: %s\n", error);
+			free(error);
+
+			return CMD_FAILURE;
+		}
 
 		location += debuggee->aslr_slide;
 
@@ -1356,9 +1391,6 @@ cmd_error_t cmdfunc_threadselect(const char *args, int arg1){
 }
 
 cmd_error_t cmdfunc_trace(const char *args, int arg1){
-	//if(debuggee->pid == -1)
-	//	return CMD_FAILURE;
-
 	if(debuggee->tracing_disabled){
 		printf("Tracing is not supported\n");
 		return CMD_FAILURE;
@@ -1412,8 +1444,18 @@ cmd_error_t cmdfunc_watch(const char *args, int arg1){
 		}
 	}
 
-	long location = strtol(tok, NULL, 16);
-	
+	char *tokcpy = strdup(tok);
+	char *error = NULL;
+
+	long location = parse_expr(tokcpy, &error);
+
+	if(error){
+		printf("Could not parse expression: %s\n", error);
+		free(error);
+
+		return CMD_FAILURE;
+	}
+
 	tok = strtok(NULL, " ");
 	
 	if(!tok){

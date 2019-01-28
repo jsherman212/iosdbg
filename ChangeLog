@@ -1,3 +1,6 @@
+1-27-18
+- implemented an expression parser and included it throughout the debugger
+
 1-24-19
 - new argument to attach command, '--waitfor'
 - can have a trace wait for iosdbg to be attached to something before starting
