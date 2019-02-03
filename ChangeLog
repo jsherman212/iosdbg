@@ -1,5 +1,13 @@
+2-2-18
+- fix giant memory leak in expr.c by not incrementing the pointer and instead
+using an index variable
+- fixed many bugs and improved expr.c by a long run
+- got rid of the unions I used to convert between types
+
 1-27-18
 - implemented an expression parser and included it throughout the debugger
+- fixed setting wp_map all to -1 like I should have done when I did it for
+breakpoint.c
 
 1-24-19
 - new argument to attach command, '--waitfor'

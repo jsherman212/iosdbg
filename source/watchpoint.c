@@ -12,7 +12,8 @@ int find_ready_wp_reg(void){
 	/* -1 means the hardware watchpoint register representing that spot
 	 * in the array has not been used. 0 means the opposite.
 	 */
-	memset(wp_map, (int)-1, debuggee->num_hw_wps);
+	for(int i=0; i<debuggee->num_hw_wps; i++)
+		wp_map[i] = -1;
 
 	while(current){
 		struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;

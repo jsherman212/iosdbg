@@ -291,13 +291,12 @@ cmd_error_t cmdfunc_break(const char *args, int arg1){
 
 	char *tok = strtok((char *)args, " ");	
 
-	char *expression = strdup(tok);
 	char *error = NULL;
 
-	long location = parse_expr(expression, &error);
+	long location = parse_expr(tok, &error);
 
 	if(error){
-		printf("Could not parse expression: %s\n", error);
+		printf("expression evaluation failed: %s\n", error);
 		free(error);
 		
 		return CMD_FAILURE;
@@ -569,15 +568,12 @@ cmd_error_t cmdfunc_disassemble(const char *args, int arg1){
 	}
 
 	// first thing is the location
-	char *loc_str = malloc(strlen(tok) + 1);
-	strcpy(loc_str, tok);
-
 	char *error = NULL;
 
-	unsigned long location = parse_expr(loc_str, &error);
+	unsigned long location = parse_expr(tok, &error);
 
 	if(error){
-		printf("Could not parse expression: %s\n", error);
+		printf("expression evaluation failed: %s\n", error);
 		free(error);
 
 		return CMD_FAILURE;
@@ -691,7 +687,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		location = parse_expr(tok, &error);
 
 		if(error){
-			printf("Could not parse expression: %s\n", error);
+			printf("expression evaluation failed: %s\n", error);
 			free(error);
 
 			return CMD_FAILURE;
@@ -925,27 +921,11 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1){
 			free(lo);
 		}
 		/* Doubleword */
-		else if(reg_type == 'd'){
-			union longdouble {
-				long l;
-				double d;
-			} LD;
-
-			LD.l = debuggee->neon_state.__v[reg_num];
-
-			sprintf(regstr, "d%d = %.15g", reg_num, LD.d);
-		}
+		else if(reg_type == 'd')
+			sprintf(regstr, "d%d = %.15g", reg_num, *(double *)&debuggee->neon_state.__v[reg_num]);
 		/* Word */
-		else if(reg_type == 's'){
-			union intfloat {
-				int i;
-				float f;
-			} IF;
-
-			IF.i = debuggee->neon_state.__v[reg_num];
-			
-			sprintf(regstr, "s%d = %g", reg_num, IF.f);
-		}
+		else if(reg_type == 's')
+			sprintf(regstr, "s%d = %g", reg_num, *(float *)&debuggee->neon_state.__v[reg_num]);
 
 		/* Figure out how many bytes the register takes up in the string. */
 		char *space = strchr(regstr, ' ');
@@ -1040,17 +1020,10 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1){
 
 		sprintf(regstr, "%c%d", reg_type, reg_num);
 
-		union regval {
-			unsigned int w;
-			unsigned long long x;
-		} rv;
-
-		rv.x = debuggee->thread_state.__x[reg_num];
-
 		if(reg_type == 'x')
-			printf("%8s = 0x%16.16llx\n", regstr, rv.x);
+			printf("%8s = 0x%16.16llx\n", regstr, (long long)debuggee->thread_state.__x[reg_num]);
 		else
-			printf("%8s = 0x%8.8x\n", regstr, rv.w);
+			printf("%8s = 0x%8.8x\n", regstr, (int)debuggee->thread_state.__x[reg_num]);
 
 		free(regstr);
 
@@ -1079,6 +1052,8 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 	char *equals = strchr(argcpy, '=');
 
 	if(!equals){
+		free(argcpy);
+
 		cmdfunc_help("set", 0);
 		return CMD_FAILURE;
 	}
@@ -1094,6 +1069,10 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 	strcpy(value_str, equals + 1);
 
 	if(strlen(value_str) == 0){
+		free(argcpy);
+		free(target);
+		free(value_str);
+
 		cmdfunc_help("set", 0);
 		return CMD_FAILURE;
 	}
@@ -1114,7 +1093,7 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 		unsigned long location = parse_expr(target, &error);
 
 		if(error){
-			printf("Could not parse expression: %s\n", error);
+			printf("expression evaluation failed: %s\n", error);
 			free(error);
 
 			return CMD_FAILURE;
@@ -1124,6 +1103,7 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 
 		/* Check for no ASLR. */
 		char *tok = strtok(argcpy, " ");
+		
 		tok = strtok(NULL, " ");
 		
 		if(tok){
@@ -1172,22 +1152,9 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 		/* Various representations of our value string. */
 		unsigned int valued = strtol(value_str, NULL, value_base);
 		unsigned long long valuellx = strtoull(value_str, NULL, value_base);
+		
 		float valuef = strtof(value_str, NULL);
 		double valuedf = strtod(value_str, NULL);
-
-		union intfloat {
-			unsigned int w;
-			float s;
-		} IF;
-
-		IF.s = valuef;
-
-		union longdouble {
-			unsigned long long x;
-			double d;
-		} LD;
-
-		LD.d = valuedf;
 
 		/* Take care of any special registers. */
 		if(strcmp(target, "fp") == 0)
@@ -1285,9 +1252,9 @@ cmd_error_t cmdfunc_set(const char *args, int arg1){
 					free(lo_str);
 				}
 				else if(reg_type == 'd')
-					debuggee->neon_state.__v[reg_num] = LD.x;
+					debuggee->neon_state.__v[reg_num] = *(long *)&valuedf;
 				else
-					debuggee->neon_state.__v[reg_num] = IF.w;
+					debuggee->neon_state.__v[reg_num] = *(int *)&valuef;
 			}
 		}
 
@@ -1444,13 +1411,12 @@ cmd_error_t cmdfunc_watch(const char *args, int arg1){
 		}
 	}
 
-	char *tokcpy = strdup(tok);
 	char *error = NULL;
 
-	long location = parse_expr(tokcpy, &error);
+	long location = parse_expr(tok, &error);
 
 	if(error){
-		printf("Could not parse expression: %s\n", error);
+		printf("expression evaluation failed: %s\n", error);
 		free(error);
 
 		return CMD_FAILURE;

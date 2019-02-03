@@ -51,14 +51,6 @@ int reset_ktrace_buffers(void){
 	return sysctl(mib, 3, NULL, &needed, NULL, 0);
 }
 
-typedef struct {
-	unsigned int type;
-	unsigned int value1;
-	unsigned int value2;
-	unsigned int value3;
-	unsigned int value4;
-} kd_regtype;
-
 int set_kdebug_trace_pid(int pid, int value){
 	int mib[3];
 

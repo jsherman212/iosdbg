@@ -48,6 +48,8 @@ void stack_free(struct stack_t *stack){
 	if(stack->data)
 		free(stack->data);
 
+	stack->data = NULL;
+
 	free(stack);
 
 	stack = NULL;

@@ -38,6 +38,14 @@ typedef struct {
 #endif
 } kd_buf;
 
+typedef struct {
+	unsigned int type;
+	unsigned int value1;
+	unsigned int value2;
+	unsigned int value3;
+	unsigned int value4;
+} kd_regtype;
+
 #define KDBG_CSC_MASK   (0xffff0000)
 #define KDBG_FUNC_MASK    (0x00000003)
 #define KDBG_EVENTID_MASK (0xfffffffc)
