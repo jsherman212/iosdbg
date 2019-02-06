@@ -567,19 +567,32 @@ cmd_error_t cmdfunc_disassemble(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
-	// first thing is the location
+	unsigned long location;
 	char *error = NULL;
 
-	unsigned long location = parse_expr(tok, &error);
+	int reg = 0;
+
+	/* We've got a register. */
+	if(args[0] == '$' && strlen(args) > 2){
+		/* +1 to get past the dollar sign. */
+		location = get_g_reg_val((char *)args + 1, &error);
+		reg = 1;
+	}
+	else{
+		location = parse_expr(tok, &error);
+
+		if(error)
+			printf("expression evaluation failed: ");
+	}
 
 	if(error){
-		printf("expression evaluation failed: %s\n", error);
+		printf("%s\n", error);
 		free(error);
 
 		return CMD_FAILURE;
 	}
 
-	// then the amount of instructions to disassemble
+	/* Get the amount of instructions to disassemble. */
 	tok = strtok(NULL, " ");
 
 	if(!tok){
@@ -599,11 +612,9 @@ cmd_error_t cmdfunc_disassemble(const char *args, int arg1){
 		return CMD_FAILURE;
 	}
 
-	// finally, whether or not '--no-aslr' was given
 	tok = strtok(NULL, " ");
 
-	// if it is NULL, nothing is there, so add ASLR to the location
-	if(!tok)
+	if(!tok && !reg)
 		location += debuggee->aslr_slide;
 
 	kern_return_t err = memutils_disassemble_at_location(location, amount, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
@@ -633,48 +644,14 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 	}
 
 	unsigned long long location;
-	
+	char *error = NULL;
+
 	int wantsreg = 0;
 
 	/* Check for a register. */
 	if(tok[0] == '$'){
+		location = get_g_reg_val(tok + 1, &error);
 		wantsreg = 1;
-
-		debuggee->get_thread_state();
-
-		for(int i=0; i<strlen(tok); i++)
-			tok[i] = tolower(tok[i]);
-
-		tok++;
-
-		if(strcmp(tok, "fp") == 0)
-			location = debuggee->thread_state.__fp;
-		else if(strcmp(tok, "lr") == 0)
-			location = debuggee->thread_state.__lr;
-		else if(strcmp(tok, "sp") == 0)
-			location = debuggee->thread_state.__sp;
-		else if(strcmp(tok, "pc") == 0)
-			location = debuggee->thread_state.__pc;
-		else{
-			/* Figure out what register we were given. */
-			char reg_type = tolower(tok[0]);
-
-			if(reg_type != 'x'){
-				cmdfunc_help("examine", 0);
-				return CMD_FAILURE;
-			}
-
-			tok++;
-
-			int reg_num = strtol(tok, NULL, 10);
-
-			if(reg_num < 0 || reg_num > 31){
-				cmdfunc_help("examine", 0);
-				return CMD_FAILURE;
-			}
-			
-			location = debuggee->thread_state.__x[reg_num];
-		}
 	}
 	else{
 		int base = 10;
@@ -682,16 +659,17 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		if(strstr(tok, "0x"))
 			base = 16;
 
-		char *error = NULL;
-
 		location = parse_expr(tok, &error);
 
-		if(error){
-			printf("expression evaluation failed: %s\n", error);
-			free(error);
+		if(error)
+			printf("expression evaluation failed: ");
+	}
 
-			return CMD_FAILURE;
-		}
+	if(error){
+		printf("%s\n", error);
+		free(error);
+
+		return CMD_FAILURE;
 	}
 
 	// next thing will be however many bytes is wanted
@@ -716,11 +694,11 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 
 	// check if --no-aslr was given
 	tok = strtok(NULL, " ");
-	
+
 	kern_return_t ret;
 	
 	if(!tok || wantsreg){
-		kern_return_t ret = memutils_dump_memory_new(location, amount);
+		kern_return_t ret = memutils_dump_memory(wantsreg ? location : location + debuggee->aslr_slide, amount);
 
 		if(ret)
 			return CMD_FAILURE;
@@ -729,8 +707,8 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 	}
 	else{
 		if(strcmp(tok, "--no-aslr") == 0){
-			ret = memutils_dump_memory_new(location, amount);
-			
+			ret = memutils_dump_memory(location, amount);
+
 			if(ret)
 				return CMD_FAILURE;
 		}
@@ -742,7 +720,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1){
 		return CMD_SUCCESS;
 	}
 
-	ret = memutils_dump_memory_new(location + debuggee->aslr_slide, amount);
+	ret = memutils_dump_memory(location + debuggee->aslr_slide, amount);
 
 	if(ret)
 		return CMD_FAILURE;
@@ -755,6 +733,7 @@ cmd_error_t cmdfunc_help(const char *args, int arg1){
 		printf("Need the command\n");
 		return CMD_FAILURE;
 	}
+
 	
 	// it does not make sense for the command to be autocompleted here
 	// so just search through the command table until we find the argument

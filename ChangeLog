@@ -1,3 +1,9 @@
+2-5-18
+- ignore zombies in pid_of_program
+- fix bug in examine command
+- rename memutils_dump_memory_new
+- new function to grab a general purpose register
+
 2-2-18
 - fix giant memory leak in expr.c by not incrementing the pointer and instead
 using an index variable

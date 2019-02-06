@@ -71,7 +71,7 @@ kern_return_t memutils_disassemble_at_location(unsigned long long location, int 
 	return KERN_SUCCESS;
 }
 
-kern_return_t memutils_dump_memory_new(unsigned long long location, vm_size_t amount){
+kern_return_t memutils_dump_memory(unsigned long long location, vm_size_t amount){
 	if(amount == 0)
 		return KERN_SUCCESS;
 

@@ -50,10 +50,11 @@ pid_t pid_of_program(char *progname, char **errorstring){
 		if(current){
 			pid_t pid = current->kp_proc.p_pid;
 			char *pname = current->kp_proc.p_comm;
+			char p_stat = current->kp_proc.p_stat;
 			int pnamelen = strlen(pname);
 			int charstocompare = pnamelen < maxnamelen ? pnamelen : maxnamelen;
 
-			if(strncmp(pname, progname, charstocompare) == 0){
+			if(strncmp(pname, progname, charstocompare) == 0 && p_stat != SZOMB){
 				matches++;
 				sprintf(matchstr, "%s PID %d: %s\n", matchstr, pid, pname);
 				final_pid = pid;
@@ -242,6 +243,39 @@ void setup_initial_debuggee(void){
 	sysctlbyname("hw.optional.watchpoint", &debuggee->num_hw_wps, &len, NULL, 0);
 }
 
+unsigned long long get_g_reg_val(char *g_reg, char **error){
+	if(!g_reg){
+		asprintf(error, "NULL argument\n");
+		return -1;
+	}
+
+	debuggee->get_thread_state();
+
+	if(strcmp(g_reg, "fp") == 0)
+		return debuggee->thread_state.__fp;
+	else if(strcmp(g_reg, "lr") == 0)
+		return debuggee->thread_state.__lr;
+	else if(strcmp(g_reg, "sp") == 0)
+		return debuggee->thread_state.__sp;
+	else if(strcmp(g_reg, "pc") == 0)
+		return debuggee->thread_state.__pc;
+
+	if(tolower(g_reg[0]) != 'x'){
+		asprintf(error, "need a 64 bit general purpose register");
+		return -1;
+	}
+
+	/* Get past the letter. */
+	int regnum = strtol(g_reg + 1, NULL, 10);
+
+	if(regnum < 0 || regnum > 31){
+		asprintf(error, "invalid register");
+		return -1;
+	}
+
+	return debuggee->thread_state.__x[regnum];
+}
+
 const char *get_exception_name(exception_type_t exception){
 	switch(exception){
 	case EXC_BAD_ACCESS:
@@ -325,7 +359,7 @@ kern_return_t catch_mach_exception_raise(
 
 	if(debuggee->task != task)
 		return KERN_FAILURE;
-	
+
 	/* If this is called two times in a row, make sure
 	 * to not increment the suspend count for our task
 	 * more than once.
@@ -389,10 +423,10 @@ kern_return_t catch_mach_exception_raise(
 				 */
 				debuggee->want_single_step = 0;
 
-				debuggee->get_debug_state();
+				/*debuggee->get_debug_state();
 				debuggee->debug_state.__mdscr_el1 |= 1;
 				debuggee->set_debug_state();
-
+				*/
 				/* Check if we a hit a breakpoint while single stepping,
 				 * and if we do, report it.
 				 */

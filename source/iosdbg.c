@@ -1,5 +1,7 @@
 #include "iosdbg.h"
 
+struct debuggee *debuggee;
+
 char **bsd_syscalls;
 char **mach_traps;
 char **mach_messages;

@@ -185,6 +185,7 @@ struct debuggee {
 	kern_return_t (*set_neon_state)(void);
 };
 
-struct debuggee *debuggee;
+/* This structure represents what we are currently debugging. */
+extern struct debuggee *debuggee;
 
 #endif

@@ -12,5 +12,6 @@ pid_t pid_of_program(char *, char **);
 char *progname_from_pid(pid_t);
 void setup_servers(void);
 void setup_initial_debuggee(void);
+unsigned long long get_g_reg_val(char *, char **);
 
 #endif
