@@ -5,6 +5,7 @@ LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo
 SRCDIR=source
 
 OBJECT_FILES = $(SRCDIR)/breakpoint.o \
+	$(SRCDIR)/convvar.o \
 	$(SRCDIR)/dbgcmd.o \
 	$(SRCDIR)/dbgutils.o \
 	$(SRCDIR)/expr.o \

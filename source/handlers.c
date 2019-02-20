@@ -59,7 +59,11 @@ kern_return_t deallocate_ports(void){
 	kern_return_t err = mach_port_deallocate(mach_task_self(), debuggee->exception_port);
 
 	CHECK_MACH_ERROR(err);
-	
+
+	err = mach_port_deallocate(mach_task_self(), debuggee->task);
+
+	CHECK_MACH_ERROR(err);
+
 	return err;
 }
 

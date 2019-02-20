@@ -65,7 +65,7 @@ pid_t pid_of_program(char *progname, char **errorstring){
 	free(result);
 	
 	if(matches > 1){
-		asprintf(errorstring, "Multiple instances of '%s': \n%s\n", progname, matchstr);
+		asprintf(errorstring, "multiple instances of '%s': \n%s", progname, matchstr);
 		free(matchstr);
 		return -1;
 	}
@@ -73,7 +73,7 @@ pid_t pid_of_program(char *progname, char **errorstring){
 	free(matchstr);
 
 	if(matches == 0){
-		asprintf(errorstring, "%s not found\n", progname);
+		asprintf(errorstring, "could not find a process named '%s'", progname);
 		return -1;
 	}
 
@@ -162,13 +162,45 @@ void *death_server(void *arg){
 		int status;
 		waitpid(debuggee->pid, &status, 0);
 
-		if(WIFEXITED(status))
-			printf("\n[%s (%d) exited normally (status = 0x%8.8x)]\n", debuggee->debuggee_name, debuggee->pid, WEXITSTATUS(status));
-		else if(WIFSIGNALED(status))
-			printf("\n[%s (%d) terminated due to signal %d]\n", debuggee->debuggee_name, debuggee->pid, WTERMSIG(status));
+		char *error = NULL;
+
+		if(WIFEXITED(status)){
+			int wexitstatus = WEXITSTATUS(status);
+			printf("\n[%s (%d) exited normally (status = 0x%8.8x)]\n", debuggee->debuggee_name, debuggee->pid, wexitstatus);
+
+			char *wexitstatusstr;
+			asprintf(&wexitstatusstr, "%#x", wexitstatus);
+
+			void_convvar("$_exitsignal");
+			set_convvar("$_exitcode", wexitstatusstr, &error);
+
+			desc_auto_convvar_error_if_needed("$_exitcode", error);
+
+			free(wexitstatusstr);
+		}
+		else if(WIFSIGNALED(status)){
+			int wtermsig = WTERMSIG(status);
+			printf("\n[%s (%d) terminated due to signal %d]\n", debuggee->debuggee_name, debuggee->pid, wtermsig);
+
+			char *wtermsigstr;
+			asprintf(&wtermsigstr, "%#x", wtermsig);
+
+			void_convvar("$_exitcode");
+			set_convvar("$_exitsignal", wtermsigstr, &error);
+
+			desc_auto_convvar_error_if_needed("$_exitsignal", error);
+
+			free(wtermsigstr);
+		}
 
 		free(arg);
-		cmdfunc_detach(NULL, 1);
+		
+		error = NULL;
+		cmdfunc_detach(NULL, 1, &error);
+		
+		if(error)
+			printf("could not detach: %s\n", error);
+
 		close(kqid);
 		safe_reprompt();
 		pthread_exit(NULL);
@@ -241,39 +273,17 @@ void setup_initial_debuggee(void){
 	len = sizeof(int);
 
 	sysctlbyname("hw.optional.watchpoint", &debuggee->num_hw_wps, &len, NULL, 0);
-}
 
-unsigned long long get_g_reg_val(char *g_reg, char **error){
-	if(!g_reg){
-		asprintf(error, "NULL argument\n");
-		return -1;
-	}
+	/* Create some iosdbg managed convenience variables. */
+	char *error = NULL;
 
-	debuggee->get_thread_state();
+	set_convvar("$_", "", &error);
+	set_convvar("$__", "", &error);
+	set_convvar("$_exitcode", "", &error);
+	set_convvar("$_exitsignal", "", &error);
 
-	if(strcmp(g_reg, "fp") == 0)
-		return debuggee->thread_state.__fp;
-	else if(strcmp(g_reg, "lr") == 0)
-		return debuggee->thread_state.__lr;
-	else if(strcmp(g_reg, "sp") == 0)
-		return debuggee->thread_state.__sp;
-	else if(strcmp(g_reg, "pc") == 0)
-		return debuggee->thread_state.__pc;
-
-	if(tolower(g_reg[0]) != 'x'){
-		asprintf(error, "need a 64 bit general purpose register");
-		return -1;
-	}
-
-	/* Get past the letter. */
-	int regnum = strtol(g_reg + 1, NULL, 10);
-
-	if(regnum < 0 || regnum > 31){
-		asprintf(error, "invalid register");
-		return -1;
-	}
-
-	return debuggee->thread_state.__x[regnum];
+	/* The user can set this so iosdbg never adds ASLR. */
+	set_convvar("$NO_ASLR_OVERRIDE", "", &error);
 }
 
 const char *get_exception_name(exception_type_t exception){
@@ -441,7 +451,7 @@ kern_return_t catch_mach_exception_raise(
 
 				free(tname);
 
-				memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+				disassemble_at_location(debuggee->thread_state.__pc, 0x4);
 				
 				safe_reprompt();
 
@@ -502,7 +512,7 @@ kern_return_t catch_mach_exception_raise(
 			printf("\nWatchpoint %d hit:\n\n", hit->id);
 
 			describe_hit_watchpoint(prev_data, hit->data, sz);
-			memutils_disassemble_at_location(debuggee->last_hit_wp_PC + 4, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+			disassemble_at_location(debuggee->last_hit_wp_PC + 4, 0x4);
 
 			free(prev_data);
 			
@@ -568,7 +578,7 @@ kern_return_t catch_mach_exception_raise(
 		if(hit->ss)
 			printf("\n");
 
-		memutils_disassemble_at_location(hit->location, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+		disassemble_at_location(hit->location, 0x4);
 			
 		safe_reprompt();
 
@@ -640,7 +650,7 @@ kern_return_t catch_mach_exception_raise(
 	free(whathappened);
 	free(tname);
 
-	memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+	disassemble_at_location(debuggee->thread_state.__pc, 0x4);
 
 	rl_already_prompted = 0;
 

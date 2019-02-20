@@ -7,7 +7,11 @@
 #include <unistd.h>
 #include <ctype.h>
 
+#include "convvar.h"
 #include "stack.h"
+
+/* Use 'N' to express a unary negation. */
+#define NEGATION 'N'
 
 long parse_expr(char *, char **);
 

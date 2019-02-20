@@ -1,3 +1,12 @@
+2-19-19
+- convenience variables
+- a way to force iosdbg to never add ASLR to expressions via convenience
+variables
+- rewrote and fixed the expression parser
+- expression parser now supports registers and convenience variables
+- much better, more descriptive, and more manageable error system
+- a ton of cleanup
+
 2-5-18
 - ignore zombies in pid_of_program
 - fix bug in examine command

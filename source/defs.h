@@ -6,12 +6,15 @@ Hold important definitions for things being used everywhere.
 #define _DEFS_H_
 
 #include <armadillo.h>
+#include <dlfcn.h>
 #include <ctype.h>
 #include <errno.h>
 #include <mach/mach.h>
 #include <mach/arm/exception.h>
+#include <mach/message.h>
 #include <pthread/pthread.h>
 #include <signal.h>
+#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/sysctl.h>
@@ -57,9 +60,6 @@ struct debuggee {
 
 	// PID of the debuggee.
 	pid_t pid;
-
-	// Port to notify us upon debuggee's termination.
-	mach_port_t death_port;
 
 	/* If this variable is non-zero, tracing is not supported. */
 	int tracing_disabled;

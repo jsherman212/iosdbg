@@ -22,9 +22,19 @@ unsigned long long CFSwapInt64(unsigned long long arg){
     return result.sv;
 }
 
-kern_return_t memutils_disassemble_at_location(unsigned long long location, int num_instrs, int show_arrow_at_location_param){
+kern_return_t disassemble_at_location(unsigned long long location, int num_instrs){
 	const int data_size = 0x4;
 	unsigned long long current_location = location;
+
+	char *locstr;
+	asprintf(&locstr, "%#llx", location);
+
+	char *error = NULL;
+	set_convvar("$_", locstr, &error);
+
+	desc_auto_convvar_error_if_needed("$_", error);
+
+	free(locstr);
 
 	while(current_location < (location + (num_instrs * data_size))){
 		char *data = malloc(data_size);
@@ -40,7 +50,7 @@ kern_return_t memutils_disassemble_at_location(unsigned long long location, int 
 		if(active)
 			instr = CFSwapInt32(active->old_instruction);
 		else{
-			// format the memory given back
+			/* Format the memory given back. */
 			char *bigendian = malloc((data_size * 2) + 1);
 			memset(bigendian, '\0', (data_size * 2) + 1);
 
@@ -50,17 +60,24 @@ kern_return_t memutils_disassemble_at_location(unsigned long long location, int 
 			free(data);
 			
 			instr = strtoul(bigendian, NULL, 16);		
-			
-			free(bigendian);
+
+			asprintf(&bigendian, "%#lx", instr);
+
+			error = NULL;
+			set_convvar("$__", bigendian, &error);
+
+			desc_auto_convvar_error_if_needed("$__", error);
+
+			//free(bigendian);
 		}
 
 		char *disassembled = ArmadilloDisassembleB(instr, current_location);
 
 		debuggee->get_thread_state();
 
-		if(show_arrow_at_location_param)
-			printf("%s%#llx:  %s\n", location == current_location ? "->  " : "    ", current_location, disassembled);
-		else
+		//if(show_arrow_at_location_param)
+		//	printf("%s%#llx:  %s\n", location == current_location ? "->  " : "    ", current_location, disassembled);
+		//else
 			printf("%s%#llx:  %s\n", debuggee->thread_state.__pc == current_location ? "->  " : "    ", current_location, disassembled);
 
 		free(disassembled);

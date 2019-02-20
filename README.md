@@ -10,9 +10,12 @@ A work in progress, native debugger built for *jailbroken* 64 bit iOS devices ca
 | iOS 8			| Unknown  |
 | iOS 9			| Yes	   |
 | iOS 10		| Yes	   |
-| iOS 11+		| Unknown  |
+| iOS 11		| Unknown  |
+| iOS 12		| Yes	   |
 
 ## Getting started
+
+#### Instructions for compiling on iOS 12 will come when a proper jailbreak is released.1
 
 #### Theos
 Skip this step if it's already installed on your device. I have been using the iOS 9.3 SDK and (currently) the iOS 11.2 SDK to build this project. If you use a different SDK, edit the Makefile.
@@ -119,13 +122,28 @@ Same as `regs gen` but shows floating point register(s). Syntax: `regs float <re
 You can list as many floating point registers as you want.
 
 ### `set`
-Modify debuggee memory, registers, or a configuration variable (TODO) for iosdbg. Syntax: `set <(*offset|$register|variable)=value>`
+Modify debuggee memory, registers, or a convenience variable for iosdbg. Syntax: `set <(*offset|$register|$variable)=value>`
 
-You must prefix an offset with a `*` and a register with `$`.
+You must prefix an offset with a `*`  and register or convenience variable with `$`.
 
 If you want to modify one of the 128 bit V registers, format value as follows: `"{byte1 byte2 byte3 byte4 byte5 byte6 byte7 byte8 byte9 byte10 byte11 byte12 byte13 byte14 byte15 byte16}"`. Bytes do not have to be in hex.
 
 If you want your value to be interpreted as hex, use `0x`. Pass `--no-aslr` to prevent ASLR from being added.
+
+### `show`
+Show convenience variables. Syntax: `show {convenience variable}`
+
+You can exclude `{convenience variable}` to print all of them, or include it to only print a specific one. Convenience variables automatically managed by iosdbg are:
+
+`$_`: set by the `examine` command to the last address examined.
+
+`$__`: set by the `examine` command to the value found in the last address examined.
+
+`$_exitcode`: when the debuggee terminates normally, iosdbg sets this variable to its exit code, and resets `$_exitsignal` to void.
+
+`$_exitsignal`: when the debuggee dies due to a signal, iosdbg sets this variable to the signal number, and resets `$_exitcode` to void.
+
+#### **To force iosdbg to never add ASLR to expressions, set the convenience variable `$NO_ASLR_OVERRIDE` to any value.**
 
 ### `stepi`
 Step into the next machine instruction. The debuggee must be suspended.
@@ -146,7 +164,7 @@ Set a read, write, or read-write watchpoint. Syntax: `(w|watch) {type} <addr> <s
 
 Type can be `--r` (read), `--w` (write), or `--rw` (read/write). It is optional, so if nothing is given, iosdbg defaults to `--w`. ASLR is not accounted for.
 
-You can view what a command does with `help command`.
+##### You can view what a command does with `help <command>`.
 
 
 ## Contributing

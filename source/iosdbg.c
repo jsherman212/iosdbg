@@ -1,4 +1,5 @@
-#include "iosdbg.h"
+#include "dbgcmd.h"
+#include "handlers.h"
 
 struct debuggee *debuggee;
 
@@ -39,7 +40,7 @@ void interrupt(int x1){
 
 		debuggee->get_thread_state();
 
-		memutils_disassemble_at_location(debuggee->thread_state.__pc, 0x4, DISAS_DONT_SHOW_ARROW_AT_LOCATION_PARAMETER);
+		disassemble_at_location(debuggee->thread_state.__pc, 0x4);
 		
 		printf("%s stopped.\n", debuggee->debuggee_name);
 
@@ -311,7 +312,13 @@ int main(int argc, char **argv, const char **envp){
 		char *linecopy = malloc(strlen(line) + 1);
 		strcpy(linecopy, line);
 		
-		execute_command(line);
+		char *error = NULL;
+		int result = execute_command(line, &error);
+
+		if(result && error){
+			printf("error: %s\n", error);
+			free(error);
+		}
 		
 		prevline = realloc(prevline, strlen(linecopy) + 1);
 		strcpy(prevline, linecopy);

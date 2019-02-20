@@ -1,3 +1,4 @@
+#include "defs.h"
 #include "expr.h"
 
 long perform_operation(long left, long right, char operator, char **error){
@@ -7,10 +8,16 @@ long perform_operation(long left, long right, char operator, char **error){
 		return left - right;
 	else if(operator == '*')
 		return left * right;
-	else if(operator == '/')
+	else if(operator == '/'){
+		if(right == 0){
+			asprintf(error, "attempt to divide by zero");
+			return LONG_MIN;
+		}
+
 		return left / right;
+	}
 	else{
-		asprintf(error, "Unknown operator '%c'", operator);
+		asprintf(error, "unknown operator '%c'", operator);
 		return LONG_MIN;
 	}
 }
@@ -20,8 +27,45 @@ int precedence(char operator){
 		return 1;
 	else if(operator == '/' || operator == '*')
 		return 2;
+	else if(operator == NEGATION)
+		return 3;
 	else
 		return 0;
+}
+
+/* Return a substring of [start, start+len].
+ * Must be freed.
+ */
+char *substr(char *str, int start, int len){
+	if(!str)
+		return NULL;
+
+	size_t slen = strlen(str);
+
+	if(start < 0 || start > slen)
+		return NULL;
+
+	if(len <= 0 || (start + len) > slen)
+		return NULL;
+
+	return strndup(str + start, len);
+}
+
+/* Check if str[start, start+len] is a convenience variable. */
+int is_conv_var(char *str, int start, int len){
+	char *target = substr(str, start, len);
+
+	if(!target)
+		return 0;
+
+	if(strlen(target) == 0)
+		return 0;
+
+	/* Convenience variables always start with $. */
+	if(target[0] != '$')
+		return 0;
+
+	return 1;
 }
 
 int is_operator(char c){
@@ -34,92 +78,15 @@ int is_operator(char c){
 int is_neg_operator(char *str, int idx){
 	if(idx < 0)
 		return 0;
-	
+
 	if(idx == 0 && str[idx] == '-')
 		return 1;
-	
+
 	if(str[idx] != '-')
 		return 0;
 
 	return str[idx] == '-' &&
 		(str[idx - 1] == '(' || is_operator(str[idx - 1]));
-}
-
-int get_next_operator_idx(char *str, int start){
-	size_t len = strlen(str);
-
-	for(int i=start; i<len; i++){
-		if(!is_neg_operator(str, i) && is_operator(str[i]))
-			return i;
-	}
-
-	return -1;
-}
-
-void insert_closing_paren_at_idx(char **str, int idx){
-	char *saved = strdup((*str) + idx);
-	
-	*str = realloc((*str), strlen((*str)) + strlen(saved) + 2);
-	strcpy((*str) + idx, ")");
-	strcat((*str), saved);
-	free(saved);
-}
-
-int find_next_closing_paren(char *str, int start){
-	size_t len = strlen(str);
-
-	/* If we have '--' in front of an expression, not a single number,
-	 * surrounded by parenthesis, we have to figure out where that
-	 * expression ends in order to place the closing paren in the right place.
-	 */
-	if(strncmp(str + start, "(-(", 3) == 0){
-		int idx = start + strlen("(-(") + 1;
-
-		while(idx < len && str[idx] != ')'){
-			/* We found an operator, so whatever is inside the
-			 * parenthesis is an expression.
-			 */
-			if(is_operator(str[idx])){
-				while(idx < len && str[idx] != ')')
-					idx++;
-
-				return idx;
-			}
-
-			idx++;
-		}
-
-		return -1;
-	}
-	else
-		return -1;
-}
-
-/* Will insert a closing parenthesis if needed and return
- * the next index, otherwise will do nothing and 
- * return -1.
- */
-int complete_expr(char **str, int idx){
-	/* If there is more than one operand surrounded by parenthesis
-	 * and one of those operands is negative, make sure we don't
-	 * only wrap that operand in parenthesis rather than the
-	 * entire expression in the parenthesis.
-	 */
-	int insert_idx = find_next_closing_paren((*str), idx);
-
-	if(insert_idx == -1)
-		insert_idx = get_next_operator_idx((*str), idx);
-
-	if(insert_idx == -1){
-		*str = realloc((*str), strlen((*str)) + 3);
-		strcat((*str), ")");
-
-		return -1;
-	}
-	
-	insert_closing_paren_at_idx(str, insert_idx);
-	
-	return insert_idx;
 }
 
 /* Check if there are two operators in a row that
@@ -141,29 +108,274 @@ int invalid_expr(char *str, char cur_op, int idx){
 		if(prev_op != '-')
 			return 1;
 
-		return is_neg_operator(str, idx - 1) && is_neg_operator(str, idx);
+		return 0;
 	}
-	
+
 	return is_operator(prev_op) && (!isnumber(cur_op) && !is_neg_operator(str, idx));
+}
+
+/* Check if we've reached the end of the number we're on
+ * given a string and an index.
+ */
+int is_end_of_number(char *str, int idx){
+	if(!str)
+		return 1;
+
+	if(idx < 0 || idx > strlen(str))
+		return 1;
+
+	return (!is_neg_operator(str, idx) && is_operator(str[idx])) ||
+		str[idx] == '(' ||
+		str[idx] == ')';
+}
+
+/* Return the index of the end of the operand we
+ * started on in `str`.
+ */
+int find_end_of_operand(char *str, int start){
+	if(!str)
+		return -1;
+
+	size_t slen = strlen(str);
+
+	if(start < 0 || start > slen)
+		return -1;
+
+	int end = start;
+
+	while(!is_end_of_number(str, end) && end < slen)
+		end++;
+
+	return end;
+}
+
+/* Turn a number into a string.
+ * Caller must free the string returned. */
+char *num_to_str(long num){
+	char *buf;
+	asprintf(&buf, "%ld", num);
+	return buf;
+}
+
+/* Insert `str` at `where` in `target`. */
+void strins(char **target, char *str, int where){
+	if(!target || !(*target))
+		return;
+
+	if(!str)
+		return;
+
+	size_t targetlen = strlen(*target);
+
+	if(where < 0 || where > targetlen)
+		return;
+
+	size_t slen = strlen(str);
+
+	if(slen == 0)
+		return;
+
+	*target = realloc(*target, targetlen + slen + 1);
+	(*target)[targetlen + slen] = '\0';
+	char *saved = strdup(*target + where);
+	strncpy(*target + where, str, slen);
+	strncpy(*target + slen + where, saved, strlen(saved));
+	free(saved);
+}
+
+/* Cut [start, start+bytes] from `target`. */
+void strcut(char **target, int start, int bytes){
+	if(!target || !(*target))
+		return;
+
+	size_t targetlen = strlen(*target);
+
+	if(start < 0 || start > targetlen)
+		return;
+
+	int endidx = start + bytes;
+
+	if(bytes <= 0 || endidx > targetlen)
+		return;
+
+	char *saved = strdup(*target + endidx);
+	size_t savedlen = strlen(saved);
+	strncpy(*target + start, saved, savedlen);
+	free(saved);
+	(*target)[start + savedlen] = '\0';
+}
+
+/* Remove any whitespace from the beginning
+ * and end of `target`.
+ */
+void strclean(char **target){
+	while(isblank((*target)[0]))
+		memmove((*target), (*target) + 1, strlen((*target)));
+
+	while(isblank((*target)[strlen((*target)) - 1]))
+		(*target)[strlen((*target)) - 1] = '\0';
+}
+
+char *lookup_register(char *reg, char **error){
+	if(!reg)
+		return NULL;
+
+	/* Registers will always be two or three characters.
+	 * We also have to factor in the '$'.
+	 * We will ignore requests for CPSR, FPSR, and FPCR.
+	 */
+	size_t reglen = strlen(reg);
+
+	if(reglen < 3 || reglen > 4){
+		asprintf(error, "bad register '%s'", reg);
+		return NULL;
+	}
+
+	/* Put the string to lowercase so we don't
+	 * have to perform as many checks.
+	 */
+	for(int i=0; i<reglen; i++)
+		reg[i] = tolower(reg[i]);
+
+	debuggee->get_thread_state();
+
+	long long regval;
+
+	if(strcmp(reg, "$fp") == 0)
+		regval = debuggee->thread_state.__fp;
+	else if(strcmp(reg, "$lr") == 0)
+		regval = debuggee->thread_state.__lr;
+	else if(strcmp(reg, "$sp") == 0)
+		regval = debuggee->thread_state.__sp;
+	else if(strcmp(reg, "$pc") == 0)
+		regval = debuggee->thread_state.__pc;
+	else{
+		/* We cannot include floating point values. */
+		if(reg[1] != 'x' && reg[1] != 'w'){
+			asprintf(error, "bad register '%s'", reg);
+			return NULL;
+		}
+
+		char *endptr = NULL;
+		int regnum = strtol(reg + 2, &endptr, 10);
+
+		if(endptr && *endptr){
+			asprintf(error, "malformed register string '%s'", reg);
+			return NULL;
+		}
+
+		if(reg[1] == 'x')
+			regval = debuggee->thread_state.__x[regnum];
+		else
+			regval = debuggee->thread_state.__x[regnum] & 0xFFFFFFFF;
+	}
+
+	char *regvalstr;
+	asprintf(&regvalstr, "%llx", regval);
+
+	return regvalstr;
+}
+
+/* Replace any convenience variables in the expression
+ * with their values.
+ */
+void sub_conv_vars(char **expr, char **error){
+	if(!expr || !(*expr))
+		return;
+
+	size_t exprlen = strlen(*expr);
+	int idx = 0;
+
+	while(idx < exprlen){
+		if(!is_operator((*expr)[idx]) && !is_neg_operator(*expr, idx)){
+			int end_of_operand = find_end_of_operand(*expr, idx);
+			int len = end_of_operand - idx;
+			
+			if(is_conv_var(*expr, idx, len)){
+				char *varstr = substr(*expr, idx, len);
+
+				if(varstr){
+					/* Remove the convenience variable. */
+					strcut(expr, idx, end_of_operand - idx);
+
+					char *varval_s = convvar_strval(varstr, error);
+					
+					/* If this convenience variable doesn't exist, it
+					 * may be a register.
+					 */
+					if(error && *error){
+						*error = NULL;
+						varval_s = lookup_register(varstr, error);
+					}
+
+					/* Insert the value of that convenience variable. */
+					strins(expr, varval_s, idx);
+
+					free(varval_s);
+
+					exprlen = strlen(*expr);
+				}
+				else{
+					asprintf(error, "expected convenience variable");
+					return;
+				}
+			}
+		}
+
+		idx++;
+	}
+}
+
+/* 6*2 and 6(2) mean the same thing. This function adds multiplication
+ * operators in order to turn 6(2) and other expressions to 6*(2).
+ */
+void add_mults(char **expr){
+	if(!expr || !(*expr))
+		return;
+
+	size_t exprlen = strlen(*expr);
+	int idx = 0;
+
+	while(idx < exprlen){
+		if(idx >= 1 && (*expr)[idx] == '(' && !is_operator((*expr)[idx - 1]) && isnumber((*expr)[idx-1])){
+			strins(expr, "*", idx);
+			exprlen = strlen(*expr);
+			idx++;
+		}
+
+		idx++;
+	}
+}
+
+/* Do calculations with the operator and operand stack.
+ * If we encounter an 'N', we have to negate what we just popped,
+ * and continue the loop when we return.
+ */
+long process_stacks(struct stack_t *operators, struct stack_t *operands, int *negative, char **error){
+	char operator = (char)stack_pop(operators);
+
+	long second = (long)stack_pop(operands);
+
+	if(operator == NEGATION){
+		second *= -1;
+		stack_push(operands, (void *)second);
+		*negative = 1;
+		return 0;
+	}
+
+	long first = (long)stack_pop(operands);
+
+	return perform_operation(first, second, operator, error);
 }
 
 /* Parse an expression.
  * `error` is set on error.
  */
-long parse_expr(char *_expr, char **error){
-	if(!_expr || (_expr && strlen(_expr) == 0)){
+long evaluate(char *expr, char **error){
+	if(!expr || (expr && strlen(expr) == 0)){
 		asprintf(error, "empty expression string");
 		return LONG_MIN;
 	}
-
-	char *expr = strdup(_expr);
-
-	/* Strip whitespace from the beginning and the end of the string. */
-	while(isblank(expr[0]))
-		memmove(expr, expr + 1, strlen(expr));
-
-	while(isblank(expr[strlen(expr) - 1]))
-		expr[strlen(expr) - 1] = '\0';
 
 	size_t exprlen = strlen(expr);
 
@@ -183,68 +395,25 @@ long parse_expr(char *_expr, char **error){
 			return LONG_MIN;
 		}
 	}
-
-	/* Put parenthesis around all negative numbers. */
-	int idx = 0;
-
-	while(idx < strlen(expr)){
-		char current = expr[idx];
-
-		if(idx == 0 && current == '-'){
-			char *temp = malloc(strlen(expr) + 2);
-			strcpy(temp, "(");
-			strcat(temp, expr);
-
-			expr = realloc(expr, strlen(temp) + 1);
-			strcpy(expr, temp);
 	
-			idx = complete_expr(&expr, idx);
-
-			if(idx == -1)
-				break;
-		}
-		else if(is_neg_operator(expr, idx)){
-			char *saved = strdup(expr + idx);
-			
-			expr = realloc(expr, strlen(expr) + strlen(saved) + 2);
-			
-			/* Don't add extra parenthesis when we don't need to. */
-			if(idx >= 1 && expr[idx-1] == '('){
-				idx++;
-				continue;
-			}
-			
-			strcpy(expr + idx, "(");
-			strcat(expr, saved);
-
-			free(saved);
-
-			idx = complete_expr(&expr, idx);
-
-			if(idx == -1)
-				break;
-		}
-		
-		idx++;
-	}
-
 	struct stack_t *operators = stack_new();
 	struct stack_t *operands = stack_new();
 
 	/* Process and solve the expression. */
-	idx = 0;
-	size_t limit = strlen(expr);
+	int idx = 0;
 	
-	while(idx < limit){
+	while(idx < exprlen){
 		char current = expr[idx];
 
 		/* Ignore any whitespace. */
 		while(isblank(current)){
 			idx++;
-			continue;
+			current = expr[idx];
 		}
 
-		if(isxdigit(current)){
+		if(is_neg_operator(expr, idx))
+			stack_push(operators, (void *)NEGATION);
+		else if(isxdigit(current)){
 			int base = isdigit(current) ? 10 : 16;
 
 			/* Ignore any '0x'. */
@@ -267,115 +436,71 @@ long parse_expr(char *_expr, char **error){
 				current = expr[++idx];
 			}
 
+			/* We had to advance one byte past the number to test
+			 * if we were past it, so decrement the index.
+			 */
+			idx--;
+
 			long num = strtol(num_s, NULL, base);
 
 			free(num_s);
 
 			stack_push(operands, (void *)num);
 		}
-		else if(current == '('){
+		else if(current == '(')
 			stack_push(operators, (void *)'(');
-			idx++;
-		}
 		else if(current == ')'){
 			while(!stack_empty(operators) && (char)stack_peek(operators) != '('){
-				char operator = (char)stack_pop(operators);
+				int negative = 0;
+				long result = process_stacks(operators, operands, &negative, error);
 
-				long second = (long)stack_pop(operands);
-				long first = (long)stack_pop(operands);
+				if(negative)
+					continue;
 
-				char *err = NULL;
-
-				long result = perform_operation(first, second, operator, &err);
-
-				if(err){
-					asprintf(error, "%s", err);
-
-					free(expr);
-					free(err);
-
-					stack_free(operands);
-					stack_free(operators);
-										
-					return LONG_MIN;
-				}
+				if(*error)
+					goto fail;
 
 				stack_push(operands, (void *)result);
 			}
 
 			stack_pop(operators);
-			
-			idx++;	
 		}
 		else if(is_operator(current)){
-			if(is_neg_operator(expr, idx))
-				stack_push(operands, (void *)0);
-
 			char cur_op_precedence = precedence(current);
 
 			while(!stack_empty(operators) && precedence((char)stack_peek(operators)) >= cur_op_precedence){
-				char operator = (char)stack_pop(operators);
+				int negative = 0;
+				long result = process_stacks(operators, operands, &negative, error);
 
-				long second = (long)stack_pop(operands);
-				long first = (long)stack_pop(operands);
+				if(negative)
+					continue;
 
-				char *err = NULL;
-
-				long result = perform_operation(first, second, operator, &err);
-
-				if(err){
-					asprintf(error, "%s", err);
-
-					free(err);
-					free(expr);
-
-					stack_free(operands);
-					stack_free(operators);
-					
-					return LONG_MIN;
-				}
+				if(*error)
+					goto fail;
 
 				stack_push(operands, (void *)result);
 			}
 
 			stack_push(operators, (void *)(uintptr_t)(current));
-
-			idx++;
 		}
 		else{
 			asprintf(error, "bad character %c at index %d", current, idx);
-
-			free(expr);
-
-			stack_free(operands);
-			stack_free(operators);
-			
-			return LONG_MIN;
+			goto fail;
 		}
+
+		idx++;
 	}
 
 	/* Perform the remaining operations to arrive at a final answer. */
 	while(!stack_empty(operators)){
-		char operator = (char)stack_pop(operators);
+		int negative = 0;
+		long result = process_stacks(operators, operands, &negative, error);
 
-		long second = (long)stack_pop(operands);
-		long first = (long)stack_pop(operands);
+		if(negative)
+			continue;
 
-		char *err = NULL;
-
-		long result = perform_operation(first, second, operator, &err);
-
-		if(err){
-			asprintf(error, "%s", err);
-
-			free(err);
-			free(expr);
-
-			stack_free(operands);
-			stack_free(operators);
-			
-			return LONG_MIN;
-		}
+		if(*error)
+			goto fail;
 
 		stack_push(operands, (void *)result);
 	}
@@ -386,6 +511,46 @@ long parse_expr(char *_expr, char **error){
 	stack_free(operands);
 	
 	free(expr);
+
+	return result;
+
+fail:
+	free(expr);
+
+	stack_free(operands);
+	stack_free(operators);
+	
+	return LONG_MIN;
+}
+
+/* Parse an expression.
+ * `error` is set on error.
+ */
+long parse_expr(char *_expr, char **error){
+	if(!_expr || (_expr && strlen(_expr) == 0)){
+		asprintf(error, "empty expression string");
+		return LONG_MIN;
+	}
+
+	char *expr = strdup(_expr);
+
+	/* 1. Get rid of unnecessary whitespace. */
+	strclean(&expr);
+
+	/* 2. Substitute any convenience variables. */
+	sub_conv_vars(&expr, error);
+
+	if(*error)
+		return LONG_MIN;
+
+	/* 3. Add any "missing" multiplication operators. */
+	add_mults(&expr);
+
+	/* 4. Evaluate the expression. */
+	long result = evaluate(expr, error);
+
+	if(*error)
+		return LONG_MIN;
 
 	return result;
 }

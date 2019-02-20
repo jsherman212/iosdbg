@@ -1,8 +1,8 @@
 #ifndef _DBGCMD_H_
 #define _DBGCMD_H_
 
-#include <dlfcn.h>
 #include "breakpoint.h"
+#include "convvar.h"
 #include "dbgutils.h"
 #include "defs.h"
 #include "expr.h"
@@ -30,28 +30,29 @@ struct dbg_cmd_t {
 	const char *desc;
 };
 
-cmd_error_t cmdfunc_attach(const char *, int);
-cmd_error_t cmdfunc_aslr(const char *, int);
-cmd_error_t cmdfunc_backtrace(const char *, int);
-cmd_error_t cmdfunc_break(const char *, int);
-cmd_error_t cmdfunc_continue(const char *, int);
-cmd_error_t cmdfunc_delete(const char *, int);
-cmd_error_t cmdfunc_detach(const char *, int);
-cmd_error_t cmdfunc_disassemble(const char *, int);
-cmd_error_t cmdfunc_examine(const char *, int);
-cmd_error_t cmdfunc_help(const char *, int);
-cmd_error_t cmdfunc_kill(const char *, int);
-cmd_error_t cmdfunc_quit(const char *, int);
-cmd_error_t cmdfunc_regsfloat(const char *, int);
-cmd_error_t cmdfunc_regsgen(const char *, int);
-cmd_error_t cmdfunc_set(const char *, int);
-cmd_error_t cmdfunc_stepi(const char *, int);
-cmd_error_t cmdfunc_threadlist(const char *, int);
-cmd_error_t cmdfunc_threadselect(const char *, int);
-cmd_error_t cmdfunc_trace(const char *, int);
-cmd_error_t cmdfunc_watch(const char *, int);
+cmd_error_t cmdfunc_attach(const char *, int, char **);
+cmd_error_t cmdfunc_aslr(const char *, int, char **);
+cmd_error_t cmdfunc_backtrace(const char *, int, char **);
+cmd_error_t cmdfunc_break(const char *, int, char **);
+cmd_error_t cmdfunc_continue(const char *, int, char **);
+cmd_error_t cmdfunc_delete(const char *, int, char **);
+cmd_error_t cmdfunc_detach(const char *, int, char **);
+cmd_error_t cmdfunc_disassemble(const char *, int, char **);
+cmd_error_t cmdfunc_examine(const char *, int, char **);
+cmd_error_t cmdfunc_help(const char *, int, char **);
+cmd_error_t cmdfunc_kill(const char *, int, char **);
+cmd_error_t cmdfunc_quit(const char *, int, char **);
+cmd_error_t cmdfunc_regsfloat(const char *, int, char **);
+cmd_error_t cmdfunc_regsgen(const char *, int, char **);
+cmd_error_t cmdfunc_set(const char *, int, char **);
+cmd_error_t cmdfunc_show(const char *, int, char **);
+cmd_error_t cmdfunc_stepi(const char *, int, char **);
+cmd_error_t cmdfunc_threadlist(const char *, int, char **);
+cmd_error_t cmdfunc_threadselect(const char *, int, char **);
+cmd_error_t cmdfunc_trace(const char *, int, char **);
+cmd_error_t cmdfunc_watch(const char *, int, char **);
 
-cmd_error_t execute_command(char *);
+cmd_error_t execute_command(char *, char **);
 
 static struct dbg_cmd_t COMMANDS[] = {
 	{ "aslr", NULL, cmdfunc_aslr, "Show the ASLR slide." },
@@ -69,12 +70,13 @@ static struct dbg_cmd_t COMMANDS[] = {
 	{ "regs", NULL, NULL, NULL },
 	{ "regs float", NULL, cmdfunc_regsfloat, "Show a floating point register. Syntax:\n\tregs float <reg1 reg2 ...>\n\n\tYou can list as many floating point registers as you want." },
 	{ "regs gen", NULL, cmdfunc_regsgen, "Show general purpose registers. Syntax:\n\tregs gen {reg1 reg2 ...}\n\n\tThe argument is optional. All general purpose registers are dumped if there is no argument.\n\tYou can list as many general registers as you want." },
-	{ "set", NULL, cmdfunc_set, "Modify debuggee memory, registers, or a configuration variable (TODO) for the debugger. Syntax:\n\tset (*offset|$register|variable)=value\n\n\tYou must prefix an offset with '*'.\n\tYou must prefix a register with '$'.\n\n\tIf you want to write to one of the 128 bit V registers, format value like this:\n\t\"{byte1 byte2 byte3 byte4 byte5 byte6 byte7 byte8 byte9 byte10 byte11 byte12 byte13 byte14 byte15 byte16}\".\n\n\tIf you want your value to be intepreted as hex, use '0x'.\n\n\tPass --no-aslr to prevent ASLR from being added." },
+	{ "set", NULL, cmdfunc_set, "Modify debuggee memory, registers, or a convenience variable for the debugger. Syntax:\n\tset (*offset|$register|variable)=value\n\n\tYou must prefix an offset with '*'.\n\tYou must prefix a register or a convenience variable with '$'.\n\n\tIf you want to write to one of the 128 bit V registers, format value like this:\n\t\"{byte1 byte2 byte3 byte4 byte5 byte6 byte7 byte8 byte9 byte10 byte11 byte12 byte13 byte14 byte15 byte16}\".\n\n\tIf you want your value to be intepreted as hex, use '0x'.\n\n\tPass --no-aslr to prevent ASLR from being added." },
+	{ "show", NULL, cmdfunc_show, "Show a convenience variable. Syntax:\n\tshow {name of convenience variable}\n\n\tGive no arguments to show all convenience variables." },
 	{ "stepi", NULL, cmdfunc_stepi, "Step into the next instruction." },
 	{ "thread", NULL, NULL, NULL },
 	{ "thread list", NULL, cmdfunc_threadlist, "List threads from the debuggee." },
 	{ "thread select", NULL, cmdfunc_threadselect, "Select a thread to focus on." },
-	{ "trace", NULL, cmdfunc_trace, "Trace system calls, mach system calls, and mach messages from the debuggee. Press Ctrl+C to quit." },
+	{ "trace", NULL, cmdfunc_trace, "Trace system calls, mach system calls, and mach messages from the debuggee. Press Ctrl+C to quit. Syntax: \n\ttrace {--dump}\n\n\tIf you include `--dump`, the trace will be dumped to ~/trace.txt." },
 	{ "watch", "w", cmdfunc_watch, "Set a watchpoint. Syntax:\n\twatch {type} <addr> <size>\n\n\ttype: what kind of access to <location> you want to watch for.\n\n\tvalid values: --r (read), --w (write), --rw (read/write).\n\n\tif no type is given, iosdbg defaults to --w.\n\n\taddr: the location to watch\n\tsize: the size, in bytes, of the data at location to watch" },
 	{ "", NULL, NULL, ""}
 };
