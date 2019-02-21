@@ -1,9 +1,6 @@
 #ifndef _WATCHPOINT_H_
 #define _WATCHPOINT_H_
 
-#include "memutils.h"
-#include "linkedlist.h"
-
 struct watchpoint {
 	/* Watchpoint ID */
 	int id;
@@ -35,7 +32,6 @@ typedef int wp_error_t;
 
 #define WP_SUCCESS (wp_error_t)0
 #define WP_FAILURE (wp_error_t)1
-#define WP_LIMIT_REACHED (wp_error_t)2
 
 #define WP_ENABLED 0
 #define WP_DISABLED 1
@@ -46,7 +42,7 @@ typedef int wp_error_t;
 
 static int current_watchpoint_id = 1;
 
-wp_error_t watchpoint_at_address(unsigned long, unsigned int, int);
+wp_error_t watchpoint_at_address(unsigned long, unsigned int, int, char **);
 void watchpoint_hit(struct watchpoint *);
 wp_error_t watchpoint_delete(int);
 void watchpoint_enable_all(void);

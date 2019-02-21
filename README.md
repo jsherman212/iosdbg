@@ -15,7 +15,7 @@ A work in progress, native debugger built for *jailbroken* 64 bit iOS devices ca
 
 ## Getting started
 
-#### Instructions for compiling on iOS 12 will come when a proper jailbreak is released.1
+#### Instructions for compiling on iOS 12 will come when a proper jailbreak is released.
 
 #### Theos
 Skip this step if it's already installed on your device. I have been using the iOS 9.3 SDK and (currently) the iOS 11.2 SDK to build this project. If you use a different SDK, edit the Makefile.

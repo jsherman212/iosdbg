@@ -1,8 +1,7 @@
 #ifndef _MACHTHREAD_H_
 #define _MACHTHREAD_H_
 
-#include "defs.h"
-#include "linkedlist.h"
+#include <mach/mach.h>
 
 #define MAXTHREADSIZENAME 64
 

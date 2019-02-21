@@ -1,5 +1,18 @@
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <readline/readline.h>
+#include <readline/history.h>
+
+#include "defs.h"
 #include "dbgcmd.h"
+#include "dbgutils.h"
 #include "handlers.h"
+#include "machthread.h"
+#include "memutils.h"
+#include "printutils.h"
+#include "trace.h"
 
 struct debuggee *debuggee;
 

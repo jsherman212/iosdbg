@@ -1,4 +1,8 @@
+#include <stdlib.h>
+
+#include "defs.h"
 #include "machthread.h"
+#include "linkedlist.h"
 
 struct machthread *machthread_new(mach_port_t thread_port){
 	struct machthread *mt = malloc(sizeof(struct machthread));

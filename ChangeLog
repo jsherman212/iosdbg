@@ -1,3 +1,9 @@
+2-20-19
+- fixed some memory leaks
+- extended new error system to breakpoints and watchpoints
+- fixed up the includes across the entire project
+- get rid of atoi in dbgcmd.c
+
 2-19-19
 - convenience variables
 - a way to force iosdbg to never add ASLR to expressions via convenience

@@ -1,5 +1,15 @@
+#include <ctype.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "convvar.h"
 #include "defs.h"
-#include "expr.h"
+#include "stack.h"
+
+/* Use 'N' to express a unary negation. */
+#define NEGATION 'N'
 
 long perform_operation(long left, long right, char operator, char **error){
 	if(operator == '+')
@@ -58,12 +68,18 @@ int is_conv_var(char *str, int start, int len){
 	if(!target)
 		return 0;
 
-	if(strlen(target) == 0)
+	if(strlen(target) == 0){
+		free(target);
 		return 0;
+	}
 
 	/* Convenience variables always start with $. */
-	if(target[0] != '$')
+	if(target[0] != '$'){
+		free(target);
 		return 0;
+	}
+
+	free(target);
 
 	return 1;
 }
@@ -540,8 +556,10 @@ long parse_expr(char *_expr, char **error){
 	/* 2. Substitute any convenience variables. */
 	sub_conv_vars(&expr, error);
 
-	if(*error)
+	if(*error){
+		free(expr);
 		return LONG_MIN;
+	}
 
 	/* 3. Add any "missing" multiplication operators. */
 	add_mults(&expr);
@@ -549,8 +567,12 @@ long parse_expr(char *_expr, char **error){
 	/* 4. Evaluate the expression. */
 	long result = evaluate(expr, error);
 
-	if(*error)
+	if(*error){
+		free(expr);
 		return LONG_MIN;
+	}
+
+	free(expr);
 
 	return result;
 }

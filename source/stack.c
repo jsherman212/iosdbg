@@ -1,4 +1,9 @@
+#include <limits.h>
+#include <stdlib.h>
+
 #include "stack.h"
+
+#define STACK_ERR (void *)LONG_MIN
 
 struct stack_t *stack_new(void){
 	struct stack_t *stack = malloc(sizeof(struct stack_t));

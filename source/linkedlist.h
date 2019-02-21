@@ -1,8 +1,6 @@
 #ifndef _LINKEDLIST_H_
 #define _LINKEDLIST_H_
 
-#include "defs.h"
-
 struct node_t {
 	void *data;
 	struct node_t *next;

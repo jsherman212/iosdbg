@@ -1,5 +1,7 @@
-#include "defs.h"
-#include "printutils.h"
+#ifndef _TRACE_H_
+#define _TRACE_H_
+
+#include <sys/types.h>
 
 typedef struct {
 	/* number of events that can fit in the buffers */
@@ -67,3 +69,5 @@ void stop_trace(void);
  * processing everything before this function returns.
  */
 void wait_for_trace(void);
+
+#endif

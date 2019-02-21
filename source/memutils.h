@@ -1,12 +1,6 @@
 #ifndef _MEMUTILS_H_
 #define _MEMUTILS_H_
 
-#include <armadillo.h>
-#include <mach/mach.h>
-
-#include "breakpoint.h"
-#include "convvar.h"
-
 unsigned int CFSwapInt32(unsigned int);
 unsigned long long CFSwapInt64(unsigned long long);
 

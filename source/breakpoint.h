@@ -1,11 +1,6 @@
 #ifndef _BREAKPOINT_H_
 #define _BREAKPOINT_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include "memutils.h"
-#include "linkedlist.h"
-
 struct breakpoint {
 	// Breakpoint ID.
 	int id;
@@ -59,7 +54,7 @@ static int current_breakpoint_id = 1;
 /* BRK #0 */
 static const unsigned long long BRK = 0x000020D4;
 
-bp_error_t breakpoint_at_address(unsigned long, int, int);
+bp_error_t breakpoint_at_address(unsigned long, int, int, char **);
 void breakpoint_hit(struct breakpoint *);
 bp_error_t breakpoint_delete(int);
 bp_error_t breakpoint_disable(int);

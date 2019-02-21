@@ -1,3 +1,10 @@
+#include <mach/kmod.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "defs.h"
+#include "linkedlist.h"
+#include "memutils.h"
 #include "watchpoint.h"
 
 /* Find an available hardware watchpoint register.*/
@@ -37,14 +44,18 @@ int find_ready_wp_reg(void){
 	return -1;
 }
 
-struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len, int LSC){
-	if(data_len == 0 || data_len > sizeof(unsigned long))
+struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len, int LSC, char **error){
+	if(data_len == 0 || data_len > sizeof(unsigned long)){
+		asprintf(error, "data length (%d) is invalid", data_len);
 		return NULL;
+	}
 
 	kern_return_t result = memutils_valid_location(location);
 	
-	if(result)
+	if(result){
+		asprintf(error, "could not set watchpoint: %s", mach_error_string(result));
 		return NULL;
+	}
 	
 	struct watchpoint *wp = malloc(sizeof(struct watchpoint));
 	
@@ -57,6 +68,7 @@ struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len,
 	result = memutils_read_memory_at_location((void *)wp->location, wp->data, wp->data_len);
 
 	if(result){
+		asprintf(error, "could not set watchpoint: could not read memory at %#lx", location);
 		free(wp);
 		return NULL;
 	}
@@ -64,6 +76,8 @@ struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len,
 	int available_wp_reg = find_ready_wp_reg();
 
 	if(available_wp_reg == -1){
+		asprintf(error, "could not set watchpoint: no more hardware watchpoint registers available (%d/%d) used", 
+				debuggee->num_hw_wps, debuggee->num_hw_wps);
 		free(wp);
 		return NULL;
 	}
@@ -105,13 +119,11 @@ struct watchpoint *watchpoint_new(unsigned long location, unsigned int data_len,
 	return wp;
 }
 
-wp_error_t watchpoint_at_address(unsigned long location, unsigned int data_len, int LSC){
-	struct watchpoint *wp = watchpoint_new(location, data_len, LSC);
+wp_error_t watchpoint_at_address(unsigned long location, unsigned int data_len, int LSC, char **error){
+	struct watchpoint *wp = watchpoint_new(location, data_len, LSC, error);
 
-	if(!wp){
-		printf("Could not set watchpoint\n");
+	if(!wp)
 		return WP_FAILURE;
-	}
 	
 	linkedlist_add(debuggee->watchpoints, wp);
 

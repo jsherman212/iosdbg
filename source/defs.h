@@ -1,33 +1,8 @@
-/*
-Hold important definitions for things being used everywhere.
-*/
-
 #ifndef _DEFS_H_
 #define _DEFS_H_
 
-#include <armadillo.h>
-#include <dlfcn.h>
-#include <ctype.h>
-#include <errno.h>
 #include <mach/mach.h>
-#include <mach/arm/exception.h>
-#include <mach/message.h>
-#include <pthread/pthread.h>
-#include <signal.h>
-#include <spawn.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/sysctl.h>
 #include <sys/types.h>
-#include <unistd.h>
-
-#include <readline/readline.h>
-#include <readline/history.h>
-
-#define CHECK_MACH_ERROR(err) if(err){ \
-	printf("%s: %s\n", __func__, mach_error_string(err)); \
-	return err; \
-	}
 
 static const char *prompt = "\e[2m(iosdbg) ";
 

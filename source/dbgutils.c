@@ -1,4 +1,24 @@
+#include <dlfcn.h>
+#include <errno.h>
+#include <pthread/pthread.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/sysctl.h>
+
+#include <readline/readline.h>
+
+#include "breakpoint.h"
+#include "convvar.h"
+#include "defs.h"
+#include "dbgcmd.h"
 #include "dbgutils.h"
+#include "linkedlist.h"
+#include "machthread.h"
+#include "memutils.h"
+#include "printutils.h"
+#include "trace.h"
+#include "watchpoint.h"
 
 /* Both unused. */
 kern_return_t catch_mach_exception_raise_state(mach_port_t exception_port, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
@@ -469,7 +489,8 @@ kern_return_t catch_mach_exception_raise(
 			struct breakpoint *bp = find_bp_with_address(debuggee->thread_state.__pc);
 
 			if(!bp && !debuggee->is_single_stepping && debuggee->want_single_step){
-				breakpoint_at_address(debuggee->thread_state.__pc, BP_TEMP, BP_SS);
+				char *e;
+				breakpoint_at_address(debuggee->thread_state.__pc, BP_TEMP, BP_SS, &e);
 				
 				debuggee->is_single_stepping = 1;
 			}

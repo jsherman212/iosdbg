@@ -1,7 +1,14 @@
-/*
-Various utility functions to read and write memory from and to the debuggee. Keep it complicated here so it can be concise everywhere else.
-*/
+#include <armadillo.h>
+#include <ctype.h>
+#include <mach/kmod.h>
+#include <mach/mach.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
+#include "breakpoint.h"
+#include "convvar.h"
+#include "defs.h"
 #include "memutils.h"
 
 /* Thanks https://opensource.apple.com/source/CF/CF-299/Base.subproj/CFByteOrder.h */
@@ -68,17 +75,14 @@ kern_return_t disassemble_at_location(unsigned long long location, int num_instr
 
 			desc_auto_convvar_error_if_needed("$__", error);
 
-			//free(bigendian);
+			free(bigendian);
 		}
 
 		char *disassembled = ArmadilloDisassembleB(instr, current_location);
 
 		debuggee->get_thread_state();
 
-		//if(show_arrow_at_location_param)
-		//	printf("%s%#llx:  %s\n", location == current_location ? "->  " : "    ", current_location, disassembled);
-		//else
-			printf("%s%#llx:  %s\n", debuggee->thread_state.__pc == current_location ? "->  " : "    ", current_location, disassembled);
+		printf("%s%#llx:  %s\n", debuggee->thread_state.__pc == current_location ? "->  " : "    ", current_location, disassembled);
 
 		free(disassembled);
 

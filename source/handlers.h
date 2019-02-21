@@ -1,8 +1,7 @@
 #ifndef _HANDLERS_H_
 #define _HANDLERS_H_
 
-#include "defs.h"
-#include "machthread.h"
+#include <mach/mach.h>
 
 unsigned long long find_slide(void);
 kern_return_t restore_exception_ports(void);

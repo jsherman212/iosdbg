@@ -1,3 +1,13 @@
+#include <pthread/pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
+
+#include <readline/readline.h>
+
+#include "defs.h"
+#include "printutils.h"
 #include "trace.h"
 
 static int stop = 0;

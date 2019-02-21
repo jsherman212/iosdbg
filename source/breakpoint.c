@@ -1,8 +1,11 @@
-/*
-Implementation for a breakpoint.
-*/
+#include <mach/mach.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "breakpoint.h"
+#include "defs.h"
+#include "linkedlist.h"
+#include "memutils.h"
 
 /* Find an available hardware breakpoint register.*/
 int find_ready_bp_reg(void){
@@ -42,14 +45,15 @@ int find_ready_bp_reg(void){
 	return -1;
 }
 
-struct breakpoint *breakpoint_new(unsigned long location, int temporary, int single_step){
-	if(location < 0x100000000)
-		return NULL;
+struct breakpoint *breakpoint_new(unsigned long location, int temporary, int single_step, char **error){
+	kern_return_t err = memutils_valid_location(location);
 
+	if(err){
+		asprintf(error, "could not set breakpoint: %s", mach_error_string(err));
+		return NULL;
+	}
+	
 	struct breakpoint *bp = malloc(sizeof(struct breakpoint));
-
-	if(!bp)
-		return NULL;
 
 	bp->hw = 0;
 	bp->hw_bp_reg = -1;
@@ -93,7 +97,13 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary, int sin
 	int sz = 0x4;
 	
 	void *orig_instruction = malloc(sz);
-	memutils_read_memory_at_location((void *)bp->location, orig_instruction, sz);
+	err = memutils_read_memory_at_location((void *)bp->location, orig_instruction, sz);
+
+	if(err){
+		asprintf(error, "could not set breakpoint: could not read memory at %#lx", location);
+		free(bp);
+		return NULL;
+	}
 
 	bp->old_instruction = CFSwapInt32(memutils_buffer_to_number(orig_instruction, sz));
 	
@@ -116,8 +126,8 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary, int sin
 }
 
 // Set a breakpoint at address.
-bp_error_t breakpoint_at_address(unsigned long address, int temporary, int single_step){
-	struct breakpoint *bp = breakpoint_new(address, temporary, single_step);
+bp_error_t breakpoint_at_address(unsigned long address, int temporary, int single_step, char **error){
+	struct breakpoint *bp = breakpoint_new(address, temporary, single_step, error);
 
 	if(!bp)
 		return BP_FAILURE;

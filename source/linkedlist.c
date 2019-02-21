@@ -1,7 +1,6 @@
-/*
-Implementation for a singly linked list.
-*/
+/* Implementation for a singly linked list. */
 
+#include <stdlib.h>
 #include "linkedlist.h"
 
 struct linkedlist *linkedlist_new(void){

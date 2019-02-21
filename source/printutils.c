@@ -1,4 +1,9 @@
-#include "printutils.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+
+#include <readline/readline.h>
+#include <readline/history.h>
 
 /* Prevent double reprompts. */
 void safe_reprompt(void){

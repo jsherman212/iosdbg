@@ -1,14 +1,7 @@
 #ifndef _DBGCMD_H_
 #define _DBGCMD_H_
 
-#include "breakpoint.h"
-#include "convvar.h"
-#include "dbgutils.h"
-#include "defs.h"
-#include "expr.h"
-#include "machthread.h"
-#include "trace.h"
-#include "watchpoint.h"
+#include <stdlib.h>
 
 typedef int cmd_error_t;
 
@@ -26,7 +19,7 @@ extern int keep_checking_for_process;
 struct dbg_cmd_t {
 	const char *name;
 	const char *alias;
-	Function *function;
+	cmd_error_t (*function)(const char *, int, char **);
 	const char *desc;
 };
 

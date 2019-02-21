@@ -1,4 +1,22 @@
+#include <dlfcn.h>
+#include <spawn.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+
+#include <readline/readline.h>
+
+#include "breakpoint.h"
+#include "convvar.h"
 #include "dbgcmd.h"
+#include "dbgutils.h"
+#include "defs.h"
+#include "expr.h"
+#include "linkedlist.h"
+#include "machthread.h"
+#include "memutils.h"
+#include "trace.h"
+#include "watchpoint.h"
 
 int keep_checking_for_process;
 
@@ -352,7 +370,10 @@ cmd_error_t cmdfunc_break(const char *args, int arg1, char **error){
 	if(add_aslr)
 		location += debuggee->aslr_slide;
 	
-	breakpoint_at_address(location, BP_NO_TEMP, BP_NO_SS);
+	bp_error_t result = breakpoint_at_address(location, BP_NO_TEMP, BP_NO_SS, error);
+
+	if(result != BP_SUCCESS)
+		return CMD_FAILURE;
 
 	return CMD_SUCCESS;
 }
@@ -415,16 +436,19 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1, char **error){
 
 	if(strcmp(type, "b") != 0 && strcmp(type, "w") != 0){
 		cmdfunc_help("delete", 0, error);
+		free(type);
 		return CMD_FAILURE;
 	}
 
 	if(strcmp(type, "b") == 0 && debuggee->num_breakpoints == 0){
 		asprintf(error, "no breakpoints to delete");
+		free(type);
 		return CMD_FAILURE;
 	}
 
 	if(strcmp(type, "w") == 0 && debuggee->num_watchpoints == 0){
 		asprintf(error, "no watchpoints to delete");
+		free(type);
 		return CMD_FAILURE;
 	}
 	
@@ -440,6 +464,7 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1, char **error){
 
 		if(ans == 'n'){
 			printf("Nothing deleted.\n");
+			free(type);
 			return CMD_SUCCESS;
 		}
 
@@ -456,10 +481,17 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1, char **error){
 
 		printf("All %s removed. (%d %s)\n", target, num_deleted, target);
 
+		free(type);
+
 		return CMD_SUCCESS;
 	}
 
-	int id = atoi(tok);
+	int id = (int)strtol_err(tok, error);
+
+	if(*error){
+		free(type);
+		return CMD_FAILURE;
+	}
 
 	if(strcmp(type, "b") == 0){
 		free(type);
@@ -843,7 +875,12 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1, char **error){
 		/* Move up a byte for the register number. */
 		tok++;
 
-		int reg_num = atoi(tok);
+		int reg_num = (int)strtol_err(tok, error);
+
+		if(*error){
+			free(regstr);
+			return CMD_FAILURE;
+		}
 
 		int good_reg_num = (reg_num >= 0 && reg_num <= 31);
 		int good_reg_type = ((reg_type == 'q' || reg_type == 'v') || reg_type == 'd' || reg_type == 's');
@@ -966,7 +1003,10 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1, char **error){
 		/* Move up one byte to get to the "register number". */
 		tok++;
 
-		int reg_num = atoi(tok);
+		int reg_num = (int)strtol_err(tok, error);
+
+		if(*error)
+			return CMD_FAILURE;
 		
 		if(reg_num < 0 || reg_num > 29){
 			tok = strtok(NULL, " ");
@@ -1321,7 +1361,10 @@ cmd_error_t cmdfunc_threadselect(const char *args, int arg1, char **error){
 	if(!debuggee->threads->front)
 		return CMD_FAILURE;
 
-	int thread_id = atoi(args);
+	int thread_id = (int)strtol_err((char *)args, error);
+
+	if(*error)
+		return CMD_FAILURE;
 
 	if(thread_id < 1 || thread_id > debuggee->thread_count){
 		asprintf(error, "out of bounds, must be in [1, %d]", debuggee->thread_count);
@@ -1429,7 +1472,10 @@ cmd_error_t cmdfunc_watch(const char *args, int arg1, char **error){
 	if(*error)
 		return CMD_FAILURE;
 
-	watchpoint_at_address(location, data_len, LSC);
+	wp_error_t err = watchpoint_at_address(location, data_len, LSC, error);
+
+	if(err != WP_SUCCESS)
+		return CMD_FAILURE;
 
 	return CMD_SUCCESS;
 }
@@ -1465,7 +1511,7 @@ cmd_error_t execute_command(char *input, char **errstr){
 	 * If this is still NULL by the end of this function,
 	 * no suitable command was found.
 	 */
-	Function *finalfunc = NULL;
+	cmd_error_t (*finalfunc)(const char *, int, char **) = NULL;
 
 	int numcmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
 	
