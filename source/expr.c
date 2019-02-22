@@ -407,13 +407,14 @@ long evaluate(char *expr, char **error){
 					exprlen > 2 && expr[i+1] != '\0' ? expr[i+1] : ' ', 
 					exprlen > 3 && expr[i+2] != '\0' ? expr[i+2] : ' ', 
 					(int)strlen("error around here") + 3, "");
-			free(expr);
 			return LONG_MIN;
 		}
 	}
 	
 	struct stack_t *operators = stack_new();
 	struct stack_t *operands = stack_new();
+
+	const size_t zeroXlen = 2;
 
 	/* Process and solve the expression. */
 	int idx = 0;
@@ -433,8 +434,8 @@ long evaluate(char *expr, char **error){
 			int base = isdigit(current) ? 10 : 16;
 
 			/* Ignore any '0x'. */
-			if(strncmp(expr + idx, "0x", strlen("0x")) == 0){
-				idx += strlen("0x");
+			if(strncmp(expr + idx, "0x", zeroXlen) == 0){
+				idx += zeroXlen;
 				current = expr[idx];
 
 				base = 16;
@@ -525,14 +526,10 @@ long evaluate(char *expr, char **error){
 
 	stack_free(operators);
 	stack_free(operands);
-	
-	free(expr);
 
 	return result;
 
 fail:
-	free(expr);
-
 	stack_free(operands);
 	stack_free(operators);
 	

@@ -19,31 +19,32 @@ extern int keep_checking_for_process;
 struct dbg_cmd_t {
 	const char *name;
 	const char *alias;
-	cmd_error_t (*function)(const char *, int, char **);
+	cmd_error_t (*function)(char *, int, char **);
 	const char *desc;
 };
 
-cmd_error_t cmdfunc_attach(const char *, int, char **);
-cmd_error_t cmdfunc_aslr(const char *, int, char **);
-cmd_error_t cmdfunc_backtrace(const char *, int, char **);
-cmd_error_t cmdfunc_break(const char *, int, char **);
-cmd_error_t cmdfunc_continue(const char *, int, char **);
-cmd_error_t cmdfunc_delete(const char *, int, char **);
-cmd_error_t cmdfunc_detach(const char *, int, char **);
-cmd_error_t cmdfunc_disassemble(const char *, int, char **);
-cmd_error_t cmdfunc_examine(const char *, int, char **);
-cmd_error_t cmdfunc_help(const char *, int, char **);
-cmd_error_t cmdfunc_kill(const char *, int, char **);
-cmd_error_t cmdfunc_quit(const char *, int, char **);
-cmd_error_t cmdfunc_regsfloat(const char *, int, char **);
-cmd_error_t cmdfunc_regsgen(const char *, int, char **);
-cmd_error_t cmdfunc_set(const char *, int, char **);
-cmd_error_t cmdfunc_show(const char *, int, char **);
-cmd_error_t cmdfunc_stepi(const char *, int, char **);
-cmd_error_t cmdfunc_threadlist(const char *, int, char **);
-cmd_error_t cmdfunc_threadselect(const char *, int, char **);
-cmd_error_t cmdfunc_trace(const char *, int, char **);
-cmd_error_t cmdfunc_watch(const char *, int, char **);
+cmd_error_t cmdfunc_aslr(char *, int, char **);
+cmd_error_t cmdfunc_attach(char *, int, char **);
+cmd_error_t cmdfunc_backtrace(char *, int, char **);
+cmd_error_t cmdfunc_break(char *, int, char **);
+cmd_error_t cmdfunc_continue(char *, int, char **);
+cmd_error_t cmdfunc_delete(char *, int, char **);
+cmd_error_t cmdfunc_detach(char *, int, char **);
+cmd_error_t cmdfunc_disassemble(char *, int, char **);
+cmd_error_t cmdfunc_examine(char *, int, char **);
+cmd_error_t cmdfunc_help(char *, int, char **);
+cmd_error_t cmdfunc_kill(char *, int, char **);
+cmd_error_t cmdfunc_quit(char *, int, char **);
+cmd_error_t cmdfunc_regsfloat(char *, int, char **);
+cmd_error_t cmdfunc_regsgen(char *, int, char **);
+cmd_error_t cmdfunc_set(char *, int, char **);
+cmd_error_t cmdfunc_show(char *, int, char **);
+cmd_error_t cmdfunc_stepi(char *, int, char **);
+cmd_error_t cmdfunc_threadlist(char *, int, char **);
+cmd_error_t cmdfunc_threadselect(char *, int, char **);
+cmd_error_t cmdfunc_trace(char *, int, char **);
+cmd_error_t cmdfunc_unset(char *, int, char **);
+cmd_error_t cmdfunc_watch(char *, int, char **);
 
 cmd_error_t execute_command(char *, char **);
 
@@ -70,6 +71,7 @@ static struct dbg_cmd_t COMMANDS[] = {
 	{ "thread list", NULL, cmdfunc_threadlist, "List threads from the debuggee." },
 	{ "thread select", NULL, cmdfunc_threadselect, "Select a thread to focus on." },
 	{ "trace", NULL, cmdfunc_trace, "Trace system calls, mach system calls, and mach messages from the debuggee. Press Ctrl+C to quit. Syntax: \n\ttrace {--dump}\n\n\tIf you include `--dump`, the trace will be dumped to ~/trace.txt." },
+	{ "unset", NULL, cmdfunc_unset, "Set a convenience variable to `void`. The variable is not deleted. Syntax:\n\tunset <convenience variable, ...>" },
 	{ "watch", "w", cmdfunc_watch, "Set a watchpoint. Syntax:\n\twatch {type} <addr> <size>\n\n\ttype: what kind of access to <location> you want to watch for.\n\n\tvalid values: --r (read), --w (write), --rw (read/write).\n\n\tif no type is given, iosdbg defaults to --w.\n\n\taddr: the location to watch\n\tsize: the size, in bytes, of the data at location to watch" },
 	{ "", NULL, NULL, ""}
 };

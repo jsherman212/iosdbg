@@ -115,7 +115,24 @@ long strtol_err(char *str, char **error){
 	return result;
 }
 
-cmd_error_t cmdfunc_aslr(const char *args, int arg1, char **error){
+double strtod_err(char *str, char **error){
+	if(!str){
+		asprintf(error, "NULL argument `str`");
+		return -1.0;
+	}
+
+	char *endptr = NULL;
+	double result = strtod(str, &endptr);
+
+	if(*endptr && *endptr != '\0'){
+		asprintf(error, "invalid number '%s'", str);
+		return -1.0;
+	}
+
+	return result;
+}
+
+cmd_error_t cmdfunc_aslr(char *args, int arg1, char **error){
 	if(debuggee->pid == -1){
 		asprintf(error, "not attached to anything");
 		return CMD_FAILURE;
@@ -126,7 +143,7 @@ cmd_error_t cmdfunc_aslr(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_attach(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
 	if(!args){
 		asprintf(error, "no target");
 		return CMD_FAILURE;
@@ -141,7 +158,7 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1, char **error){
 		char *target = NULL;
 
 		if(strstr(args, "--waitfor"))
-			target = (char *)args + strlen("--waitfor ");
+			target = args + strlen("--waitfor ");
 
 		char ans = answer("Detach from %s and reattach to %s? (y/n) ", debuggee->debuggee_name, !target ? args : target);
 
@@ -164,7 +181,7 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1, char **error){
 
 	/* Constantly check if this process has been launched. */
 	if(strstr(args, "--waitfor")){
-		target = (char *)args + strlen("--waitfor ");
+		target = args + strlen("--waitfor ");
 
 		if(strlen(target) == 0){
 			asprintf(error, "no target given");
@@ -202,8 +219,8 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1, char **error){
 		keep_checking_for_process = 0;
 	}
 	else{
-		target = (char *)args;
-		pid = parse_pid((char *)args, &piderr);
+		target = args;
+		pid = parse_pid(args, &piderr);
 	}
 	
 	if(pid == -1){
@@ -234,7 +251,11 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1, char **error){
 	debuggee->aslr_slide = debuggee->find_slide();
 	
 	if(is_number(target)){
-		char *name = progname_from_pid(debuggee->pid);
+		char *name = progname_from_pid(debuggee->pid, error);
+
+		if(*error){
+			return CMD_FAILURE;
+		}
 
 		if(!name){
 			asprintf(error, "could not get the debuggee's name");
@@ -296,7 +317,7 @@ cmd_error_t cmdfunc_attach(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_backtrace(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_backtrace(char *args, int arg1, char **error){
 	if(debuggee->pid == -1){
 		asprintf(error, "not attached to anything");
 		return CMD_FAILURE;
@@ -341,7 +362,7 @@ cmd_error_t cmdfunc_backtrace(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_break(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_break(char *args, int arg1, char **error){
 	if(!args){
 		asprintf(error, "missing argument");
 		cmdfunc_help("break", 0, error);
@@ -353,7 +374,7 @@ cmd_error_t cmdfunc_break(const char *args, int arg1, char **error){
 		return CMD_FAILURE;
 	}
 
-	char *tok = strtok((char *)args, " ");	
+	char *tok = strtok(args, " ");	
 
 	long location = parse_expr(tok, error);
 
@@ -378,7 +399,7 @@ cmd_error_t cmdfunc_break(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_continue(const char *args, int do_not_print_msg, char **error){
+cmd_error_t cmdfunc_continue(char *args, int do_not_print_msg, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 	
@@ -415,7 +436,7 @@ cmd_error_t cmdfunc_continue(const char *args, int do_not_print_msg, char **erro
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_delete(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_delete(char *args, int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 	
@@ -424,15 +445,14 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1, char **error){
 		return CMD_FAILURE;
 	}
 
-	char *tok = strtok((char *)args, " ");
+	char *tok = strtok(args, " ");
 	
 	if(!tok){
 		cmdfunc_help("delete", 0, error);
 		return CMD_FAILURE;
 	}
-	
-	char *type = malloc(strlen(tok) + 1);
-	strcpy(type, tok);
+
+	char *type = strdup(tok);
 
 	if(strcmp(type, "b") != 0 && strcmp(type, "w") != 0){
 		cmdfunc_help("delete", 0, error);
@@ -525,7 +545,7 @@ cmd_error_t cmdfunc_delete(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_detach(const char *args, int from_death, char **error){
+cmd_error_t cmdfunc_detach(char *args, int from_death, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -630,13 +650,13 @@ cmd_error_t cmdfunc_detach(const char *args, int from_death, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_disassemble(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_disassemble(char *args, int arg1, char **error){
 	if(!args){
 		cmdfunc_help("disassemble", 0, error);
 		return CMD_FAILURE;
 	}
 
-	char *tok = strtok((char *)args, " ");
+	char *tok = strtok(args, " ");
 	
 	if(!tok){
 		cmdfunc_help("disassemble", 0, error);
@@ -684,7 +704,7 @@ cmd_error_t cmdfunc_disassemble(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_examine(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_examine(char *args, int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -693,14 +713,14 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1, char **error){
 		return CMD_FAILURE;
 	}
 
-	char *tok = strtok((char *)args, " ");
+	char *tok = strtok(args, " ");
 	
 	if(!tok){
 		cmdfunc_help("examine", 0, error);
 		return CMD_FAILURE;
 	}
 
-	*error = NULL;
+	//*error = NULL;
 	long location = parse_expr(tok, error);
 
 	if(*error)
@@ -741,7 +761,7 @@ cmd_error_t cmdfunc_examine(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_help(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_help(char *args, int arg1, char **error){
 	if(!args){
 		asprintf(error, "need command");
 		return CMD_FAILURE;
@@ -765,7 +785,7 @@ cmd_error_t cmdfunc_help(const char *args, int arg1, char **error){
 	return CMD_FAILURE;
 }
 
-cmd_error_t cmdfunc_kill(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_kill(char *args, int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -798,7 +818,7 @@ cmd_error_t cmdfunc_kill(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_quit(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_quit(char *args, int arg1, char **error){
 	cmdfunc_detach(NULL, 0, error);
 
 	if(*error)
@@ -835,7 +855,7 @@ cmd_error_t cmdfunc_quit(const char *args, int arg1, char **error){
 	exit(0);
 }
 
-cmd_error_t cmdfunc_regsfloat(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_regsfloat(char *args, int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -852,7 +872,7 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1, char **error){
 	char *regstr = malloc(sz);
 
 	/* Iterate through and show all the registers the user asked for. */
-	char *tok = strtok((char *)args, " ");
+	char *tok = strtok(args, " ");
 
 	while(tok){
 		debuggee->get_neon_state();
@@ -938,7 +958,7 @@ cmd_error_t cmdfunc_regsfloat(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_regsgen(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_regsgen(char *args, int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 	
@@ -969,7 +989,7 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1, char **error){
 	}
 
 	/* Otherwise, print every register they asked for. */
-	char *tok = strtok((char *)args, " ");
+	char *tok = strtok(args, " ");
 
 	while(tok){
 		char reg_type = tolower(tok[0]);
@@ -1031,12 +1051,7 @@ cmd_error_t cmdfunc_regsgen(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_set(const char *args, int arg1, char **error){
-	if(debuggee->pid == -1){
-		cmdfunc_help("set", 0, error);
-		return CMD_FAILURE;
-	}
-
+cmd_error_t cmdfunc_set(char *args, int arg1, char **error){
 	if(!args){
 		cmdfunc_help("set", 0, error);
 		return CMD_FAILURE;
@@ -1044,9 +1059,7 @@ cmd_error_t cmdfunc_set(const char *args, int arg1, char **error){
 
 	char specifier = args[0];
 
-	char *argcpy = malloc(strlen(args/* + 1*/) + 1);
-	strcpy(argcpy, args/* + 1*/);
-
+	char *argcpy = strdup(args);
 	char *equals = strchr(argcpy, '=');
 
 	if(!equals){
@@ -1057,13 +1070,8 @@ cmd_error_t cmdfunc_set(const char *args, int arg1, char **error){
 
 	int cpylen = equals - argcpy;
 
-	char *target = malloc(cpylen + 1);
-	memset(target, '\0', cpylen + 1);
-
-	strncpy(target, argcpy, cpylen);
-
-	char *value_str = malloc(strlen(equals + 1) + 1);
-	strcpy(value_str, equals + 1);
+	char *target = strndup(argcpy, cpylen);
+	char *value_str = strdup(equals + 1);
 
 	if(strlen(value_str) == 0){
 		free(argcpy);
@@ -1138,6 +1146,14 @@ cmd_error_t cmdfunc_set(const char *args, int arg1, char **error){
 			return CMD_SUCCESS;
 		}
 
+		/* Put this check here so the user and set convenience variables
+		 * without being attached to anything.
+		 */
+		if(debuggee->pid == -1){
+			cmdfunc_help("set", 0, error);
+			return CMD_FAILURE;
+		}
+
 		memmove(target, target + 1, strlen(target));
 
 		for(int i=0; i<strlen(target); i++)
@@ -1172,8 +1188,21 @@ cmd_error_t cmdfunc_set(const char *args, int arg1, char **error){
 		if(gpr && *error)
 			return CMD_FAILURE;
 
-		float valuef = strtof(value_str, NULL);
-		double valuedf = strtod(value_str, NULL);
+		/* The functions above will have set error
+		 * if we have a floating point value, so
+		 * clear it.
+		 */
+		*error = NULL;
+
+		float valuef = (float)strtod_err(value_str, error);
+
+		if(fpr && *error)
+			return CMD_FAILURE;
+
+		double valuedf = strtod_err(value_str, error);
+
+		if(fpr && *error)
+			return CMD_FAILURE;
 
 		/* Take care of any special registers. */
 		if(strcmp(target, "fp") == 0)
@@ -1286,13 +1315,13 @@ cmd_error_t cmdfunc_set(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_show(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_show(char *args, int arg1, char **error){
 	if(!args){
 		show_all_cvars();
 		return CMD_SUCCESS;
 	}
 
-	char *tok = strtok((char *)args, " ");
+	char *tok = strtok(args, " ");
 
 	while(tok){
 		p_convvar(tok);
@@ -1302,7 +1331,7 @@ cmd_error_t cmdfunc_show(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_stepi(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_stepi(char *args, int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -1325,7 +1354,7 @@ cmd_error_t cmdfunc_stepi(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_threadlist(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_threadlist(char *args, int arg1, char **error){
 	if(!debuggee)
 		return CMD_FAILURE;
 
@@ -1348,7 +1377,7 @@ cmd_error_t cmdfunc_threadlist(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_threadselect(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_threadselect(char *args, int arg1, char **error){
 	if(!args)
 		return CMD_FAILURE;
 	
@@ -1396,7 +1425,7 @@ cmd_error_t cmdfunc_threadselect(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_trace(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_trace(char *args, int arg1, char **error){
 	if(debuggee->tracing_disabled){
 		asprintf(error, "tracing is not supported on this host");
 		return CMD_FAILURE;
@@ -1412,13 +1441,29 @@ cmd_error_t cmdfunc_trace(const char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_watch(const char *args, int arg1, char **error){
+cmd_error_t cmdfunc_unset(char *args, int arg1, char **error){
+	if(!args){
+		asprintf(error, "need a convenience variable");
+		return CMD_FAILURE;
+	}
+	
+	char *tok = strtok(args, " ");
+
+	while(tok){
+		void_convvar(tok);
+		tok = strtok(NULL, " ");
+	}
+
+	return CMD_SUCCESS;
+}
+
+cmd_error_t cmdfunc_watch(char *args, int arg1, char **error){
 	if(!args){
 		cmdfunc_help("watch", 0, error);
 		return CMD_FAILURE;
 	}
 	
-	char *tok = strtok((char *)args, " ");
+	char *tok = strtok(args, " ");
 
 	if(!tok){
 		cmdfunc_help("watch", 0, error);
@@ -1481,12 +1526,12 @@ cmd_error_t cmdfunc_watch(const char *args, int arg1, char **error){
 }
 
 cmd_error_t execute_command(char *input, char **errstr){
+	if(!input)
+		return CMD_FAILURE;
+
 	/* Trim any whitespace at the beginning and the end of the command. */
 	while(isspace(*input))
 		input++;
-
-	if(!input)
-		return CMD_FAILURE;
 
 	const char *end = input + (strlen(input) - 1);
 
@@ -1511,7 +1556,7 @@ cmd_error_t execute_command(char *input, char **errstr){
 	 * If this is still NULL by the end of this function,
 	 * no suitable command was found.
 	 */
-	cmd_error_t (*finalfunc)(const char *, int, char **) = NULL;
+	cmd_error_t (*finalfunc)(char *, int, char **) = NULL;
 
 	int numcmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
 	

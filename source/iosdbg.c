@@ -1,14 +1,16 @@
 #include <stdio.h>
+#include <sys/sysctl.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include "convvar.h"
 #include "defs.h"
 #include "dbgcmd.h"
-#include "dbgutils.h"
 #include "handlers.h"
+#include "linkedlist.h"
 #include "machthread.h"
 #include "memutils.h"
 #include "printutils.h"
@@ -259,6 +261,54 @@ int setup_tracing(void){
 	fclose(tracecodes);
 
 	return 0;
+}
+
+void setup_initial_debuggee(void){
+	debuggee = malloc(sizeof(struct debuggee));
+
+	/* If we aren't attached to anything, debuggee's pid is -1. */
+	debuggee->pid = -1;
+	debuggee->interrupted = 0;
+	debuggee->breakpoints = linkedlist_new();
+	debuggee->watchpoints = linkedlist_new();
+	debuggee->threads = linkedlist_new();
+
+	debuggee->num_breakpoints = 0;
+	debuggee->num_watchpoints = 0;
+
+	debuggee->last_hit_bkpt_ID = 0;
+	debuggee->last_hit_bkpt_hw = 0;
+
+	debuggee->is_single_stepping = 0;
+	debuggee->want_single_step = 0;
+
+	debuggee->want_detach = 0;
+
+	debuggee->last_unix_signal = -1;
+	debuggee->soft_signal_exc = 0;
+
+	debuggee->tracing_disabled = 0;
+	debuggee->currently_tracing = 0;
+
+	/* Figure out how many hardware breakpoints/watchpoints are supported. */
+	size_t len = sizeof(int);
+
+	sysctlbyname("hw.optional.breakpoint", &debuggee->num_hw_bps, &len, NULL, 0);
+	
+	len = sizeof(int);
+
+	sysctlbyname("hw.optional.watchpoint", &debuggee->num_hw_wps, &len, NULL, 0);
+
+	/* Create some iosdbg managed convenience variables. */
+	char *error = NULL;
+
+	set_convvar("$_", "", &error);
+	set_convvar("$__", "", &error);
+	set_convvar("$_exitcode", "", &error);
+	set_convvar("$_exitsignal", "", &error);
+
+	/* The user can set this so iosdbg never adds ASLR. */
+	set_convvar("$NO_ASLR_OVERRIDE", "", &error);
 }
 
 int main(int argc, char **argv, const char **envp){

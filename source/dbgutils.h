@@ -4,8 +4,7 @@
 #include <unistd.h>
 
 pid_t pid_of_program(char *, char **);
-char *progname_from_pid(pid_t);
+char *progname_from_pid(pid_t, char **);
 void setup_servers(void);
-void setup_initial_debuggee(void);
 
 #endif

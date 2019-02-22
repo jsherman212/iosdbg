@@ -26,7 +26,7 @@ kern_return_t catch_mach_exception_raise_state_identity(mach_port_t exception_po
 
 extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
 
-struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length){
+struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length, char **error){
 	int err;
 	struct kinfo_proc *result = NULL;
 
@@ -37,7 +37,7 @@ struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length){
 	err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, NULL, length, NULL, 0);
 	
 	if(err){
-		printf("Couldn't get the size of our kinfo_proc buffer: %s\n", strerror(errno));
+		asprintf(error, "couldn't get the size of our kinfo_proc buffer: %s\n", strerror(errno));
 		return NULL;
 	}
 	
@@ -45,17 +45,20 @@ struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length){
 	err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, result, length, NULL, 0);
 	
 	if(err){
-		printf("Second sysctl call failed: %s\n", strerror(errno));
+		asprintf(error, "second sysctl call failed: %s\n", strerror(errno));
 		return NULL;
 	}
 
 	return result;
 }
 
-pid_t pid_of_program(char *progname, char **errorstring){
+pid_t pid_of_program(char *progname, char **error){
 	size_t length;
 
-	struct kinfo_proc *result = fill_kinfo_proc_buffer(&length);
+	struct kinfo_proc *result = fill_kinfo_proc_buffer(&length, error);
+
+	if(*error)
+		return -1;
 
 	int num_procs = length / sizeof(struct kinfo_proc);
 	int matches = 0;
@@ -85,7 +88,7 @@ pid_t pid_of_program(char *progname, char **errorstring){
 	free(result);
 	
 	if(matches > 1){
-		asprintf(errorstring, "multiple instances of '%s': \n%s", progname, matchstr);
+		asprintf(error, "multiple instances of '%s': \n%s", progname, matchstr);
 		free(matchstr);
 		return -1;
 	}
@@ -93,7 +96,7 @@ pid_t pid_of_program(char *progname, char **errorstring){
 	free(matchstr);
 
 	if(matches == 0){
-		asprintf(errorstring, "could not find a process named '%s'", progname);
+		asprintf(error, "could not find a process named '%s'", progname);
 		return -1;
 	}
 
@@ -103,10 +106,13 @@ pid_t pid_of_program(char *progname, char **errorstring){
 	return -1;
 }
 
-char *progname_from_pid(pid_t pid){
+char *progname_from_pid(pid_t pid, char **error){
 	size_t length;
 
-	struct kinfo_proc *result = fill_kinfo_proc_buffer(&length);
+	struct kinfo_proc *result = fill_kinfo_proc_buffer(&length, error);
+
+	if(*error)
+		return NULL;
 
 	int num_procs = length / sizeof(struct kinfo_proc);
 
@@ -258,53 +264,6 @@ void setup_servers(void){
 	pthread_create(&death_server_thread, NULL, death_server, intptr);
 }
 
-void setup_initial_debuggee(void){
-	debuggee = malloc(sizeof(struct debuggee));
-
-	/* If we aren't attached to anything, debuggee's pid is -1. */
-	debuggee->pid = -1;
-	debuggee->interrupted = 0;
-	debuggee->breakpoints = linkedlist_new();
-	debuggee->watchpoints = linkedlist_new();
-	debuggee->threads = linkedlist_new();
-
-	debuggee->num_breakpoints = 0;
-	debuggee->num_watchpoints = 0;
-
-	debuggee->last_hit_bkpt_ID = 0;
-	debuggee->last_hit_bkpt_hw = 0;
-
-	debuggee->is_single_stepping = 0;
-	debuggee->want_single_step = 0;
-
-	debuggee->want_detach = 0;
-
-	debuggee->last_unix_signal = -1;
-	debuggee->soft_signal_exc = 0;
-
-	debuggee->tracing_disabled = 0;
-	debuggee->currently_tracing = 0;
-
-	/* Figure out how many hardware breakpoints/watchpoints are supported. */
-	size_t len = sizeof(int);
-
-	sysctlbyname("hw.optional.breakpoint", &debuggee->num_hw_bps, &len, NULL, 0);
-	
-	len = sizeof(int);
-
-	sysctlbyname("hw.optional.watchpoint", &debuggee->num_hw_wps, &len, NULL, 0);
-
-	/* Create some iosdbg managed convenience variables. */
-	char *error = NULL;
-
-	set_convvar("$_", "", &error);
-	set_convvar("$__", "", &error);
-	set_convvar("$_exitcode", "", &error);
-	set_convvar("$_exitsignal", "", &error);
-
-	/* The user can set this so iosdbg never adds ASLR. */
-	set_convvar("$NO_ASLR_OVERRIDE", "", &error);
-}
 
 const char *get_exception_name(exception_type_t exception){
 	switch(exception){

@@ -1,3 +1,8 @@
+2-21-19
+- cmdfunc args parameters are no longer const char *
+- fix expr.c double free
+- new command: unset, set a convenience variable to void
+
 2-20-19
 - fixed some memory leaks
 - extended new error system to breakpoints and watchpoints
