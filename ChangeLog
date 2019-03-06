@@ -1,3 +1,6 @@
+3-6-19
+- re-organize code, get rid of dbgutils.c/dbgutils.h
+
 2-21-19
 - cmdfunc args parameters are no longer const char *
 - fix expr.c double free

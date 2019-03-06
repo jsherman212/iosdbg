@@ -15,6 +15,8 @@
 #include "linkedlist.h"
 #include "machthread.h"
 #include "memutils.h"
+#include "procutils.h"
+#include "servers.h"
 #include "trace.h"
 #include "watchpoint.h"
 

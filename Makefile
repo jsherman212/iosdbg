@@ -7,7 +7,7 @@ SRCDIR=source
 OBJECT_FILES = $(SRCDIR)/breakpoint.o \
 	$(SRCDIR)/convvar.o \
 	$(SRCDIR)/dbgcmd.o \
-	$(SRCDIR)/dbgutils.o \
+	$(SRCDIR)/exception.o \
 	$(SRCDIR)/expr.o \
 	$(SRCDIR)/iosdbg.o \
 	$(SRCDIR)/handlers.o \
@@ -17,6 +17,8 @@ OBJECT_FILES = $(SRCDIR)/breakpoint.o \
 	$(SRCDIR)/machthread.o \
 	$(SRCDIR)/memutils.o \
 	$(SRCDIR)/printutils.o \
+	$(SRCDIR)/procutils.o \
+	$(SRCDIR)/servers.o \
 	$(SRCDIR)/stack.o \
 	$(SRCDIR)/trace.o \
 	$(SRCDIR)/watchpoint.o
