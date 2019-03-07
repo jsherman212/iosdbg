@@ -196,6 +196,11 @@ cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
 			return CMD_FAILURE;
 		}
 
+		if(strcmp(target, "iosdbg") == 0){
+			asprintf(error, "cannot attach to myself");
+			return CMD_FAILURE;
+		}
+
 		printf("Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", target);
 
 		pid = parse_pid(target, &piderr);
@@ -255,9 +260,8 @@ cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
 	if(is_number(target)){
 		char *name = progname_from_pid(debuggee->pid, error);
 
-		if(*error){
+		if(*error)
 			return CMD_FAILURE;
-		}
 
 		if(!name){
 			asprintf(error, "could not get the debuggee's name");

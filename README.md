@@ -18,7 +18,7 @@ A work in progress, native debugger built for *jailbroken* 64 bit iOS devices ca
 #### If you're jailbroken with Unc0ver on iOS 12, you'll need to set CS_GET_TASK_ALLOW (0x4) in the csflags of the program you want to debug, as of March 6th, 2019.
 
 #### Theos
-Skip this step if it's already installed on your device. I have been using the iOS 9.3 SDK and (currently) the iOS 11.2 SDK to build this project. If you use a different SDK, edit the Makefile. I have been developing this debugger on an iPhone 6s on iOS 9.3.3, an iPhone 5s on iOS 10.3.2, and an iPhone X on iOS 12.1.
+Skip this step if it's already installed on your device. I have been using the iOS 9.3 SDK and (currently) the iOS 11.2 SDK to build this project. If you use a different SDK, edit the Makefile. I have been developing this debugger on an iPhone 6s on iOS 9.3.3, an iPhone 5s on iOS 10.3.2, an iPhone SE on iOS 12.0, and an iPhone X on iOS 12.1.
 
 Theos is a cross-platform suite of tools capable of building iOS software without Xcode. Refer to this link for instructions on installing Theos on your jailbroken iOS device: https://github.com/theos/theos/wiki/Installation-iOS
 
