@@ -290,6 +290,8 @@ void setup_initial_debuggee(void){
 	debuggee->tracing_disabled = 0;
 	debuggee->currently_tracing = 0;
 
+	debuggee->pending_messages = 0;
+
 	/* Figure out how many hardware breakpoints/watchpoints are supported. */
 	size_t len = sizeof(int);
 

@@ -16,7 +16,11 @@
 #include "trace.h"
 #include "watchpoint.h"
 
-const char *get_exception_name(exception_type_t exception){
+int JUST_HIT_WATCHPOINT;
+int JUST_HIT_BREAKPOINT;
+int JUST_HIT_SW_BREAKPOINT;
+
+const char *exc_str(exception_type_t exception){
 	switch(exception){
 	case EXC_BAD_ACCESS:
 		return "EXC_BAD_ACCESS";
@@ -49,31 +53,57 @@ const char *get_exception_name(exception_type_t exception){
 	}
 }
 
-void describe_hit_watchpoint(void *prev_data, void *cur_data, unsigned int sz){
+void set_single_step(int enabled){
+	debuggee->get_debug_state();
+
+	if(enabled)
+		debuggee->debug_state.__mdscr_el1 |= 1;
+	else
+		debuggee->debug_state.__mdscr_el1 = 0;
+
+	debuggee->set_debug_state();
+}
+
+void describe_hit_breakpoint(unsigned long long tid, char *tname, 
+		struct breakpoint *hit){
+	printf("\n * Thread %#llx: '%s': breakpoint %d at %#lx hit %d time(s).\n", 
+			tid, tname, hit->id, hit->location, hit->hit_count);
+}
+
+void describe_hit_watchpoint(void *prev_data, void *cur_data, 
+		unsigned int sz){
 	long long old_val = memutils_buffer_to_number(prev_data, sz);
 	long long new_val = memutils_buffer_to_number(cur_data, sz);
 
-	/* I'd like output in hex, but %x specifies unsigned int, and data could be negative.
-	 * This is a hacky workaround.
+	/* I'd like output in hex, but %x specifies unsigned int, 
+	 * and data could be negative. This is a hacky workaround.
 	 */
 	if(sz == sizeof(char))
-		printf("Old value: %s%#x\nNew value: %s%#x\n\n", (char)old_val < 0 ? "-" : "", (char)old_val < 0 ? (char)-old_val : (char)old_val, (char)new_val < 0 ? "-" : "", (char)new_val < 0 ? (char)-new_val : (char)new_val);
+		printf("Old value: %s%#x\nNew value: %s%#x\n\n", 
+				(char)old_val < 0 ? "-" : "", 
+				(char)old_val < 0 ? (char)-old_val : (char)old_val, 
+				(char)new_val < 0 ? "-" : "", 
+				(char)new_val < 0 ? (char)-new_val : (char)new_val);
 	else if(sz == sizeof(short) || sz == sizeof(int)){
 		old_val = (int)CFSwapInt32(old_val);
 		new_val = (int)CFSwapInt32(new_val);
 
-		printf("Old value: %s%#x\nNew value: %s%#x\n\n", (int)old_val < 0 ? "-" : "", (int)old_val < 0 ? (int)-old_val : (int)old_val, (int)new_val < 0 ? "-" : "", (int)new_val < 0 ? (int)-new_val : (int)new_val);
+		printf("Old value: %s%#x\nNew value: %s%#x\n\n", 
+				(int)old_val < 0 ? "-" : "", 
+				(int)old_val < 0 ? (int)-old_val : (int)old_val, 
+				(int)new_val < 0 ? "-" : "", 
+				(int)new_val < 0 ? (int)-new_val : (int)new_val);
 	}
 	else{
 		old_val = (long)CFSwapInt64(old_val);
 		new_val = (long)CFSwapInt64(new_val);
 
-		printf("Old value: %s%#lx\nNew value: %s%#lx\n\n", (long)old_val < 0 ? "-" : "", (long)old_val < 0 ? (long)-old_val : (long)old_val, (long)new_val < 0 ? "-" : "", (long)new_val < 0 ? (long)-new_val : (long)new_val);
+		printf("Old value: %s%#lx\nNew value: %s%#lx\n\n", 
+				(long)old_val < 0 ? "-" : "", 
+				(long)old_val < 0 ? (long)-old_val : (long)old_val, 
+				(long)new_val < 0 ? "-" : "", 
+				(long)new_val < 0 ? (long)-new_val : (long)new_val);
 	}
-}
-
-void describe_hit_breakpoint(unsigned long long tid, char *tname, struct breakpoint *hit){
-	printf("\n * Thread %#llx: '%s': breakpoint %d at %#lx hit %d time(s).\n", tid, tname, hit->id, hit->location, hit->hit_count);
 }
 
 void clear_signal(mach_port_t thread){
@@ -85,307 +115,278 @@ void clear_signal(mach_port_t thread){
 	dlclose(h);
 }
 
-kern_return_t catch_mach_exception_raise(
-		mach_port_t exception_port,
-		mach_port_t thread,
-		mach_port_t task,
-		exception_type_t exception,
-		exception_data_t _code,
-		mach_msg_type_number_t code_count){
+void handle_soft_signal(mach_port_t thread, long subcode, char **desc){
+	if(debuggee->want_detach){
+		debuggee->resume();
+		debuggee->interrupted = 0;
+
+		return;
+	}
+
+	char *sigstr = strdup(sys_signame[subcode]);
+	size_t sigstrlen = strlen(sigstr);
+
+	for(int i=0; i<sigstrlen; i++)
+		sigstr[i] = toupper(sigstr[i]);
+
+	asprintf(desc, "%s%ld, SIG%s. ", *desc, subcode, sigstr);
+
+	free(sigstr);
+
+	/* TODO let user decide which signals to clear, will be easier
+	 * now that I'm manually handling exceptions...
+	 */
+	if(subcode == SIGINT || subcode == SIGTRAP)
+		clear_signal(thread);
+}
+
+void handle_hit_watchpoint(void){
+	struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
+
+	/* This should never happen... but just in case? */
+	if(!hit)
+		return;
+
+	unsigned int sz = hit->data_len;
+
+	/* Save previous data for comparison. */
+	void *prev_data = malloc(sz);
+	memcpy(prev_data, hit->data, sz);
+
+	memutils_read_memory_at_location((void *)hit->location, hit->data, sz);
+	
+	printf("\nWatchpoint %d hit:\n\n", hit->id);
+
+	describe_hit_watchpoint(prev_data, hit->data, sz);
+	disassemble_at_location(debuggee->last_hit_wp_PC + 4, 4);
+
+	free(prev_data);
+	
+	debuggee->last_hit_wp_loc = 0;
+	debuggee->last_hit_wp_PC = 0;
+}
+
+void handle_single_step(void){
+	if(JUST_HIT_BREAKPOINT){
+		if(JUST_HIT_SW_BREAKPOINT){
+			breakpoint_enable(debuggee->last_hit_bkpt_ID);
+			JUST_HIT_SW_BREAKPOINT = 0;
+		}
+		/* If we caused a software step exception to get past a breakpoint,
+		 * just continue as normal. Otherwise, if we're actually
+		 * single stepping and we step over a breakpoint, print the disassembly.
+		 */
+		if(!debuggee->is_single_stepping){
+			char *e;
+			cmdfunc_continue(NULL, 0, &e);
+		}
+		else
+			disassemble_at_location(debuggee->thread_state.__pc, 4);
+
+		JUST_HIT_BREAKPOINT = 0;
+
+		debuggee->is_single_stepping = 0;
+
+		return;
+	}
+
+	putchar('\n');
+
+	disassemble_at_location(debuggee->thread_state.__pc, 4);
+	set_single_step(0);
+	debuggee->is_single_stepping = 0;
+}
+
+void handle_hit_breakpoint(long subcode, char **desc){
+	struct breakpoint *hit = find_bp_with_address(subcode);
+
+	if(!hit){
+		printf("Could not find hit breakpoint (this shouldn't happen)\n");
+		return;
+	}
+
+	breakpoint_hit(hit);
+
+	asprintf(desc, "%s breakpoint %d at %#lx hit %d time(s).\n",
+			*desc, hit->id, hit->location, hit->hit_count);
+
+	if(!hit->hw){
+		JUST_HIT_SW_BREAKPOINT = 1;
+		breakpoint_disable(hit->id);
+	}
+
+	debuggee->last_hit_bkpt_ID = hit->id;
+}
+
+void handle_exception(Request *request){
+	if(!request){
+		printf("NULL request (shouldn't happen)\n");
+		return;
+	}
+
 	/* Finish printing everything while tracing so
 	 * we don't get caught in the middle of it.
 	 */
 	wait_for_trace();
 
-	if(debuggee->task != task)
-		return KERN_FAILURE;
-
-	/* If this is called two times in a row, make sure
-	 * to not increment the suspend count for our task
-	 * more than once.
-	 */
 	if(!debuggee->interrupted){
 		debuggee->suspend();
 		debuggee->interrupted = 1;
 	}
 
-	debuggee->soft_signal_exc = 0;
+	mach_port_t task = request->task.name;
+	mach_port_t thread = request->thread.name;
+	exception_type_t exception = request->exception;
+	const char *exc = exc_str(exception);
+	long code = ((long *)request->code)[0];
+	long subcode = ((long *)request->code)[1];
 
-	struct machthread *curfocused = machthread_getfocused();
-	
-	unsigned long long tid = get_tid_from_thread_port(thread);
+	/* Give focus to whatever caused this exception. */
+	struct machthread *focused = machthread_getfocused();
 
-	/* exception_data_t is typedef'ed as int *, which is
-	 * not enough space to hold the data break address.
-	 */
-	long code = ((long *)_code)[0];
-	long subcode = ((long *)_code)[1];
-
-	/* Like LLDB, ignore signals when we aren't on the
-	 * main thread and single stepping. 
-	 */
-	if(debuggee->is_single_stepping && exception == EXC_SOFTWARE && code == EXC_SOFT_SIGNAL){
-		struct machthread *main = machthread_find(1);
-
-		if(main && main->port != curfocused->port){
-			rl_clear_visible_line();
-			safe_reprompt();
-			clear_signal(thread);
-
-			return KERN_SUCCESS;
-		}
-	}
-
-	/* Give focus to the thread that caused this exception. */
-	if(!curfocused || curfocused->port != thread){
-		printf("[Switching to thread %#llx]\n", tid);
+	if(!focused || (focused && focused->port != thread)){
+		printf("\n[Switching to thread %#llx]\n", 
+				(unsigned long long)get_tid_from_thread_port(thread));
 		machthread_setfocused(thread);
 	}
 
 	debuggee->get_thread_state();
 
-	if(exception == EXC_BREAKPOINT && code == EXC_ARM_BREAKPOINT){
-		char *tname = get_thread_name_from_thread_port(thread);
+	unsigned long long tid = get_tid_from_thread_port(thread);
+	char *tname = get_thread_name_from_thread_port(thread);
+
+	char *desc;
+	asprintf(&desc, "\n * Thread %#llx", tid);
+
+	/* A number of things could have happened to cause an exception:
+	 * 		- hardware breakpoint
+	 * 		- hardware watchpoint
+	 * 		- software breakpoint
+	 * 		- hardware single step
+	 * 		- software single step exception
+	 * 		- Unix soft signal
+	 */
+	/* Unix soft signal. */
+	if(exception == EXC_SOFTWARE && code == EXC_SOFT_SIGNAL){
+		asprintf(&desc, "%s, '%s' received signal ", desc, tname);
+		handle_soft_signal(thread, subcode, &desc);
+		asprintf(&desc, "%s%#llx in debuggee.\n", desc,
+				debuggee->thread_state.__pc);
+
+		/* Don't print any of this if we're detaching. */
+		if(!debuggee->want_detach){
+			printf("%s", desc);
+			disassemble_at_location(debuggee->thread_state.__pc, 4);
+		}
+
+		free(tname);
+		free(desc);
+
+		rl_already_prompted = 0;
+
+		safe_reprompt();
+
+		return;
+	}
+	/* A hardware watchpoint hit. However, we need to single step in 
+	 * order for the CPU to execute the instruction at this address
+	 * so the value actually changes.
+	 */
+	else if(code == EXC_ARM_DA_DEBUG){
+		JUST_HIT_WATCHPOINT = 1;
+
+		debuggee->last_hit_wp_loc = subcode;
+		debuggee->last_hit_wp_PC = debuggee->thread_state.__pc;
+
+		set_single_step(1);
 		
-		/* Hardware single step exception. */
+		/* Continue execution so the software step exception occurs. */
+		char *e;
+		cmdfunc_continue(NULL, 0, &e);
+
+		free(tname);
+
+		return;
+	}
+	/* A hardware/software breakpoint hit, or the software step
+	 * exception has occured.
+	 */
+	else if(exception == EXC_BREAKPOINT && code == EXC_ARM_BREAKPOINT){
 		if(subcode == 0){
-			/* When the exception caused by the single step happens,
-			 * we can re-enable the breakpoint last it if it was software,
-			 * or do nothing if it was hardware.
-			 */
-			if(!debuggee->last_hit_bkpt_hw)
-				breakpoint_enable(debuggee->last_hit_bkpt_ID);
-			
-			if(debuggee->is_single_stepping && debuggee->want_single_step){
-				/* Assume the user only wants to single step once
-				 * so we don't have to deal with finding every place
-				 * to reset this variable.
-				 */
-				debuggee->want_single_step = 0;
+			if(JUST_HIT_WATCHPOINT){
+				handle_hit_watchpoint();
 
-				/*debuggee->get_debug_state();
-				debuggee->debug_state.__mdscr_el1 |= 1;
-				debuggee->set_debug_state();
-				*/
-				/* Check if we a hit a breakpoint while single stepping,
-				 * and if we do, report it.
-				 */
-				struct breakpoint *hit = find_bp_with_address(debuggee->thread_state.__pc);
-
-				if(hit && !hit->ss){
-					breakpoint_hit(hit);
-					describe_hit_breakpoint(tid, tname, hit);
-				}
-				else
-					printf("\n");
-
-				free(tname);
-
-				disassemble_at_location(debuggee->thread_state.__pc, 0x4);
+				JUST_HIT_WATCHPOINT = 0;
 				
 				safe_reprompt();
 
-				return KERN_SUCCESS;
+				free(tname);
+
+				return;
 			}
-			else{
-				debuggee->is_single_stepping = 0;
+			/* If we single step over where a hardware breakpoint is set,
+			 * we should report it and count it as hit.
+			 */ 
+			struct breakpoint *hit = find_bp_with_address(
+					debuggee->thread_state.__pc);
 
-				debuggee->get_debug_state();
-				debuggee->debug_state.__mdscr_el1 = 0;
-				debuggee->set_debug_state();
-			}
-
-			/* Wait until we are not on a breakpoint to start single stepping. */
-			struct breakpoint *bp = find_bp_with_address(debuggee->thread_state.__pc);
-
-			if(!bp && !debuggee->is_single_stepping && debuggee->want_single_step){
-				char *e;
-				breakpoint_at_address(debuggee->thread_state.__pc, BP_TEMP, BP_SS, &e);
-				
-				debuggee->is_single_stepping = 1;
+			if(hit && hit->hw){
+				breakpoint_hit(hit);
+				describe_hit_breakpoint(tid, tname, hit);
 			}
 
-			/* After we let the CPU single step, the instruction 
-			 * at the last watchpoint executes, so we can check
-			 * if there was a change in the data being watched.
-			 */
-			struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
+			handle_single_step();
 
-			/* If nothing was found, continue as normal. */
-			if(!hit){
-				debuggee->resume();
-				debuggee->interrupted = 0;
-				
-				return KERN_SUCCESS;
-			}
-
-			unsigned int sz = hit->data_len;
-			
-			/* Save previous data for comparision. */
-			void *prev_data = malloc(sz);
-			memcpy(prev_data, hit->data, sz);
-			
-			memutils_read_memory_at_location((void *)hit->location, hit->data, sz);
-			
-			/* Nothing has changed. However, I would like for a
-			 * watchpoint to report even if this is the case if 
-			 * the WP_READ bit is set in hit->LSC.
-			 */
-			if(memcmp(prev_data, hit->data, sz) == 0 && (hit->LSC & WP_READ)){
-				free(prev_data);
-
-				debuggee->resume();
-				debuggee->interrupted = 0;
-
-				return KERN_SUCCESS;
-			}
-
-			printf("\nWatchpoint %d hit:\n\n", hit->id);
-
-			describe_hit_watchpoint(prev_data, hit->data, sz);
-			disassemble_at_location(debuggee->last_hit_wp_PC + 4, 0x4);
-
-			free(prev_data);
-			
-			debuggee->last_hit_wp_loc = 0;
-			debuggee->last_hit_wp_PC = 0;
-			
 			safe_reprompt();
 
 			free(tname);
 
-			return KERN_SUCCESS;
+			return;
 		}
+		JUST_HIT_BREAKPOINT = 1;
 
-		struct breakpoint *hit = find_bp_with_address(subcode);
+		asprintf(&desc, "%s: '%s':", desc, tname);
+		handle_hit_breakpoint(subcode, &desc);
 
-		if(!hit){
-			printf("Could not find hit breakpoint? Please open an issue on github\n");
-			return KERN_FAILURE;
-		}
-		
-		/* Enable hardware single stepping so we can get past this instruction. */
-		debuggee->get_debug_state();
-		debuggee->debug_state.__mdscr_el1 |= 1;
-		debuggee->set_debug_state();
+		printf("%s", desc);
 
-		/* Record the ID and type of this breakpoint so we can
-		 * enable it later if it's a software breakpoint.
-		 */
-		if(!hit->ss)
-			debuggee->last_hit_bkpt_ID = hit->id;
+		disassemble_at_location(debuggee->thread_state.__pc, 4);
 
-		debuggee->last_hit_bkpt_hw = hit->hw;
-
-		/* If we're single stepping and we encounter a
-		 * software breakpoint, an exception will be
-		 * thrown no matter what. This results in stepping
-		 * the same instruction twice, so just disable it
-		 * and re-enable it when the single step exception occurs.
-		 */
-		if(!hit->hw && !hit->ss && debuggee->is_single_stepping){
-			breakpoint_disable(hit->id);
-
-			debuggee->resume();
-			debuggee->interrupted = 0;
-
-			return KERN_SUCCESS;
-		}
-
-		breakpoint_hit(hit);
-
-		if(!debuggee->is_single_stepping)
-			describe_hit_breakpoint(tid, tname, hit);
-		
+		free(desc);
 		free(tname);
 
-		/* Disable this software breakpoint to prevent
-		 * an exception from being thrown over and over.
-		 */
-		if(!hit->hw)
-			breakpoint_disable(hit->id);
-
-		/* Fix up the output if a single step breakpoint hit. */
-		if(hit->ss)
-			printf("\n");
-
-		disassemble_at_location(hit->location, 0x4);
-			
+		set_single_step(1);
+		
 		safe_reprompt();
 
-		return KERN_SUCCESS;
+		return;
 	}
-	else if(code == EXC_ARM_DA_DEBUG){
-		/* A watchpoint hit. Log anything we need to compare data when
-		 * the single step exception occurs.
-		 */
-		debuggee->last_hit_wp_loc = subcode;
-		debuggee->last_hit_wp_PC = debuggee->thread_state.__pc;
-		
-		/* Enable hardware single stepping so we can get past this watchpoint. */
-		debuggee->get_debug_state();
-		debuggee->debug_state.__mdscr_el1 |= 1;
-		debuggee->set_debug_state();
+}
 
-		debuggee->resume();
-		debuggee->interrupted = 0;
+void reply_to_exception(Request *req, kern_return_t retcode){
+	Reply reply;
+	
+	mach_msg_header_t *rpl_head = &reply.Head;
 
-		return KERN_SUCCESS;
-	}
+	/* This is from mach_excServer.c. */
+	rpl_head->msgh_bits = MACH_MSGH_BITS(MACH_MSGH_BITS_REMOTE(
+				req->Head.msgh_bits), 0);
+	rpl_head->msgh_remote_port = req->Head.msgh_remote_port;
+	rpl_head->msgh_size = (mach_msg_size_t)sizeof(mig_reply_error_t);
+	rpl_head->msgh_local_port = MACH_PORT_NULL;
+	rpl_head->msgh_id = req->Head.msgh_id + 100;
+	rpl_head->msgh_reserved = 0;
 
-	/* Some other exception occured. */
-	char *tname = get_thread_name_from_thread_port(thread);
+	reply.NDR = req->NDR;
+	reply.RetCode = retcode;
 
-	char *whathappened;
+	mach_msg(&reply.Head,
+			MACH_SEND_MSG,
+			reply.Head.msgh_size,
+			0,
+			MACH_PORT_NULL,
+			MACH_MSG_TIMEOUT_NONE,
+			MACH_PORT_NULL);
 
-	asprintf(&whathappened, "\n * Thread %#llx, '%s' received signal ", tid, tname);
-
-	/* A Unix signal was caught. */
-	if(exception == EXC_SOFTWARE && code == EXC_SOFT_SIGNAL){
-		/* If we sent SIGSTOP to correct the debuggee's process
-		 * state, ignore it and resume execution.
-		 */
-		if(debuggee->want_detach){
-			free(whathappened);
-
-			debuggee->resume();
-			debuggee->interrupted = 0;
-
-			return KERN_SUCCESS;
-		}
-
-		debuggee->last_unix_signal = subcode;
-		debuggee->soft_signal_exc = 1;
-
-		char *sigstr = strdup(sys_signame[subcode]);
-		size_t sigstrlen = strlen(sigstr);
-
-		for(int i=0; i<sigstrlen; i++)
-			sigstr[i] = toupper(sigstr[i]);
-
-		asprintf(&whathappened, "%s%ld, SIG%s. ", whathappened, subcode, sigstr);
-
-		free(sigstr);
-		
-		/* Ignore SIGINT and SIGTRAP. */
-		if(subcode == SIGINT || subcode == SIGTRAP)
-			clear_signal(thread);
-	}
-	else
-		asprintf(&whathappened, "%s%d, %s. ", whathappened, exception, get_exception_name(exception));
-
-	asprintf(&whathappened, "%s%#llx in debuggee.\n", whathappened, debuggee->thread_state.__pc);
-
-	printf("%s", whathappened);
-
-	free(whathappened);
-	free(tname);
-
-	disassemble_at_location(debuggee->thread_state.__pc, 0x4);
-
-	rl_already_prompted = 0;
-
-	safe_reprompt();
-
-	return KERN_SUCCESS;
+	debuggee->pending_messages--;
 }

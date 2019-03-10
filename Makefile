@@ -12,8 +12,6 @@ OBJECT_FILES = $(SRCDIR)/breakpoint.o \
 	$(SRCDIR)/iosdbg.o \
 	$(SRCDIR)/handlers.o \
 	$(SRCDIR)/linkedlist.o \
-	$(SRCDIR)/mach_excUser.o \
-	$(SRCDIR)/mach_excServer.o \
 	$(SRCDIR)/machthread.o \
 	$(SRCDIR)/memutils.o \
 	$(SRCDIR)/printutils.o \

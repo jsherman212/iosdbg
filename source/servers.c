@@ -8,43 +8,31 @@
 
 #include "convvar.h"
 #include "dbgcmd.h"
-#include "defs.h"
+#include "exception.h"		/* Includes defs.h */
 #include "printutils.h"
 #include "trace.h"
 
-/* Both unused. */
-kern_return_t catch_mach_exception_raise_state(mach_port_t exception_port, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
-kern_return_t catch_mach_exception_raise_state_identity(mach_port_t exception_port, mach_port_t thread, mach_port_t task, exception_type_t exception, exception_data_t code, mach_msg_type_number_t code_count, int *flavor, thread_state_t in_state, mach_msg_type_number_t in_state_count, thread_state_t out_state, mach_msg_type_number_t *out_state_count){return KERN_FAILURE;}
-
-extern boolean_t mach_exc_server(mach_msg_header_t *InHeadP, mach_msg_header_t *OutHeadP);
 void *exception_server(void *arg){
+	struct msg {
+		mach_msg_header_t hdr;
+		char data[256];
+	};
+
+	struct msg req, rpl;
+
 	while(1){
-		if(debuggee->pid == -1)
-			pthread_exit(NULL);
+		mach_msg(&req.hdr,
+				MACH_RCV_MSG,
+				0,
+				sizeof(req),
+				debuggee->exception_port,
+				MACH_MSG_TIMEOUT_NONE,
+				MACH_PORT_NULL);
 
-		struct msg req;
-		kern_return_t err = mach_msg(&req.head, MACH_RCV_MSG, 0, sizeof(req), debuggee->exception_port, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+		debuggee->pending_messages++;
+		debuggee->exc_request = (Request *)&req;
 
-		if(err)
-			printf("exception_server: %s\n", mach_error_string(err));
-
-		boolean_t parsed = mach_exc_server(&req.head, &debuggee->exc_rpl.head);
-
-		if(!parsed)
-			printf("exception_server: our request could not be parsed\n");
-
-		/* If a fatal UNIX signal is encountered and we reply
-		 * to this exception right away, the debuggee will be killed
-		 * before the user can inspect it.
-		 * Solution: if we had this kind of exception, reply to it
-		 * when the user wants to continue.
-		 */
-		if(!debuggee->soft_signal_exc){
-			err = mach_msg(&debuggee->exc_rpl.head, MACH_SEND_MSG, debuggee->exc_rpl.head.msgh_size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
-
-			if(err)
-				printf("exception_server: %s\n", mach_error_string(err));
-		}
+		handle_exception((Request *)&req);
 	}
 
 	return NULL;
@@ -81,7 +69,8 @@ void *death_server(void *arg){
 
 		if(WIFEXITED(status)){
 			int wexitstatus = WEXITSTATUS(status);
-			printf("\n[%s (%d) exited normally (status = 0x%8.8x)]\n", debuggee->debuggee_name, debuggee->pid, wexitstatus);
+			printf("\n[%s (%d) exited normally (status = 0x%8.8x)]\n", 
+					debuggee->debuggee_name, debuggee->pid, wexitstatus);
 
 			char *wexitstatusstr;
 			asprintf(&wexitstatusstr, "%#x", wexitstatus);
@@ -95,7 +84,8 @@ void *death_server(void *arg){
 		}
 		else if(WIFSIGNALED(status)){
 			int wtermsig = WTERMSIG(status);
-			printf("\n[%s (%d) terminated due to signal %d]\n", debuggee->debuggee_name, debuggee->pid, wtermsig);
+			printf("\n[%s (%d) terminated due to signal %d]\n", 
+					debuggee->debuggee_name, debuggee->pid, wtermsig);
 
 			char *wtermsigstr;
 			asprintf(&wtermsigstr, "%#x", wtermsig);

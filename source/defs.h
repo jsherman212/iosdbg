@@ -24,10 +24,25 @@ struct original_exception_ports_t {
 	thread_state_flavor_t flavors[MAX_EXCEPTION_PORTS];
 };
 
-struct msg {
-	mach_msg_header_t head;
-	char data[256];
-};
+typedef struct {
+	mach_msg_header_t Head;
+	/* start of the kernel processed data */
+	mach_msg_body_t msgh_body;
+	mach_msg_port_descriptor_t thread;
+	mach_msg_port_descriptor_t task;
+	/* end of the kernel processed data */
+	NDR_record_t NDR;
+	exception_type_t exception;
+	mach_msg_type_number_t codeCnt;
+	int code[2];
+	mach_msg_trailer_t trailer;
+} Request;
+
+typedef struct {
+	mach_msg_header_t Head;
+	NDR_record_t NDR;
+	kern_return_t RetCode;
+} Reply;
 
 struct debuggee {
 	// Task port to the debuggee.
@@ -35,6 +50,12 @@ struct debuggee {
 
 	// PID of the debuggee.
 	pid_t pid;
+
+	/* Number of pending messages received at the debuggee's exception port. */
+	int pending_messages;
+
+	/* Exception request from exception_server. TODO should be a linked list */
+	Request *exc_request;
 
 	/* If this variable is non-zero, tracing is not supported. */
 	int tracing_disabled;
@@ -95,10 +116,7 @@ struct debuggee {
 
 	/* Neon state for the debuggee. */
 	arm_neon_state64_t neon_state;
-
-	/* The reply message for exceptions. */
-	struct msg exc_rpl;
-
+	
 	// Count of threads for the debuggee.
 	mach_msg_type_number_t thread_count;
 

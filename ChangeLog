@@ -1,3 +1,7 @@
+3-9-19
+- get rid of mach_catch_exception_raise, rewrite exception handling logic
+- fix potential NULL pointer dereferences
+
 3-6-19
 - re-organize code, get rid of dbgutils.c/dbgutils.h
 

@@ -10,7 +10,7 @@
 #include "convvar.h"
 #include "dbgcmd.h"
 #include "dbgutils.h"
-#include "defs.h"
+#include "exception.h"		/* Includes defs.h */
 #include "expr.h"
 #include "linkedlist.h"
 #include "machthread.h"
@@ -109,7 +109,7 @@ long strtol_err(char *str, char **error){
 	char *endptr = NULL;
 	long result = strtol(str, &endptr, 0);
 
-	if(*endptr && *endptr != '\0'){
+	if(endptr && *endptr != '\0'){
 		asprintf(error, "invalid number '%s'", str);
 		return -1;
 	}
@@ -126,7 +126,7 @@ double strtod_err(char *str, char **error){
 	char *endptr = NULL;
 	double result = strtod(str, &endptr);
 
-	if(*endptr && *endptr != '\0'){
+	if(endptr && *endptr != '\0'){
 		asprintf(error, "invalid number '%s'", str);
 		return -1.0;
 	}
@@ -412,14 +412,8 @@ cmd_error_t cmdfunc_continue(char *args, int do_not_print_msg, char **error){
 	if(!debuggee->interrupted)
 		return CMD_FAILURE;
 	
-	if(debuggee->soft_signal_exc){
-		kern_return_t err = mach_msg(&debuggee->exc_rpl.head, MACH_SEND_MSG, debuggee->exc_rpl.head.msgh_size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
-
-		if(err)
-			printf("Replying to the Unix soft signal failed: %s\n", mach_error_string(err));
-
-		debuggee->soft_signal_exc = 0;
-	}
+	if(debuggee->pending_messages > 0)
+		reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
 
 	kern_return_t err = debuggee->resume();
 
@@ -615,7 +609,7 @@ cmd_error_t cmdfunc_detach(char *args, int from_death, char **error){
 
 		free(pidstr);
 	}
-	
+
 	debuggee->restore_exception_ports();
 
 	debuggee->interrupted = 0;
@@ -726,7 +720,6 @@ cmd_error_t cmdfunc_examine(char *args, int arg1, char **error){
 		return CMD_FAILURE;
 	}
 
-	//*error = NULL;
 	long location = parse_expr(tok, error);
 
 	if(*error)
@@ -1340,19 +1333,19 @@ cmd_error_t cmdfunc_show(char *args, int arg1, char **error){
 cmd_error_t cmdfunc_stepi(char *args, int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
-
-	if(!debuggee->interrupted){
-		asprintf(error, "debuggee must be suspended");
-		return CMD_FAILURE;
-	}
+	
+	if(debuggee->pending_messages > 0)
+		reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
 
 	debuggee->get_debug_state();
 	debuggee->debug_state.__mdscr_el1 |= 1;
 	debuggee->set_debug_state();
 	
 	debuggee->want_single_step = 1;
+	debuggee->is_single_stepping = 1;
 
-	cmdfunc_continue(NULL, 1, error);
+	debuggee->resume();
+	debuggee->interrupted = 0;
 
 	if(*error)
 		return CMD_FAILURE;
@@ -1469,6 +1462,9 @@ cmd_error_t cmdfunc_watch(char *args, int arg1, char **error){
 		return CMD_FAILURE;
 	}
 	
+	if(debuggee->pid == -1)
+		return CMD_FAILURE;
+
 	char *tok = strtok(args, " ");
 
 	if(!tok){
