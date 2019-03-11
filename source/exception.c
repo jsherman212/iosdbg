@@ -64,12 +64,6 @@ void set_single_step(int enabled){
 	debuggee->set_debug_state();
 }
 
-void describe_hit_breakpoint(unsigned long long tid, char *tname, 
-		struct breakpoint *hit){
-	printf("\n * Thread %#llx: '%s': breakpoint %d at %#lx hit %d time(s).\n", 
-			tid, tname, hit->id, hit->location, hit->hit_count);
-}
-
 void describe_hit_watchpoint(void *prev_data, void *cur_data, 
 		unsigned int sz){
 	long long old_val = memutils_buffer_to_number(prev_data, sz);
@@ -167,18 +161,25 @@ void handle_hit_watchpoint(void){
 }
 
 void handle_single_step(void){
+	/* Re-enable all the breakpoints we disabled while performing the
+	 * single step. This function is called when the CPU raises the software
+	 * step exception after the single step occurs.
+	 */
+	breakpoint_enable_all();
+
 	if(JUST_HIT_BREAKPOINT){
 		if(JUST_HIT_SW_BREAKPOINT){
 			breakpoint_enable(debuggee->last_hit_bkpt_ID);
 			JUST_HIT_SW_BREAKPOINT = 0;
 		}
+
 		/* If we caused a software step exception to get past a breakpoint,
-		 * just continue as normal. Otherwise, if we're actually
-		 * single stepping and we step over a breakpoint, print the disassembly.
+		 * just continue as normal. Otherwise, if we manually single step
+		 * right after a breakpoint hit, just print the disassembly.
 		 */
 		if(!debuggee->is_single_stepping){
 			char *e;
-			cmdfunc_continue(NULL, 0, &e);
+			cmdfunc_continue(NULL, 1, &e);
 		}
 		else
 			disassemble_at_location(debuggee->thread_state.__pc, 4);
@@ -194,6 +195,7 @@ void handle_single_step(void){
 
 	disassemble_at_location(debuggee->thread_state.__pc, 4);
 	set_single_step(0);
+
 	debuggee->is_single_stepping = 0;
 }
 
@@ -219,6 +221,8 @@ void handle_hit_breakpoint(long subcode, char **desc){
 }
 
 void handle_exception(Request *request){
+	rl_already_prompted = 0;
+
 	if(!request){
 		printf("NULL request (shouldn't happen)\n");
 		return;
@@ -244,7 +248,7 @@ void handle_exception(Request *request){
 	/* Give focus to whatever caused this exception. */
 	struct machthread *focused = machthread_getfocused();
 
-	if(!focused || (focused && focused->port != thread)){
+	if(!focused || focused->port != thread){
 		printf("\n[Switching to thread %#llx]\n", 
 				(unsigned long long)get_tid_from_thread_port(thread));
 		machthread_setfocused(thread);
@@ -262,7 +266,6 @@ void handle_exception(Request *request){
 	 * 		- hardware breakpoint
 	 * 		- hardware watchpoint
 	 * 		- software breakpoint
-	 * 		- hardware single step
 	 * 		- software single step exception
 	 * 		- Unix soft signal
 	 */
@@ -282,11 +285,7 @@ void handle_exception(Request *request){
 		free(tname);
 		free(desc);
 
-		rl_already_prompted = 0;
-
 		safe_reprompt();
-
-		return;
 	}
 	/* A hardware watchpoint hit. However, we need to single step in 
 	 * order for the CPU to execute the instruction at this address
@@ -302,11 +301,9 @@ void handle_exception(Request *request){
 		
 		/* Continue execution so the software step exception occurs. */
 		char *e;
-		cmdfunc_continue(NULL, 0, &e);
+		cmdfunc_continue(NULL, 1, &e);
 
 		free(tname);
-
-		return;
 	}
 	/* A hardware/software breakpoint hit, or the software step
 	 * exception has occured.
@@ -324,25 +321,31 @@ void handle_exception(Request *request){
 
 				return;
 			}
-			/* If we single step over where a hardware breakpoint is set,
+			/* If we single step over where a breakpoint is set,
 			 * we should report it and count it as hit.
 			 */ 
 			struct breakpoint *hit = find_bp_with_address(
 					debuggee->thread_state.__pc);
 
-			if(hit && hit->hw){
+			if(debuggee->is_single_stepping && hit){
 				breakpoint_hit(hit);
-				describe_hit_breakpoint(tid, tname, hit);
-			}
 
+				asprintf(&desc, "%s: '%s': breakpoint %d at %#lx hit %d time(s).\n",
+						desc, tname, hit->id, hit->location, hit->hit_count);
+
+				printf("%s", desc);
+			}
+	
 			handle_single_step();
 
 			safe_reprompt();
 
+			free(desc);
 			free(tname);
 
 			return;
 		}
+		
 		JUST_HIT_BREAKPOINT = 1;
 
 		asprintf(&desc, "%s: '%s':", desc, tname);
@@ -356,10 +359,8 @@ void handle_exception(Request *request){
 		free(tname);
 
 		set_single_step(1);
-		
+			
 		safe_reprompt();
-
-		return;
 	}
 }
 

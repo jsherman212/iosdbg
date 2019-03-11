@@ -59,6 +59,8 @@ void breakpoint_hit(struct breakpoint *);
 bp_error_t breakpoint_delete(int);
 bp_error_t breakpoint_disable(int);
 bp_error_t breakpoint_enable(int);
+void breakpoint_disable_all(void);
+void breakpoint_enable_all(void);
 int breakpoint_disabled(int);
 void breakpoint_delete_all(void);
 struct breakpoint *find_bp_with_address(unsigned long);

@@ -1,3 +1,10 @@
+3-10-19
+- no more complicated logic when handling the case of single stepping over a
+breakpoint
+- fix double "Process %d resuming" prints
+- clean up the debuggee struct
+- no more malloc(512) nonsense in procutils.c
+
 3-9-19
 - get rid of mach_catch_exception_raise, rewrite exception handling logic
 - fix potential NULL pointer dereferences

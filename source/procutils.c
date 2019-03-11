@@ -40,8 +40,7 @@ pid_t pid_of_program(char *progname, char **error){
 
 	int num_procs = length / sizeof(struct kinfo_proc);
 	int matches = 0;
-	char *matchstr = malloc(512);
-	memset(matchstr, '\0', 512);
+	char *matchstr = NULL;
 	pid_t final_pid = -1;
 	int maxnamelen = MAXCOMLEN + 1;
 
@@ -57,7 +56,7 @@ pid_t pid_of_program(char *progname, char **error){
 
 			if(strncmp(pname, progname, charstocompare) == 0 && p_stat != SZOMB){
 				matches++;
-				sprintf(matchstr, "%s PID %d: %s\n", matchstr, pid, pname);
+				asprintf(&matchstr, "%s PID %d: %s\n", matchstr, pid, pname);
 				final_pid = pid;
 			}
 		}
@@ -67,11 +66,15 @@ pid_t pid_of_program(char *progname, char **error){
 	
 	if(matches > 1){
 		asprintf(error, "multiple instances of '%s': \n%s", progname, matchstr);
-		free(matchstr);
+
+		if(matchstr)
+			free(matchstr);
+
 		return -1;
 	}
 
-	free(matchstr);
+	if(matchstr)
+		free(matchstr);
 
 	if(matches == 0){
 		asprintf(error, "could not find a process named '%s'", progname);

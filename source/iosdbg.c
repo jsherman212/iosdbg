@@ -79,7 +79,7 @@ void install_handlers(void){
 	debuggee->set_neon_state = &set_neon_state;
 }
 
-int reset_colors(void){
+int reset_colors_hook(void){
 	printf("\e[0m");
 
 	return 0;
@@ -92,13 +92,13 @@ void initialize_readline(void){
 	/* Our prompt is colored, so we need to reset colors
 	 * when Readline is ready for input.
 	 */
-	rl_pre_input_hook = &reset_colors;
+	rl_pre_input_hook = &reset_colors_hook;
 	
 	/* rl_event_hook is used to reset colors on SIGINT and
 	 * enter button press to repeat the previous command.
 	 */	
-	rl_event_hook = &reset_colors;
-	rl_input_available_hook = &reset_colors;
+	rl_event_hook = &reset_colors_hook;
+	rl_input_available_hook = &reset_colors_hook;
 }
 
 void get_code_and_event_from_line(char *line, char **code, char **event, char **freethis){
@@ -277,15 +277,10 @@ void setup_initial_debuggee(void){
 	debuggee->num_watchpoints = 0;
 
 	debuggee->last_hit_bkpt_ID = 0;
-	debuggee->last_hit_bkpt_hw = 0;
 
 	debuggee->is_single_stepping = 0;
-	debuggee->want_single_step = 0;
 
 	debuggee->want_detach = 0;
-
-	debuggee->last_unix_signal = -1;
-	debuggee->soft_signal_exc = 0;
 
 	debuggee->tracing_disabled = 0;
 	debuggee->currently_tracing = 0;
@@ -313,31 +308,7 @@ void setup_initial_debuggee(void){
 	set_convvar("$NO_ASLR_OVERRIDE", "", &error);
 }
 
-int main(int argc, char **argv, const char **envp){
-	if(getuid() && geteuid()){
-		printf("iosdbg requires root to operate correctly\n");
-		return 1;
-	}	
-
-	setup_initial_debuggee();
-	install_handlers();
-	initialize_readline();
-	
-	bsd_syscalls = NULL;
-	mach_traps = NULL;
-	mach_messages = NULL;
-
-	bsd_syscalls_arr_len = 0;
-	mach_traps_arr_len = 0;
-	mach_messages_arr_len = 0;
-
-	int err = setup_tracing();
-
-	if(err)
-		printf("Could not setup for future tracing. Tracing is disabled.\n");
-	
-	signal(SIGINT, interrupt);
-
+void runmainloop(void){
 	char *line = NULL;
 	char *prevline = NULL;
 	
@@ -374,8 +345,7 @@ int main(int argc, char **argv, const char **envp){
 		}
 
 		/* Make a copy of line in case the command function modifies it. */
-		char *linecopy = malloc(strlen(line) + 1);
-		strcpy(linecopy, line);
+		char *linecopy = strdup(line);
 		
 		char *error = NULL;
 		int result = execute_command(line, &error);
@@ -391,6 +361,34 @@ int main(int argc, char **argv, const char **envp){
 		free(linecopy);
 		free(line);
 	}
+}
+
+int main(int argc, char **argv, const char **envp){
+	if(getuid() && geteuid()){
+		printf("iosdbg requires root to operate correctly\n");
+		return 1;
+	}	
+
+	setup_initial_debuggee();
+	install_handlers();
+	initialize_readline();
+	
+	bsd_syscalls = NULL;
+	mach_traps = NULL;
+	mach_messages = NULL;
+
+	bsd_syscalls_arr_len = 0;
+	mach_traps_arr_len = 0;
+	mach_messages_arr_len = 0;
+
+	int err = setup_tracing();
+
+	if(err)
+		printf("Could not setup for future tracing. Tracing is disabled.\n");
+	
+	signal(SIGINT, interrupt);
+
+	runmainloop();
 
 	return 0;
 }

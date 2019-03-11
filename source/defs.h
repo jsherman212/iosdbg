@@ -69,9 +69,6 @@ struct debuggee {
 	// Keeps track of the ID of the last breakpoint that hit.
 	int last_hit_bkpt_ID;
 
-	/* Keeps track of the type of the last breakpoint hit. */
-	int last_hit_bkpt_hw;
-
 	/* Keeps track of the location of the data in the last watchpoint hit. */
 	unsigned long last_hit_wp_loc;
 
@@ -96,18 +93,9 @@ struct debuggee {
 	/* Whether or not the debuggee is single stepping. */
 	int is_single_stepping;
 
-	/* Whether or not the user wants to single step. */
-	int want_single_step;
-
 	/* Whether or not the debuggee wants to detach. */
 	int want_detach;
 
-	/* What the last UNIX signal caught was. */
-	int last_unix_signal;
-
-	/* If we enountered a soft signal. */
-	int soft_signal_exc;
-	
 	// Thread state for the debuggee.
 	arm_thread_state64_t thread_state;
 

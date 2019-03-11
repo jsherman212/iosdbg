@@ -32,10 +32,8 @@ void *exception_server(void *arg){
 		debuggee->pending_messages++;
 		debuggee->exc_request = (Request *)&req;
 
-		handle_exception((Request *)&req);
+		handle_exception(debuggee->exc_request);
 	}
-
-	return NULL;
 }
 
 void *death_server(void *arg){

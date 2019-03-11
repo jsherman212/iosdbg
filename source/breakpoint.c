@@ -45,7 +45,8 @@ int find_ready_bp_reg(void){
 	return -1;
 }
 
-struct breakpoint *breakpoint_new(unsigned long location, int temporary, int single_step, char **error){
+struct breakpoint *breakpoint_new(unsigned long location, int temporary, 
+		int single_step, char **error){
 	kern_return_t err = memutils_valid_location(location);
 
 	if(err){
@@ -272,6 +273,34 @@ bp_error_t breakpoint_enable(int breakpoint_id){
 	}
 
 	return BP_FAILURE;	
+}
+
+void breakpoint_disable_all(void){
+	if(!debuggee->breakpoints->front)
+		return;
+
+	struct node_t *current = debuggee->breakpoints->front;
+
+	while(current){
+		struct breakpoint *bp = current->data;
+		bp_set_state_internal(bp, BP_DISABLED);
+
+		current = current->next;
+	}
+}
+
+void breakpoint_enable_all(void){
+	if(!debuggee->breakpoints->front)
+		return;
+
+	struct node_t *current = debuggee->breakpoints->front;
+
+	while(current){
+		struct breakpoint *bp = current->data;
+		bp_set_state_internal(bp, BP_ENABLED);
+
+		current = current->next;
+	}
 }
 
 int breakpoint_disabled(int breakpoint_id){

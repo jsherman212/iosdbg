@@ -162,7 +162,8 @@ cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
 		if(strstr(args, "--waitfor"))
 			target = args + strlen("--waitfor ");
 
-		char ans = answer("Detach from %s and reattach to %s? (y/n) ", debuggee->debuggee_name, !target ? args : target);
+		char ans = answer("Detach from %s and reattach to %s? (y/n) ", 
+				debuggee->debuggee_name, !target ? args : target);
 
 		if(ans == 'n')
 			return CMD_SUCCESS;
@@ -171,9 +172,8 @@ cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
 		 * and call this function again.
 		 */		
 		cmdfunc_detach(NULL, 0, error);
-		cmdfunc_attach(args, 0, error);
 
-		return CMD_SUCCESS;
+		return cmdfunc_attach(args, 0, error);
 	}
 
 	pid_t pid;
@@ -250,7 +250,8 @@ cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
 
 	if(err){
 		asprintf(error, "couldn't get task port for %s (pid: %d): %s\n"
-				"Did you forget to sign iosdbg with entitlements?", args, pid, mach_error_string(err));
+				"Did you forget to sign iosdbg with entitlements?", args, pid, 
+				mach_error_string(err));
 		return CMD_FAILURE;
 	}
 
@@ -269,15 +270,12 @@ cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
 			return CMD_FAILURE;
 		}
 
-		debuggee->debuggee_name = malloc(strlen(name) + 1);
-		strcpy(debuggee->debuggee_name, name);
+		debuggee->debuggee_name = strdup(name);
 
 		free(name);
 	}
-	else{
-		debuggee->debuggee_name = malloc(strlen(target) + 1);
-		strcpy(debuggee->debuggee_name, target);
-	}
+	else
+		debuggee->debuggee_name = strdup(target);
 
 	debuggee->breakpoints = linkedlist_new();
 	debuggee->watchpoints = linkedlist_new();
@@ -300,7 +298,8 @@ cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
 
 	debuggee->want_detach = 0;
 
-	printf("Attached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
+	printf("Attached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, 
+			debuggee->pid, debuggee->aslr_slide);
 
 	/* ptrace.h is unavailable on iOS. */
 	void *h = dlopen(0, RTLD_GLOBAL | RTLD_NOW);
@@ -347,7 +346,9 @@ cmd_error_t cmdfunc_backtrace(char *args, int arg1, char **error){
 	};
 
 	struct frame_t *current_frame = malloc(sizeof(struct frame_t));
-	kern_return_t err = memutils_read_memory_at_location((void *)debuggee->thread_state.__fp, current_frame, sizeof(struct frame_t));
+	kern_return_t err = memutils_read_memory_at_location(
+			(void *)debuggee->thread_state.__fp, current_frame, 
+			sizeof(struct frame_t));
 	
 	if(err){
 		asprintf(error, "backtrace failed: %s", mach_error_string(err));
@@ -355,9 +356,11 @@ cmd_error_t cmdfunc_backtrace(char *args, int arg1, char **error){
 	}
 
 	while(current_frame->next){
-		printf("    frame #%d: 0x%16.16llx\n", frame_counter, current_frame->frame);
+		printf("    frame #%d: 0x%16.16llx\n", frame_counter, 
+				current_frame->frame);
 
-		memutils_read_memory_at_location((void *)current_frame->next, (void *)current_frame, sizeof(struct frame_t));	
+		memutils_read_memory_at_location((void *)current_frame->next, 
+				(void *)current_frame, sizeof(struct frame_t));	
 		frame_counter++;
 	}
 
@@ -557,8 +560,6 @@ cmd_error_t cmdfunc_detach(char *args, int from_death, char **error){
 	void_convvar("$_");
 	void_convvar("$__");
 
-	// delete all breakpoints on detach so the original instruction is written back to prevent a crash
-	// TODO: instead of deleting them, maybe disable all of them and if we are attached to the same thing again re-enable them?
 	breakpoint_delete_all();
 	watchpoint_delete_all();
 
@@ -627,7 +628,6 @@ cmd_error_t cmdfunc_detach(char *args, int from_death, char **error){
 	debuggee->num_watchpoints = 0;
 
 	debuggee->last_hit_bkpt_ID = 0;
-	debuggee->last_hit_bkpt_hw = 0;
 	
 	debuggee->last_hit_wp_loc = 0;
 	debuggee->last_hit_wp_PC = 0;
@@ -643,9 +643,6 @@ cmd_error_t cmdfunc_detach(char *args, int from_death, char **error){
 	debuggee->debuggee_name = NULL;
 
 	debuggee->want_detach = 0;
-	
-	debuggee->last_unix_signal = -1;
-	debuggee->soft_signal_exc = 0;
 
 	return CMD_SUCCESS;
 }
@@ -697,7 +694,8 @@ cmd_error_t cmdfunc_disassemble(char *args, int arg1, char **error){
 	kern_return_t err = disassemble_at_location(location, amount);
 
 	if(err){
-		asprintf(error, "could not disassemble from %#lx to %#lx: %s", location, location + amount, mach_error_string(err));
+		asprintf(error, "could not disassemble from %#lx to %#lx: %s", 
+				location, location + amount, mach_error_string(err));
 		return CMD_FAILURE;
 	}
 	
@@ -753,7 +751,8 @@ cmd_error_t cmdfunc_examine(char *args, int arg1, char **error){
 	kern_return_t err = memutils_dump_memory(location, amount);
 
 	if(err){
-		asprintf(error, "could not dump memory from %#lx to %#lx: %s", location, location + amount, mach_error_string(err));
+		asprintf(error, "could not dump memory from %#lx to %#lx: %s", 
+				location, location + amount, mach_error_string(err));
 		return CMD_FAILURE;
 	}
 
@@ -791,7 +790,8 @@ cmd_error_t cmdfunc_kill(char *args, int arg1, char **error){
 	if(!debuggee->debuggee_name)
 		return CMD_FAILURE;
 
-	char ans = answer("Do you really want to kill %s? (y/n) ", debuggee->debuggee_name);
+	char ans = answer("Do you really want to kill %s? (y/n) ", 
+			debuggee->debuggee_name);
 
 	if(ans == 'n')
 		return CMD_SUCCESS;
@@ -902,7 +902,8 @@ cmd_error_t cmdfunc_regsfloat(char *args, int arg1, char **error){
 		}
 
 		int good_reg_num = (reg_num >= 0 && reg_num <= 31);
-		int good_reg_type = ((reg_type == 'q' || reg_type == 'v') || reg_type == 'd' || reg_type == 's');
+		int good_reg_type = ((reg_type == 'q' || reg_type == 'v') 
+				|| reg_type == 'd' || reg_type == 's');
 
 		if(!good_reg_num || !good_reg_type){
 			printf("%8sInvalid register\n", "");
@@ -929,17 +930,20 @@ cmd_error_t cmdfunc_regsfloat(char *args, int arg1, char **error){
 			for(int i=0; i<sizeof(long) - 1; i++)
 				sprintf(regstr, "%s0x%02x ", regstr, *(uint8_t *)(hi_data + i));
 
-			sprintf(regstr, "%s0x%02x}", regstr, *(uint8_t *)(hi_data + (sizeof(long) - 1)));
+			sprintf(regstr, "%s0x%02x}", regstr, 
+					*(uint8_t *)(hi_data + (sizeof(long) - 1)));
 
 			free(hi);
 			free(lo);
 		}
 		/* Doubleword */
 		else if(reg_type == 'd')
-			sprintf(regstr, "d%d = %.15g", reg_num, *(double *)&debuggee->neon_state.__v[reg_num]);
+			sprintf(regstr, "d%d = %.15g", reg_num, 
+					*(double *)&debuggee->neon_state.__v[reg_num]);
 		/* Word */
 		else if(reg_type == 's')
-			sprintf(regstr, "s%d = %g", reg_num, *(float *)&debuggee->neon_state.__v[reg_num]);
+			sprintf(regstr, "s%d = %g", reg_num, 
+					*(float *)&debuggee->neon_state.__v[reg_num]);
 
 		/* Figure out how many bytes the register takes up in the string. */
 		char *space = strchr(regstr, ' ');
@@ -1038,9 +1042,11 @@ cmd_error_t cmdfunc_regsgen(char *args, int arg1, char **error){
 		sprintf(regstr, "%c%d", reg_type, reg_num);
 
 		if(reg_type == 'x')
-			printf("%8s = 0x%16.16llx\n", regstr, (long long)debuggee->thread_state.__x[reg_num]);
+			printf("%8s = 0x%16.16llx\n", regstr, 
+					(long long)debuggee->thread_state.__x[reg_num]);
 		else
-			printf("%8s = 0x%8.8x\n", regstr, (int)debuggee->thread_state.__x[reg_num]);
+			printf("%8s = 0x%8.8x\n", regstr, 
+					(int)debuggee->thread_state.__x[reg_num]);
 
 		free(regstr);
 
@@ -1117,7 +1123,8 @@ cmd_error_t cmdfunc_set(char *args, int arg1, char **error){
 		kern_return_t err = memutils_write_memory_to_location((vm_address_t)location, (vm_offset_t)value);
 
 		if(err){
-			asprintf(error, "could not write to %#lx: %s", location, mach_error_string(err));
+			asprintf(error, "could not write to %#lx: %s", location, 
+					mach_error_string(err));
 			return CMD_FAILURE;
 		}
 
@@ -1234,7 +1241,8 @@ cmd_error_t cmdfunc_set(char *args, int arg1, char **error){
 			}
 			else{
 				if(reg_type == 'q' || reg_type == 'v'){
-					if(value_str[0] != '{' || value_str[strlen(value_str) - 1] != '}'){
+					if(value_str[0] != '{' || 
+							value_str[strlen(value_str) - 1] != '}'){
 						cmdfunc_help("set", 0, error);
 						return CMD_FAILURE;
 					}
@@ -1272,11 +1280,13 @@ cmd_error_t cmdfunc_set(char *args, int arg1, char **error){
 						unsigned int byte = strtol(curbyte, NULL, 0);
 
 						if(i < sizeof(long)){
-							lo_str = realloc(lo_str, strlen(lo_str) + strlen(curbyte) + 3);
+							lo_str = realloc(lo_str, strlen(lo_str) +
+								   	strlen(curbyte) + 3);
 							sprintf(lo_str, "%s%02x", lo_str, byte);
 						}
 						else{
-							hi_str = realloc(hi_str, strlen(hi_str) + strlen(curbyte) + 3);
+							hi_str = realloc(hi_str, strlen(hi_str) + 
+									strlen(curbyte) + 3);
 							sprintf(hi_str, "%s%02x", hi_str, byte);
 						}
 
@@ -1337,12 +1347,19 @@ cmd_error_t cmdfunc_stepi(char *args, int arg1, char **error){
 	if(debuggee->pending_messages > 0)
 		reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
 
+	/* Disable breakpoints when single stepping so we don't have to deal
+	 * with more exceptions being raised. Instead, just check if we're at
+	 * a breakpointed address every time we step.
+	 */
+	breakpoint_disable_all();
+
 	debuggee->get_debug_state();
 	debuggee->debug_state.__mdscr_el1 |= 1;
 	debuggee->set_debug_state();
-	
-	debuggee->want_single_step = 1;
+
 	debuggee->is_single_stepping = 1;
+
+	rl_already_prompted = 1;
 
 	debuggee->resume();
 	debuggee->interrupted = 0;
@@ -1368,7 +1385,9 @@ cmd_error_t cmdfunc_threadlist(char *args, int arg1, char **error){
 	while(current){
 		struct machthread *t = current->data;
 
-		printf("\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", t->focused ? "* " : "", t->ID, t->tid, t->tname, t->thread_state.__pc);
+		printf("\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", 
+				t->focused ? "* " : "", t->ID, t->tid, t->tname, 
+				t->thread_state.__pc);
 		
 		current = current->next;
 	}
@@ -1395,7 +1414,8 @@ cmd_error_t cmdfunc_threadselect(char *args, int arg1, char **error){
 		return CMD_FAILURE;
 
 	if(thread_id < 1 || thread_id > debuggee->thread_count){
-		asprintf(error, "out of bounds, must be in [1, %d]", debuggee->thread_count);
+		asprintf(error, "out of bounds, must be in [1, %d]", 
+				debuggee->thread_count);
 		return CMD_FAILURE;
 	}
 
@@ -1762,7 +1782,8 @@ cmd_error_t execute_command(char *input, char **errstr){
 				/* Chop off the ", " at the end of this string. */
 				possible_cmds[pclen - 2] = '\0';
 				
-				asprintf(errstr, "ambiguous command '%s': %s", input, possible_cmds);
+				asprintf(errstr, "ambiguous command '%s': %s", input, 
+						possible_cmds);
 
 				free(usercmd);
 				free(possible_cmds);
