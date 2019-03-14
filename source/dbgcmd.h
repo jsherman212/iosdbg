@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+#include "argparse.h"
+
 typedef int cmd_error_t;
 
 #define CMD_SUCCESS (cmd_error_t)0
@@ -19,36 +21,36 @@ extern int keep_checking_for_process;
 struct dbg_cmd_t {
 	const char *name;
 	const char *alias;
-	cmd_error_t (*function)(char *, int, char **);
+	cmd_error_t (*function)(struct arguments_t *, int, char **);
 	const char *desc;
 };
 
-cmd_error_t cmdfunc_aslr(char *, int, char **);
-cmd_error_t cmdfunc_attach(char *, int, char **);
-cmd_error_t cmdfunc_backtrace(char *, int, char **);
-cmd_error_t cmdfunc_break(char *, int, char **);
-cmd_error_t cmdfunc_continue(char *, int, char **);
-cmd_error_t cmdfunc_delete(char *, int, char **);
-cmd_error_t cmdfunc_detach(char *, int, char **);
-cmd_error_t cmdfunc_disassemble(char *, int, char **);
-cmd_error_t cmdfunc_examine(char *, int, char **);
-cmd_error_t cmdfunc_help(char *, int, char **);
-cmd_error_t cmdfunc_kill(char *, int, char **);
-cmd_error_t cmdfunc_quit(char *, int, char **);
-cmd_error_t cmdfunc_regsfloat(char *, int, char **);
-cmd_error_t cmdfunc_regsgen(char *, int, char **);
-cmd_error_t cmdfunc_set(char *, int, char **);
-cmd_error_t cmdfunc_show(char *, int, char **);
-cmd_error_t cmdfunc_stepi(char *, int, char **);
-cmd_error_t cmdfunc_threadlist(char *, int, char **);
-cmd_error_t cmdfunc_threadselect(char *, int, char **);
-cmd_error_t cmdfunc_trace(char *, int, char **);
-cmd_error_t cmdfunc_unset(char *, int, char **);
-cmd_error_t cmdfunc_watch(char *, int, char **);
+cmd_error_t cmdfunc_aslr(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_attach(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_backtrace(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_break(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_continue(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_delete(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_detach(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_disassemble(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_examine(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_help(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_kill(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_quit(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_regsfloat(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_regsgen(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_set(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_show(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_stepi(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_threadlist(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_threadselect(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_trace(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_unset(struct arguments_t *, int, char **);
+cmd_error_t cmdfunc_watch(struct arguments_t *, int, char **);
 
 cmd_error_t execute_command(char *, char **);
 
-static struct dbg_cmd_t COMMANDS[] = {
+static const struct dbg_cmd_t COMMANDS[] = {
 	{ "aslr", NULL, cmdfunc_aslr, "Show the ASLR slide." },
 	{ "attach", NULL, cmdfunc_attach, "Attach to a program with its PID or executable name. Syntax: attach <(PID|{--waitfor} progname)>\n\n\tInclude '--waitfor' to wait for the target process to launch." },
 	{ "backtrace", "bt", cmdfunc_backtrace, "Unwind the stack." },

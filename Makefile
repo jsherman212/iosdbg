@@ -4,7 +4,8 @@ CFLAGS=-g -arch arm64 -isysroot $(SDK)
 LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo -fsanitize=address
 SRCDIR=source
 
-OBJECT_FILES = $(SRCDIR)/breakpoint.o \
+OBJECT_FILES = $(SRCDIR)/argparse.o \
+	$(SRCDIR)/breakpoint.o \
 	$(SRCDIR)/convvar.o \
 	$(SRCDIR)/dbgcmd.o \
 	$(SRCDIR)/exception.o \
@@ -16,6 +17,7 @@ OBJECT_FILES = $(SRCDIR)/breakpoint.o \
 	$(SRCDIR)/memutils.o \
 	$(SRCDIR)/printutils.o \
 	$(SRCDIR)/procutils.o \
+	$(SRCDIR)/queue.o \
 	$(SRCDIR)/servers.o \
 	$(SRCDIR)/stack.o \
 	$(SRCDIR)/trace.o \

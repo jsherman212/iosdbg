@@ -8,7 +8,7 @@
 
 #include "breakpoint.h"
 #include "convvar.h"
-#include "dbgcmd.h"
+#include "dbgcmd.h"			/* Includes argparse.h */
 #include "dbgutils.h"
 #include "exception.h"		/* Includes defs.h */
 #include "expr.h"
@@ -84,10 +84,8 @@ pid_t parse_pid(char *pidstr, char **err){
 	return is_number(pidstr) ? strtol(pidstr, NULL, 10) : pid_of_program(pidstr, err);
 }
 
+/*
 int wants_add_aslr(char *str){
-	/* This convenience variable allows the user to tell iosdbg
-	 * to ignore ASLR no matter what.
-	 */
 	char *error;
 	char *no_aslr_override = convvar_strval("$NO_ASLR_OVERRIDE", &error);
 
@@ -99,6 +97,7 @@ int wants_add_aslr(char *str){
 
 	return strnstr(str, "--no-aslr", strlen(str)) == NULL;
 }
+*/
 
 long strtol_err(char *str, char **error){
 	if(!str){
@@ -134,7 +133,27 @@ double strtod_err(char *str, char **error){
 	return result;
 }
 
-cmd_error_t cmdfunc_aslr(char *args, int arg1, char **error){
+cmd_error_t help_internal(char *cmd){
+	int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
+	int cur_cmd_idx = 0;
+
+	while(cur_cmd_idx < num_cmds){
+		struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
+	
+		/* Must not be an ambiguous command. */
+		if(strcmp(cmd->name, cmd) == 0 && cmd->function){
+			printf("\t%s\n", cmd->desc);
+			return CMD_SUCCESS;
+		}
+
+		cur_cmd_idx++;
+	}
+
+	return CMD_FAILURE;
+}
+
+cmd_error_t cmdfunc_aslr(struct arguments_t *args, 
+		int arg1, char **error){
 	if(debuggee->pid == -1){
 		asprintf(error, "not attached to anything");
 		return CMD_FAILURE;
@@ -145,7 +164,8 @@ cmd_error_t cmdfunc_aslr(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_attach(struct arguments_t *args, 
+		int arg1, char **error){
 	if(!args){
 		asprintf(error, "no target");
 		return CMD_FAILURE;
@@ -322,7 +342,8 @@ cmd_error_t cmdfunc_attach(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_backtrace(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_backtrace(struct arguments_t *args, 
+		int arg1, char **error){
 	if(debuggee->pid == -1){
 		asprintf(error, "not attached to anything");
 		return CMD_FAILURE;
@@ -371,7 +392,8 @@ cmd_error_t cmdfunc_backtrace(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_break(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_break(struct arguments_t *args, 
+		int arg1, char **error){
 	if(!args){
 		asprintf(error, "missing argument");
 		cmdfunc_help("break", 0, error);
@@ -408,7 +430,8 @@ cmd_error_t cmdfunc_break(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_continue(char *args, int do_not_print_msg, char **error){
+cmd_error_t cmdfunc_continue(struct arguments_t *args, 
+		int do_not_print_msg, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 	
@@ -439,7 +462,8 @@ cmd_error_t cmdfunc_continue(char *args, int do_not_print_msg, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_delete(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_delete(struct arguments_t *args, 
+		int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 	
@@ -548,7 +572,8 @@ cmd_error_t cmdfunc_delete(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_detach(char *args, int from_death, char **error){
+cmd_error_t cmdfunc_detach(struct arguments_t *args, 
+		int from_death, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -647,7 +672,8 @@ cmd_error_t cmdfunc_detach(char *args, int from_death, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_disassemble(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_disassemble(struct arguments_t *args, 
+		int arg1, char **error){
 	if(!args){
 		cmdfunc_help("disassemble", 0, error);
 		return CMD_FAILURE;
@@ -702,7 +728,8 @@ cmd_error_t cmdfunc_disassemble(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_examine(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_examine(struct arguments_t *args, 
+		int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -759,31 +786,28 @@ cmd_error_t cmdfunc_examine(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_help(char *args, int arg1, char **error){
-	if(!args){
+cmd_error_t cmdfunc_help(struct arguments_t *args, 
+		int arg1, char **error){
+	if(!args)
+		return CMD_FAILURE;
+
+	if(args->num_args == 0){
 		asprintf(error, "need command");
 		return CMD_FAILURE;
 	}
 
-	int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
-	int cur_cmd_idx = 0;
+	char *cmd = argnext(args);
 
-	while(cur_cmd_idx < num_cmds){
-		struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
-	
-		/* Must not be an ambiguous command. */
-		if(strcmp(cmd->name, args) == 0 && cmd->function){
-			printf("\t%s\n", cmd->desc);
-			return CMD_SUCCESS;
-		}
-
-		cur_cmd_idx++;
+	while(cmd){
+		help_internal(cmd);
+		cmd = argnext(args);
 	}
 	
-	return CMD_FAILURE;
+	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_kill(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_kill(struct arguments_t *args, 
+		int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -817,7 +841,8 @@ cmd_error_t cmdfunc_kill(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_quit(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_quit(struct arguments_t *args, 
+		int arg1, char **error){
 	cmdfunc_detach(NULL, 0, error);
 
 	if(*error)
@@ -854,7 +879,8 @@ cmd_error_t cmdfunc_quit(char *args, int arg1, char **error){
 	exit(0);
 }
 
-cmd_error_t cmdfunc_regsfloat(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_regsfloat(struct arguments_t *args, 
+		int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
@@ -961,7 +987,8 @@ cmd_error_t cmdfunc_regsfloat(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_regsgen(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_regsgen(struct arguments_t *args, 
+		int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 	
@@ -1056,7 +1083,8 @@ cmd_error_t cmdfunc_regsgen(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_set(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_set(struct arguments_t *args, 
+		int arg1, char **error){
 	if(!args){
 		cmdfunc_help("set", 0, error);
 		return CMD_FAILURE;
@@ -1120,7 +1148,8 @@ cmd_error_t cmdfunc_set(char *args, int arg1, char **error){
 		
 		free(argcpy);
 
-		kern_return_t err = memutils_write_memory_to_location((vm_address_t)location, (vm_offset_t)value);
+		kern_return_t err = memutils_write_memory_to_location(
+				(vm_address_t)location, (vm_offset_t)value);
 
 		if(err){
 			asprintf(error, "could not write to %#lx: %s", location, 
@@ -1324,7 +1353,8 @@ cmd_error_t cmdfunc_set(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_show(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_show(struct arguments_t *args, 
+		int arg1, char **error){
 	if(!args){
 		show_all_cvars();
 		return CMD_SUCCESS;
@@ -1340,7 +1370,8 @@ cmd_error_t cmdfunc_show(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_stepi(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_stepi(struct arguments_t *args, 
+		int arg1, char **error){
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 	
@@ -1370,7 +1401,8 @@ cmd_error_t cmdfunc_stepi(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_threadlist(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_threadlist(struct arguments_t *args, 
+		int arg1, char **error){
 	if(!debuggee)
 		return CMD_FAILURE;
 
@@ -1395,7 +1427,8 @@ cmd_error_t cmdfunc_threadlist(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_threadselect(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_threadselect(struct arguments_t *args, 
+		int arg1, char **error){
 	if(!args)
 		return CMD_FAILURE;
 	
@@ -1444,7 +1477,8 @@ cmd_error_t cmdfunc_threadselect(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_trace(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_trace(struct arguments_t *args, 
+		int arg1, char **error){
 	if(debuggee->tracing_disabled){
 		asprintf(error, "tracing is not supported on this host");
 		return CMD_FAILURE;
@@ -1460,7 +1494,8 @@ cmd_error_t cmdfunc_trace(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_unset(char *args, int arg1, char **error){
+cmd_error_t cmdfunc_unset(struct arguments_t *args, 
+		int arg1, char **error){
 	if(!args){
 		asprintf(error, "need a convenience variable");
 		return CMD_FAILURE;
@@ -1476,19 +1511,18 @@ cmd_error_t cmdfunc_unset(char *args, int arg1, char **error){
 	return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_watch(char *args, int arg1, char **error){
-	if(!args){
-		cmdfunc_help("watch", 0, error);
+cmd_error_t cmdfunc_watch(struct arguments_t *args, 
+		int arg1, char **error){
+	if(!args)
 		return CMD_FAILURE;
-	}
-	
+
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
-	char *tok = strtok(args, " ");
+	char *type = argnext(args);
 
-	if(!tok){
-		cmdfunc_help("watch", 0, error);
+	if(!type){
+		help_internal("watch");
 		return CMD_FAILURE;
 	}
 
@@ -1497,18 +1531,18 @@ cmd_error_t cmdfunc_watch(char *args, int arg1, char **error){
 	/* Check if the user specified a watchpoint type. If they didn't,
 	 * this watchpoint will match on reads and writes.
 	 */
-	if(!strstr(tok, "0x")){
-		if(strcmp(tok, "--r") == 0)
+	if(!strstr(type, "0x")){
+		if(strcmp(type, "--r") == 0)
 			LSC = WP_READ;
-		else if(strcmp(tok, "--w") == 0)
+		else if(strcmp(type, "--w") == 0)
 			LSC = WP_WRITE;
-		else if(strcmp(tok, "--rw") == 0)
+		else if(strcmp(type, "--rw") == 0)
 			LSC = WP_READ_WRITE;
 		else{
-			cmdfunc_help("watch", 0, error);
+			help_internal("watch");
 			return CMD_FAILURE;
 		}
-		
+
 		tok = strtok(NULL, " ");
 
 		if(!tok){
@@ -1578,7 +1612,7 @@ cmd_error_t execute_command(char *input, char **errstr){
 	 * If this is still NULL by the end of this function,
 	 * no suitable command was found.
 	 */
-	cmd_error_t (*finalfunc)(char *, int, char **) = NULL;
+	cmd_error_t (*finalfunc)(struct arguments_t *, int, char **) = NULL;
 
 	int numcmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
 	
@@ -1605,10 +1639,13 @@ cmd_error_t execute_command(char *input, char **errstr){
 			size_t tokenlen = strlen(token);
 
 			if(strlen(input) > tokenlen)
-				args = (char *)input + tokenlen + 1;
-		
-			cmd_error_t result = finalfunc(args, 0, errstr);
+				args = input + tokenlen + 1;
 
+			struct arguments_t *parsed_args = parse_args(args, errstr);
+		
+			cmd_error_t result = finalfunc(parsed_args, 0, errstr);
+
+			free(parsed_args);
 			free(usercmd);
 			
 			return result;
@@ -1842,8 +1879,12 @@ cmd_error_t execute_command(char *input, char **errstr){
 
 	/* If we've found a good command, call its function.
 	 * At this point, anything token contains is an argument. */
-	if(!token)
-		return finalfunc(NULL, 0, errstr);
+	if(!token){
+		// XXX special case
+		struct arguments_t *parsed_args = parse_args(token);
+		return finalfunc(parsed_args, 0, errstr);
+		free(parsed_args);
+	}
 
 	char *args = malloc(init_buf_sz);
 	memset(args, '\0', init_buf_sz);
@@ -1859,8 +1900,12 @@ cmd_error_t execute_command(char *input, char **errstr){
 	/* Remove the trailing space from args. */
 	args[strlen(args) - 1] = '\0';
 
-	cmd_error_t result = finalfunc(args, 0, errstr);
+	struct arguments_t *parsed_args = parse_args(args, errstr);
 
+	cmd_error_t result = finalfunc(parsed_args, 0, errstr);
+
+	free(parsed_args);
+	// XXX double free?
 	free(args);
 	free(usercmd);
 	
