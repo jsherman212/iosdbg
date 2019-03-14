@@ -80,10 +80,6 @@ int is_number(char *str){
 	return 1;
 }
 
-pid_t parse_pid(char *pidstr, char **err){
-	return is_number(pidstr) ? strtol(pidstr, NULL, 10) : pid_of_program(pidstr, err);
-}
-
 /*
 int wants_add_aslr(char *str){
 	char *error;
@@ -116,6 +112,11 @@ long strtol_err(char *str, char **error){
 	return result;
 }
 
+pid_t parse_pid(char *pidstr, char **err){
+	return is_number(pidstr) ? (pid_t)strtol_err(pidstr, err) 
+		: pid_of_program(pidstr, err);
+}
+
 double strtod_err(char *str, char **error){
 	if(!str){
 		asprintf(error, "NULL argument `str`");
@@ -133,7 +134,7 @@ double strtod_err(char *str, char **error){
 	return result;
 }
 
-cmd_error_t help_internal(char *cmd){
+cmd_error_t help_internal(char *cmd_name){
 	int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
 	int cur_cmd_idx = 0;
 
@@ -141,7 +142,7 @@ cmd_error_t help_internal(char *cmd){
 		struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
 	
 		/* Must not be an ambiguous command. */
-		if(strcmp(cmd->name, cmd) == 0 && cmd->function){
+		if(strcmp(cmd->name, cmd_name) == 0 && cmd->function){
 			printf("\t%s\n", cmd->desc);
 			return CMD_SUCCESS;
 		}
@@ -167,23 +168,41 @@ cmd_error_t cmdfunc_aslr(struct arguments_t *args,
 cmd_error_t cmdfunc_attach(struct arguments_t *args, 
 		int arg1, char **error){
 	if(!args){
-		asprintf(error, "no target");
+		asprintf(error, "need target");
 		return CMD_FAILURE;
 	}
 
-	if(strcmp(args, "iosdbg") == 0){
-		asprintf(error, "cannot attach to myself");
+	/* First argument could either be '--waitfor' or what the user
+	 * wants to attach to.
+	 */
+	char *firstarg = argnext(args);
+
+	if(!firstarg){
+		asprintf(error, "need target");
 		return CMD_FAILURE;
 	}
 
+	int waitfor = strcmp(firstarg, "--waitfor") == 0;
+
+	/* Check if the user wants to attach to something else while attached
+	 * to something.
+	 */
 	if(debuggee->pid != -1){
-		char *target = NULL;
+		/* If we got '--waitfor' as the first argument, whatever the user
+		 * wants to attach to will be next.
+		 */
+		char *target = firstarg;
 
-		if(strstr(args, "--waitfor"))
-			target = args + strlen("--waitfor ");
+		if(strcmp(firstarg, "--waitfor") == 0)
+			target = argnext(args);
+
+		if(!target){
+			asprintf(error, "need target");
+			return CMD_FAILURE;
+		}
 
 		char ans = answer("Detach from %s and reattach to %s? (y/n) ", 
-				debuggee->debuggee_name, !target ? args : target);
+				debuggee->debuggee_name, target);
 
 		if(ans == 'n')
 			return CMD_SUCCESS;
@@ -193,63 +212,67 @@ cmd_error_t cmdfunc_attach(struct arguments_t *args,
 		 */		
 		cmdfunc_detach(NULL, 0, error);
 
+		/* Re-construct the argument queue for the next call. */
+		enqueue(args->argqueue, firstarg);
+		enqueue(args->argqueue, target);
+
 		return cmdfunc_attach(args, 0, error);
 	}
 
-	pid_t pid;
-	char *piderr = NULL;
+	char *target = firstarg;
+	
+	if(waitfor)
+		target = argnext(args);
 
-	char *target = NULL;
+	if(!target){
+		asprintf(error, "need target");
+		return CMD_FAILURE;
+	}
 
-	/* Constantly check if this process has been launched. */
-	if(strstr(args, "--waitfor")){
-		target = args + strlen("--waitfor ");
+	if(strcmp(target, "iosdbg") == 0){
+		asprintf(error, "cannot attach to myself");
+		return CMD_FAILURE;
+	}
 
-		if(strlen(target) == 0){
-			asprintf(error, "no target given");
-			cmdfunc_help("attach", 0, error);
-			return CMD_FAILURE;
-		}
+	pid_t target_pid;
 
+	/* Check for '--waitfor', and if we have it,
+	 * constantly check if this process has launched.
+	 */
+	if(waitfor){
 		if(is_number(target)){
 			asprintf(error, "cannot wait for PIDs");
 			return CMD_FAILURE;
 		}
 
-		if(strcmp(target, "iosdbg") == 0){
-			asprintf(error, "cannot attach to myself");
+		printf("Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", 
+				target);
+
+		target_pid = parse_pid(target, error);
+
+		if(*error)
 			return CMD_FAILURE;
-		}
-
-		printf("Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", target);
-
-		pid = parse_pid(target, &piderr);
-
-		if(piderr)
-			free(piderr);
-		
-		piderr = NULL;
 
 		keep_checking_for_process = 1;
 
-		while(pid == -1 && keep_checking_for_process){
-			pid = parse_pid(target, &piderr);
+		while(target_pid == -1 && keep_checking_for_process){
+			pid_t target_pid = parse_pid(target, error);
 
-			if(piderr)
-				free(piderr);
-
-			piderr = NULL;
+			if(*error)
+				return CMD_FAILURE;
 
 			usleep(400);
 		}
 
 		keep_checking_for_process = 0;
 	}
-	else{
-		target = args;
-		pid = parse_pid(args, &piderr);
-	}
-	
+	else
+		target_pid = parse_pid(target, error);
+
+	if(*error)
+		return CMD_FAILURE;
+
+	/*
 	if(pid == -1){
 		if(piderr){
 			asprintf(error, "%s", piderr);
@@ -259,23 +282,24 @@ cmd_error_t cmdfunc_attach(struct arguments_t *args,
 			asprintf(error, "PID not found");
 
 		return CMD_FAILURE;
-	}
+	}*/
 
-	if(pid == 0){
+	if(target_pid == 0){
 		asprintf(error, "no kernel debugging");
 		return CMD_FAILURE;
 	}
 
-	kern_return_t err = task_for_pid(mach_task_self(), pid, &debuggee->task);
+	kern_return_t err = task_for_pid(mach_task_self(), 
+			target_pid, &debuggee->task);
 
 	if(err){
 		asprintf(error, "couldn't get task port for %s (pid: %d): %s\n"
-				"Did you forget to sign iosdbg with entitlements?", args, pid, 
-				mach_error_string(err));
+				"Did you forget to sign iosdbg with entitlements?", 
+				target, target_pid, mach_error_string(err));
 		return CMD_FAILURE;
 	}
 
-	debuggee->pid = pid;
+	debuggee->pid = target_pid;
 	debuggee->aslr_slide = debuggee->find_slide();
 	
 	if(is_number(target)){
@@ -284,11 +308,8 @@ cmd_error_t cmdfunc_attach(struct arguments_t *args,
 		if(*error)
 			return CMD_FAILURE;
 
-		if(!name){
-			asprintf(error, "could not get the debuggee's name");
-			cmdfunc_detach(NULL, 0, error);
+		if(!name)
 			return CMD_FAILURE;
-		}
 
 		debuggee->debuggee_name = strdup(name);
 
@@ -318,8 +339,8 @@ cmd_error_t cmdfunc_attach(struct arguments_t *args,
 
 	debuggee->want_detach = 0;
 
-	printf("Attached to %s (pid: %d), slide: %#llx.\n", debuggee->debuggee_name, 
-			debuggee->pid, debuggee->aslr_slide);
+	printf("Attached to %s (pid: %d), slide: %#llx.\n",
+			debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
 	/* ptrace.h is unavailable on iOS. */
 	void *h = dlopen(0, RTLD_GLOBAL | RTLD_NOW);
@@ -377,7 +398,7 @@ cmd_error_t cmdfunc_backtrace(struct arguments_t *args,
 	}
 
 	while(current_frame->next){
-		printf("    frame #%d: 0x%16.16llx\n", frame_counter, 
+		printf("\tframe #%d: 0x%16.16llx\n", frame_counter, 
 				current_frame->frame);
 
 		memutils_read_memory_at_location((void *)current_frame->next, 
@@ -394,40 +415,43 @@ cmd_error_t cmdfunc_backtrace(struct arguments_t *args,
 
 cmd_error_t cmdfunc_break(struct arguments_t *args, 
 		int arg1, char **error){
-	if(!args){
-		asprintf(error, "missing argument");
-		cmdfunc_help("break", 0, error);
-		return CMD_FAILURE;
-	}
-
 	if(debuggee->pid == -1){
 		asprintf(error, "not attached to anything");
 		return CMD_FAILURE;
 	}
 
-	char *tok = strtok(args, " ");	
+	if(!args){
+		help_internal("break");
+		return CMD_FAILURE;
+	}
 
-	long location = parse_expr(tok, error);
+	char *location_str = argnext(args);
+	//char *tok = strtok(args, " ");	
+	
+	if(!location_str){
+		asprintf(error, "need location");
+		return CMD_FAILURE;
+	}
+
+	long location = parse_expr(location_str, error);
 
 	if(*error){
 		asprintf(error, "expression evaluation failed: %s", *error);
 		return CMD_FAILURE;
 	}
 
-	/* Check for --no-aslr. */
-	tok = strtok(NULL, " ");
-	
-	int add_aslr = wants_add_aslr(tok);
-
-	if(add_aslr)
+	if(args->add_aslr)
 		location += debuggee->aslr_slide;
-	
+
+	return breakpoint_at_address(location, BP_NO_TEMP, BP_NO_SS, error);	
+	/*
 	bp_error_t result = breakpoint_at_address(location, BP_NO_TEMP, BP_NO_SS, error);
 
 	if(result != BP_SUCCESS)
 		return CMD_FAILURE;
 
 	return CMD_SUCCESS;
+	*/
 }
 
 cmd_error_t cmdfunc_continue(struct arguments_t *args, 
@@ -468,50 +492,46 @@ cmd_error_t cmdfunc_delete(struct arguments_t *args,
 		return CMD_FAILURE;
 	
 	if(!args){
-		cmdfunc_help("delete", 0, error);
+		help_internal("delete");
 		return CMD_FAILURE;
 	}
 
-	char *tok = strtok(args, " ");
-	
-	if(!tok){
-		cmdfunc_help("delete", 0, error);
+	char *type = argnext(args);
+
+	if(!type){
+		asprintf(error, "need type");
 		return CMD_FAILURE;
 	}
-
-	char *type = strdup(tok);
 
 	if(strcmp(type, "b") != 0 && strcmp(type, "w") != 0){
-		cmdfunc_help("delete", 0, error);
-		free(type);
+		asprintf(error, "unknown type '%s'", type);
 		return CMD_FAILURE;
 	}
 
 	if(strcmp(type, "b") == 0 && debuggee->num_breakpoints == 0){
 		asprintf(error, "no breakpoints to delete");
-		free(type);
 		return CMD_FAILURE;
 	}
 
 	if(strcmp(type, "w") == 0 && debuggee->num_watchpoints == 0){
 		asprintf(error, "no watchpoints to delete");
-		free(type);
 		return CMD_FAILURE;
 	}
 	
-	tok = strtok(NULL, " ");
+	char *delete_id_str = argnext(args);
+	//tok = strtok(NULL, " ");
 
 	/* If there's nothing after type, give the user
 	 * an option to delete all.
 	 */
-	if(!tok){
-		const char *target = strcmp(type, "b") == 0 ? "breakpoints" : "watchpoints";
+	if(!delete_id_str){
+		const char *target = strcmp(type, "b") == 0 ? 
+			"breakpoints" : "watchpoints";
 		
 		char ans = answer("Delete all %s? (y/n) ", target);
 
 		if(ans == 'n'){
 			printf("Nothing deleted.\n");
-			free(type);
 			return CMD_SUCCESS;
 		}
 
@@ -528,44 +548,37 @@ cmd_error_t cmdfunc_delete(struct arguments_t *args,
 
 		printf("All %s removed. (%d %s)\n", target, num_deleted, target);
 
-		free(type);
-
 		return CMD_SUCCESS;
 	}
 
-	int id = (int)strtol_err(tok, error);
+	int delete_id = (int)strtol_err(delete_id_str, error);
 
-	if(*error){
-		free(type);
+	if(*error)
 		return CMD_FAILURE;
-	}
 
 	if(strcmp(type, "b") == 0){
-		free(type);
-
-		bp_error_t err = breakpoint_delete(id);
+		bp_error_t err = breakpoint_delete(delete_id);
 
 		if(err == BP_FAILURE){
-			asprintf(error, "couldn't delete breakpoint %d", id);
+			asprintf(error, "couldn't delete breakpoint %d", delete_id);
 			return CMD_FAILURE;
 		}
 
-		printf("Breakpoint %d deleted\n", id);
+		printf("Breakpoint %d deleted\n", delete_id);
 	}
 	else if(strcmp(type, "w") == 0){
-		free(type);
-		
-		wp_error_t err = watchpoint_delete(id);
+		wp_error_t err = watchpoint_delete(delete_id);
 
 		if(err == WP_FAILURE){
-			asprintf(error, "couldn't delete watchpoint %d", id);
+			asprintf(error, "couldn't delete watchpoint %d", delete_id);
 			return CMD_FAILURE;
 		}
 
-		printf("Watchpoint %d deleted\n", id);
+		printf("Watchpoint %d deleted\n", delete_id);
 	}
+	// XXX I don't think I need this?
 	else{
-		cmdfunc_help("delete", 0, error);
+		asprintf(error, "unknown type '%s'\n", type);
 		return CMD_FAILURE;
 	}
 
@@ -675,46 +688,43 @@ cmd_error_t cmdfunc_detach(struct arguments_t *args,
 cmd_error_t cmdfunc_disassemble(struct arguments_t *args, 
 		int arg1, char **error){
 	if(!args){
-		cmdfunc_help("disassemble", 0, error);
+		help_internal("disassemble");
 		return CMD_FAILURE;
 	}
 
-	char *tok = strtok(args, " ");
+	char *location_str = argnext(args);
 	
-	if(!tok){
-		cmdfunc_help("disassemble", 0, error);
+	if(!location_str){
+		asprintf(error, "need location");
 		return CMD_FAILURE;
 	}
 
-	long location = parse_expr(tok, error);
+	long location = parse_expr(location_str, error);
 
 	if(*error)
 		return CMD_FAILURE;
 
 	/* Get the amount of instructions to disassemble. */
-	tok = strtok(NULL, " ");
+	char *amount_str = argnext(args);
 
-	if(!tok){
-		cmdfunc_help("disassemble", 0, error);
+	if(!amount_str){
+		asprintf(error, "need amount");
 		return CMD_FAILURE;
 	}
 
-	*error = NULL;
-	int amount = (int)strtol_err(tok, error);
+	// XXX will this introduce bugs?
+	//*error = NULL;
+	int amount = (int)strtol_err(amount_str, error);
 
 	if(*error)
 		return CMD_FAILURE;
 
 	if(amount <= 0){
-		cmdfunc_help("disassemble", 0, error);
+		asprintf(error, "bad amount %d", amount);
 		return CMD_FAILURE;
 	}
 
-	tok = strtok(NULL, " ");
-
-	int add_aslr = wants_add_aslr(tok);
-
-	if(add_aslr)
+	if(args->add_aslr)
 		location += debuggee->aslr_slide;
 
 	kern_return_t err = disassemble_at_location(location, amount);
@@ -730,49 +740,47 @@ cmd_error_t cmdfunc_disassemble(struct arguments_t *args,
 
 cmd_error_t cmdfunc_examine(struct arguments_t *args, 
 		int arg1, char **error){
+	if(!args){
+		help_internal("examine");
+		return CMD_FAILURE;
+	}
+
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
-	if(!args){
-		cmdfunc_help("examine", 0, error);
-		return CMD_FAILURE;
-	}
+	char *location_str = argnext(args);
 
-	char *tok = strtok(args, " ");
+	//char *tok = strtok(args, " ");
 	
-	if(!tok){
-		cmdfunc_help("examine", 0, error);
+	if(!location_str){
+		asprintf(error, "need location");
 		return CMD_FAILURE;
 	}
 
-	long location = parse_expr(tok, error);
+	long location = parse_expr(location_str, error);
 
 	if(*error)
 		return CMD_FAILURE;
 
 	/* Next, however many bytes are wanted. */
-	tok = strtok(NULL, " ");
+	char *size = argnext(args);
 
-	if(!tok){
-		cmdfunc_help("examine", 0, error);
+	if(!size){
+		asprintf(error, "need size");
 		return CMD_FAILURE;
 	}
 	
-	int amount = (int)strtol_err(tok, error);
+	int amount = (int)strtol_err(size, error);
 
 	if(*error)
 		return CMD_FAILURE;
 	
 	if(amount < 0){
-		cmdfunc_help("examine", 0, error);
+		asprintf(error, "negative amount");
 		return CMD_FAILURE;
 	}
 
-	tok = strtok(NULL, " ");
-
-	int add_aslr = wants_add_aslr(tok);
-
-	if(add_aslr)
+	if(args->add_aslr)
 		location += debuggee->aslr_slide;
 
 	kern_return_t err = memutils_dump_memory(location, amount);
@@ -884,8 +892,8 @@ cmd_error_t cmdfunc_regsfloat(struct arguments_t *args,
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
-	if(!args){
-		cmdfunc_help("regs float", 0, error);
+	if(args && args->num_args == 0){
+		asprintf(error, "need a register");
 		return CMD_FAILURE;
 	}
 
@@ -897,30 +905,33 @@ cmd_error_t cmdfunc_regsfloat(struct arguments_t *args,
 	char *regstr = malloc(sz);
 
 	/* Iterate through and show all the registers the user asked for. */
-	char *tok = strtok(args, " ");
+	char *curreg = argnext(args);
+	//char *tok = strtok(args, " ");
 
-	while(tok){
+	while(curreg){//tok){
 		debuggee->get_neon_state();
 
-		if(strcmp(tok, "fpsr") == 0){
-			tok = strtok(NULL, " ");
+		if(strcmp(curreg, "fpsr") == 0){
+			curreg = argnext(args);
 			printf("%10s = 0x%8.8x\n", "fpsr", debuggee->neon_state.__fpsr);
 			continue;
 		}
-		else if(strcmp(tok, "fpcr") == 0){
-			tok = strtok(NULL, " ");
+		else if(strcmp(curreg, "fpcr") == 0){
+			curreg = argnext(args);
 			printf("%10s = 0x%8.8x\n", "fpcr", debuggee->neon_state.__fpcr);
 			continue;
 		}
 		
 		memset(regstr, '\0', sz);
 
-		char reg_type = tolower(tok[0]);
+		char reg_type = tolower(curreg[0]);
 		
 		/* Move up a byte for the register number. */
-		tok++;
+		//tok++;
+		memmove(curreg, curreg + 1, strlen(curreg));
+		curreg[strlen(curreg) - 1] = '\0';
 
-		int reg_num = (int)strtol_err(tok, error);
+		int reg_num = (int)strtol_err(curreg, error);
 
 		if(*error){
 			free(regstr);
@@ -934,7 +945,7 @@ cmd_error_t cmdfunc_regsfloat(struct arguments_t *args,
 		if(!good_reg_num || !good_reg_type){
 			printf("%8sInvalid register\n", "");
 
-			tok = strtok(NULL, " ");
+			curreg = argnext(args);
 			continue;
 		}
 		/* Quadword */
@@ -979,7 +990,8 @@ cmd_error_t cmdfunc_regsfloat(struct arguments_t *args,
 		
 		printf("%*s\n", (int)(strlen(regstr) + add), regstr);
 		
-		tok = strtok(NULL, " ");
+		//tok = strtok(NULL, " ");
+		curreg = argnext(args);
 	}
 
 	free(regstr);
@@ -997,14 +1009,15 @@ cmd_error_t cmdfunc_regsgen(struct arguments_t *args,
 	const int sz = 8;
 
 	/* If there were no arguments, print every register. */
-	if(!args){
+	if(args->num_args == 0){
 		for(int i=0; i<29; i++){		
 			char *regstr = malloc(sz);
 			memset(regstr, '\0', sz);
 
 			sprintf(regstr, "x%d", i);
 
-			printf("%10s = 0x%16.16llx\n", regstr, debuggee->thread_state.__x[i]);
+			printf("%10s = 0x%16.16llx\n", regstr, 
+					debuggee->thread_state.__x[i]);
 
 			free(regstr);
 		}
@@ -1019,47 +1032,52 @@ cmd_error_t cmdfunc_regsgen(struct arguments_t *args,
 	}
 
 	/* Otherwise, print every register they asked for. */
-	char *tok = strtok(args, " ");
+	char *curreg = argnext(args);
+	//char *tok = strtok(args, " ");
 
-	while(tok){
-		char reg_type = tolower(tok[0]);
+	while(curreg){
+		char reg_type = tolower(curreg[0]);
 
 		if(reg_type != 'x' && reg_type != 'w'){
-			char *tokcpy = strdup(tok);
+			char *curreg_cpy = strdup(curreg);
+			size_t curreg_cpy_len = strlen(curreg_cpy);
 
 			/* We need to be able to free it. */
-			for(int i=0; i<strlen(tokcpy); i++)
-				tokcpy[i] = tolower(tokcpy[i]);
+			for(int i=0; i<curreg_cpy_len; i++)
+				curreg_cpy[i] = tolower(curreg_cpy[i]);
 
-			if(strcmp(tokcpy, "fp") == 0)
+			if(strcmp(curreg_cpy, "fp") == 0)
 				printf("%8s = 0x%16.16llx\n", "fp", debuggee->thread_state.__fp);
-			else if(strcmp(tokcpy, "lr") == 0)
+			else if(strcmp(curreg_cpy, "lr") == 0)
 				printf("%8s = 0x%16.16llx\n", "lr", debuggee->thread_state.__lr);
-			else if(strcmp(tokcpy, "sp") == 0)
+			else if(strcmp(curreg_cpy, "sp") == 0)
 				printf("%8s = 0x%16.16llx\n", "sp", debuggee->thread_state.__sp);
-			else if(strcmp(tokcpy, "pc") == 0)
+			else if(strcmp(curreg_cpy, "pc") == 0)
 				printf("%8s = 0x%16.16llx\n", "pc", debuggee->thread_state.__pc);
-			else if(strcmp(tokcpy, "cpsr") == 0)
+			else if(strcmp(curreg_cpy, "cpsr") == 0)
 				printf("%8s = 0x%8.8x\n", "cpsr", debuggee->thread_state.__cpsr);
 			else
 				printf("Invalid register\n");
 
-			free(tokcpy);
+			free(curreg_cpy);
 
-			tok = strtok(NULL, " ");
+			curreg = argnext(args);
+			//tok = strtok(NULL, " ");
 			continue;
 		}
 
 		/* Move up one byte to get to the "register number". */
-		tok++;
+		//tok++;
+		memmove(curreg, curreg + 1, strlen(curreg));
+		curreg[strlen(curreg) - 1] = '\0';
 
-		int reg_num = (int)strtol_err(tok, error);
+		int reg_num = (int)strtol_err(curreg, error);
 
 		if(*error)
 			return CMD_FAILURE;
 		
 		if(reg_num < 0 || reg_num > 29){
-			tok = strtok(NULL, " ");
+			curreg = argnext(args);
 			continue;
 		}
 
@@ -1077,7 +1095,8 @@ cmd_error_t cmdfunc_regsgen(struct arguments_t *args,
 
 		free(regstr);
 
-		tok = strtok(NULL, " ");
+		//tok = strtok(NULL, " ");
+		curreg = argnext(args);
 	}
 	
 	return CMD_SUCCESS;
@@ -1086,32 +1105,42 @@ cmd_error_t cmdfunc_regsgen(struct arguments_t *args,
 cmd_error_t cmdfunc_set(struct arguments_t *args, 
 		int arg1, char **error){
 	if(!args){
-		cmdfunc_help("set", 0, error);
+		help_internal("set");
 		return CMD_FAILURE;
 	}
 
-	char specifier = args[0];
+	/* Current argument: the expression which contains what we're modifying and
+	 * what we're modifing it to.
+	 */
+	char *curarg = argnext(args);
 
-	char *argcpy = strdup(args);
-	char *equals = strchr(argcpy, '=');
+	if(!curarg){
+		help_internal("set");
+		return CMD_FAILURE;
+	}
+
+	char specifier = curarg[0];
+
+	//char *argcpy = strdup(curarg);
+	char *equals = strchr(curarg, '=');
 
 	if(!equals){
-		free(argcpy);
-		cmdfunc_help("set", 0, error);
+		//free(argcpy);
+		help_internal("set");
 		return CMD_FAILURE;
 	}
 
-	int cpylen = equals - argcpy;
+	int cpylen = equals - curarg;//argcpy;
 
-	char *target = strndup(argcpy, cpylen);
+	char *target = strndup(curarg/*argcpy*/, cpylen);
 	char *value_str = strdup(equals + 1);
 
 	if(strlen(value_str) == 0){
-		free(argcpy);
+		//free(argcpy);
 		free(target);
 		free(value_str);
 
-		cmdfunc_help("set", 0, error);
+		help_internal("set");
 		return CMD_FAILURE;
 	}
 
@@ -1133,20 +1162,25 @@ cmd_error_t cmdfunc_set(struct arguments_t *args,
 
 		if(*error){
 			asprintf(error, "expression evaluation failed: %s", *error);
+			
+			free(target);
+
 			return CMD_FAILURE;
 		}
 
+		free(target);
 		/* Check for no ASLR. */
+		/*
 		char *tok = strtok(argcpy, " ");
 		
 		tok = strtok(NULL, " ");
 
 		int wants_aslr = wants_add_aslr(tok);
-
-		if(wants_aslr)
+		*/
+		if(args->add_aslr)
 			location += debuggee->aslr_slide;
 		
-		free(argcpy);
+		//free(argcpy);
 
 		kern_return_t err = memutils_write_memory_to_location(
 				(vm_address_t)location, (vm_offset_t)value);
@@ -1161,7 +1195,7 @@ cmd_error_t cmdfunc_set(struct arguments_t *args,
 	}
 	/* Convenience variable or register. */
 	else if(specifier == '$'){
-		free(argcpy);
+		//free(argcpy);
 
 		/* To tell whether or not the user wants to set a 
 		 * convenience variable, we can pass a string to the
@@ -1185,7 +1219,8 @@ cmd_error_t cmdfunc_set(struct arguments_t *args,
 		 * without being attached to anything.
 		 */
 		if(debuggee->pid == -1){
-			cmdfunc_help("set", 0, error);
+			help_internal("set");
+			free(target);
 			return CMD_FAILURE;
 		}
 
@@ -1215,13 +1250,19 @@ cmd_error_t cmdfunc_set(struct arguments_t *args,
 		/* Various representations of our value string. */
 		int valued = (int)strtol_err(value_str, error);
 
-		if(gpr && *error)
+		if(gpr && *error){
+			free(target);
+			free(value_str);
 			return CMD_FAILURE;
+		}
 
 		long valuellx = strtol_err(value_str, error);
 
-		if(gpr && *error)
+		if(gpr && *error){
+			free(target);
+			free(value_str);
 			return CMD_FAILURE;
+		}
 
 		/* The functions above will have set error
 		 * if we have a floating point value, so
@@ -1231,13 +1272,19 @@ cmd_error_t cmdfunc_set(struct arguments_t *args,
 
 		float valuef = (float)strtod_err(value_str, error);
 
-		if(fpr && *error)
+		if(fpr && *error){
+			free(target);
+			free(value_str);
 			return CMD_FAILURE;
+		}
 
 		double valuedf = strtod_err(value_str, error);
 
-		if(fpr && *error)
+		if(fpr && *error){
+			free(target);
+			free(value_str);
 			return CMD_FAILURE;
+		}
 
 		/* Take care of any special registers. */
 		if(strcmp(target, "fp") == 0)
@@ -1256,9 +1303,15 @@ cmd_error_t cmdfunc_set(struct arguments_t *args,
 			debuggee->neon_state.__fpcr = valued;
 		else{
 			if(!good_reg_num || !good_reg_type){
-				cmdfunc_help("set", 0, error);
+				asprintf(error, "bad register '%s'", target);
+
+				free(target);
+				free(value_str);
+
 				return CMD_FAILURE;
 			}
+
+			free(target);
 
 			if(gpr){
 				if(reg_type == 'x')
@@ -1272,12 +1325,14 @@ cmd_error_t cmdfunc_set(struct arguments_t *args,
 				if(reg_type == 'q' || reg_type == 'v'){
 					if(value_str[0] != '{' || 
 							value_str[strlen(value_str) - 1] != '}'){
-						cmdfunc_help("set", 0, error);
+						asprintf(error, "bad value '%s'", value_str);
+						free(value_str);
 						return CMD_FAILURE;
 					}
 
 					if(strlen(value_str) == 2){
-						cmdfunc_help("set", 0, error);
+						asprintf(error, "bad value '%s'", value_str);
+						free(value_str);
 						return CMD_FAILURE;
 					}
 					
@@ -1305,8 +1360,9 @@ cmd_error_t cmdfunc_set(struct arguments_t *args,
 						}
 						else
 							curbyte = strdup(value_str);
-						
-						unsigned int byte = strtol(curbyte, NULL, 0);
+												
+						unsigned int byte = 
+							(unsigned int)strtol(curbyte, NULL, 0);
 
 						if(i < sizeof(long)){
 							lo_str = realloc(lo_str, strlen(lo_str) +
@@ -1360,11 +1416,12 @@ cmd_error_t cmdfunc_show(struct arguments_t *args,
 		return CMD_SUCCESS;
 	}
 
-	char *tok = strtok(args, " ");
+	/* All arguments will be convenience variables. */
+	char *cur_convvar = argnext(args);
 
-	while(tok){
-		p_convvar(tok);
-		tok = strtok(NULL, " ");
+	while(cur_convvar){
+		p_convvar(cur_convvar);
+		cur_convvar = argnext(args);
 	}
 
 	return CMD_SUCCESS;
@@ -1403,9 +1460,6 @@ cmd_error_t cmdfunc_stepi(struct arguments_t *args,
 
 cmd_error_t cmdfunc_threadlist(struct arguments_t *args, 
 		int arg1, char **error){
-	if(!debuggee)
-		return CMD_FAILURE;
-
 	if(!debuggee->threads)
 		return CMD_FAILURE;
 	
@@ -1441,7 +1495,15 @@ cmd_error_t cmdfunc_threadselect(struct arguments_t *args,
 	if(!debuggee->threads->front)
 		return CMD_FAILURE;
 
-	int thread_id = (int)strtol_err((char *)args, error);
+	/* Current argument: the ID of the thread the user wants to focus on. */
+	char *curarg = argnext(args);
+	
+	if(!curarg){
+		asprintf(error, "need thread ID");
+		return CMD_FAILURE;
+	}
+
+	int thread_id = (int)strtol_err(curarg, error);
 
 	if(*error)
 		return CMD_FAILURE;
@@ -1452,6 +1514,7 @@ cmd_error_t cmdfunc_threadselect(struct arguments_t *args,
 		return CMD_FAILURE;
 	}
 
+	// XXX so I need this since I disable all bps when single stepping?
 	/* Delete any single step breakpoints belonging to
 	 * the other thread.
 	 */
@@ -1496,16 +1559,20 @@ cmd_error_t cmdfunc_trace(struct arguments_t *args,
 
 cmd_error_t cmdfunc_unset(struct arguments_t *args, 
 		int arg1, char **error){
-	if(!args){
+	if(!args)
+		return CMD_FAILURE;
+
+	if(args->num_args == 0){
 		asprintf(error, "need a convenience variable");
 		return CMD_FAILURE;
 	}
-	
-	char *tok = strtok(args, " ");
 
-	while(tok){
-		void_convvar(tok);
-		tok = strtok(NULL, " ");
+	/* Arguments will consist of convenience variables. */
+	char *cur_convvar = argnext(args);
+
+	while(cur_convvar){
+		void_convvar(cur_convvar);
+		cur_convvar = argnext(args);
 	}
 
 	return CMD_SUCCESS;
@@ -1519,9 +1586,10 @@ cmd_error_t cmdfunc_watch(struct arguments_t *args,
 	if(debuggee->pid == -1)
 		return CMD_FAILURE;
 
-	char *type = argnext(args);
+	/* Current argument: watchpoint type or location. */
+	char *curarg = argnext(args);
 
-	if(!type){
+	if(!curarg){
 		help_internal("watch");
 		return CMD_FAILURE;
 	}
@@ -1531,54 +1599,58 @@ cmd_error_t cmdfunc_watch(struct arguments_t *args,
 	/* Check if the user specified a watchpoint type. If they didn't,
 	 * this watchpoint will match on reads and writes.
 	 */
-	if(!strstr(type, "0x")){
-		if(strcmp(type, "--r") == 0)
+	if(!strstr(curarg, "0x")){
+		if(strcmp(curarg, "--r") == 0)
 			LSC = WP_READ;
-		else if(strcmp(type, "--w") == 0)
+		else if(strcmp(curarg, "--w") == 0)
 			LSC = WP_WRITE;
-		else if(strcmp(type, "--rw") == 0)
+		else if(strcmp(curarg, "--rw") == 0)
 			LSC = WP_READ_WRITE;
 		else{
 			help_internal("watch");
 			return CMD_FAILURE;
 		}
 
-		tok = strtok(NULL, " ");
+		/* If we had a type before the location, we need to get the next
+		 * argument. After that, current argument is the location to watch.
+		 */
+		curarg = argnext(args);
 
-		if(!tok){
-			cmdfunc_help("watch", 0, error);
+		/* We need the location after type. */
+		if(!curarg){//argpeek(args)){
+			help_internal("watch");
 			return CMD_FAILURE;
 		}
 	}
 
-	long location = parse_expr(tok, error);
+	long location = parse_expr(curarg, error);
 
 	if(*error){
 		asprintf(error, "expression evaluation failed: %s\n", *error);
 		return CMD_FAILURE;
 	}
 
-	tok = strtok(NULL, " ");
+	/* Current argument: size of data we're watching. */
+	curarg = argnext(args);
 	
-	if(!tok){
-		cmdfunc_help("watch", 0, error);
+	if(!curarg){
+		help_internal("watch");
 		return CMD_FAILURE;
 	}
 
-	/* Base does not matter since watchpoint_at_address
-	 * bails if data_len > sizeof(long)
-	 */
-	int data_len = (int)strtol_err(tok, error);
+	int data_len = (int)strtol_err(curarg, error);
 
 	if(*error)
 		return CMD_FAILURE;
 
+	return watchpoint_at_address(location, data_len, LSC, error);
+	/*
 	wp_error_t err = watchpoint_at_address(location, data_len, LSC, error);
 
 	if(err != WP_SUCCESS)
 		return CMD_FAILURE;
 
-	return CMD_SUCCESS;
+	return CMD_SUCCESS;*/
 }
 
 cmd_error_t execute_command(char *input, char **errstr){
@@ -1881,9 +1953,9 @@ cmd_error_t execute_command(char *input, char **errstr){
 	 * At this point, anything token contains is an argument. */
 	if(!token){
 		// XXX special case
-		struct arguments_t *parsed_args = parse_args(token);
-		return finalfunc(parsed_args, 0, errstr);
-		free(parsed_args);
+		//struct arguments_t *parsed_args = parse_args(token, errstr);
+		return finalfunc(NULL/*parsed_args*/, 0, errstr);
+		//free(parsed_args);
 	}
 
 	char *args = malloc(init_buf_sz);

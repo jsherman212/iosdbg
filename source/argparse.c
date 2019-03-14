@@ -25,7 +25,7 @@ int wants_add_aslr(char *str){
 struct arguments_t *parse_args(char *_args, char **error){
 	char *args;
 
-	if(!args_)
+	if(!_args)
 		args = strdup("");
 	else
 		args = strdup(_args);
@@ -53,10 +53,10 @@ char *argpeek(struct arguments_t *args){
 	if(!args)
 		return NULL;
 
-	if(!args->argsqueue)
+	if(!args->argqueue)
 		return NULL;
 
-
+	return queue_peek(args->argqueue);
 }
 
 char *argnext(struct arguments_t *args){

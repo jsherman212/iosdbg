@@ -106,5 +106,7 @@ char *progname_from_pid(pid_t pid, char **error){
 		}
 	}
 
+	asprintf(error, "could not find process for pid %d", pid);
+
 	return NULL;
 }

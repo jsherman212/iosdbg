@@ -50,7 +50,7 @@ cmd_error_t cmdfunc_watch(struct arguments_t *, int, char **);
 
 cmd_error_t execute_command(char *, char **);
 
-static const struct dbg_cmd_t COMMANDS[] = {
+static struct dbg_cmd_t COMMANDS[] = {
 	{ "aslr", NULL, cmdfunc_aslr, "Show the ASLR slide." },
 	{ "attach", NULL, cmdfunc_attach, "Attach to a program with its PID or executable name. Syntax: attach <(PID|{--waitfor} progname)>\n\n\tInclude '--waitfor' to wait for the target process to launch." },
 	{ "backtrace", "bt", cmdfunc_backtrace, "Unwind the stack." },
