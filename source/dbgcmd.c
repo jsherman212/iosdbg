@@ -8,9 +8,9 @@
 
 #include "breakpoint.h"
 #include "convvar.h"
-#include "dbgcmd.h"			/* Includes argparse.h */
+#include "dbgcmd.h"         /* Includes argparse.h */
 #include "dbgutils.h"
-#include "exception.h"		/* Includes defs.h */
+#include "exception.h"      /* Includes defs.h */
 #include "expr.h"
 #include "linkedlist.h"
 #include "machthread.h"
@@ -79,21 +79,6 @@ int is_number(char *str){
 
 	return 1;
 }
-
-/*
-int wants_add_aslr(char *str){
-	char *error;
-	char *no_aslr_override = convvar_strval("$NO_ASLR_OVERRIDE", &error);
-
-	if(no_aslr_override && strcmp(no_aslr_override, "void") != 0)
-		return 0;
-
-	if(!str)
-		return 1;
-
-	return strnstr(str, "--no-aslr", strlen(str)) == NULL;
-}
-*/
 
 long strtol_err(char *str, char **error){
 	if(!str){
@@ -248,18 +233,16 @@ cmd_error_t cmdfunc_attach(struct arguments_t *args,
 		printf("Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", 
 				target);
 
+        /* If we're waiting for something to launch, it will not exist,
+         * so don't return on error.
+         */
 		target_pid = parse_pid(target, error);
-
-		if(*error)
-			return CMD_FAILURE;
-
 		keep_checking_for_process = 1;
 
 		while(target_pid == -1 && keep_checking_for_process){
-			pid_t target_pid = parse_pid(target, error);
+			target_pid = parse_pid(target, error);
 
-			if(*error)
-				return CMD_FAILURE;
+            *error = NULL;
 
 			usleep(400);
 		}
@@ -272,22 +255,13 @@ cmd_error_t cmdfunc_attach(struct arguments_t *args,
 	if(*error)
 		return CMD_FAILURE;
 
-	/*
-	if(pid == -1){
-		if(piderr){
-			asprintf(error, "%s", piderr);
-			free(piderr);
-		}
-		else
-			asprintf(error, "PID not found");
-
-		return CMD_FAILURE;
-	}*/
-
 	if(target_pid == 0){
 		asprintf(error, "no kernel debugging");
 		return CMD_FAILURE;
 	}
+
+    if(target_pid == -1)
+        return CMD_FAILURE;
 
 	kern_return_t err = task_for_pid(mach_task_self(), 
 			target_pid, &debuggee->task);
@@ -306,9 +280,6 @@ cmd_error_t cmdfunc_attach(struct arguments_t *args,
 		char *name = progname_from_pid(debuggee->pid, error);
 
 		if(*error)
-			return CMD_FAILURE;
-
-		if(!name)
 			return CMD_FAILURE;
 
 		debuggee->debuggee_name = strdup(name);
@@ -398,7 +369,7 @@ cmd_error_t cmdfunc_backtrace(struct arguments_t *args,
 	}
 
 	while(current_frame->next){
-		printf("\tframe #%d: 0x%16.16llx\n", frame_counter, 
+		printf("    frame #%d: 0x%16.16llx\n", frame_counter, 
 				current_frame->frame);
 
 		memutils_read_memory_at_location((void *)current_frame->next, 
@@ -749,8 +720,6 @@ cmd_error_t cmdfunc_examine(struct arguments_t *args,
 		return CMD_FAILURE;
 
 	char *location_str = argnext(args);
-
-	//char *tok = strtok(args, " ");
 	
 	if(!location_str){
 		asprintf(error, "need location");
@@ -796,13 +765,10 @@ cmd_error_t cmdfunc_examine(struct arguments_t *args,
 
 cmd_error_t cmdfunc_help(struct arguments_t *args, 
 		int arg1, char **error){
-	if(!args)
-		return CMD_FAILURE;
-
-	if(args->num_args == 0){
+	if(!args){
 		asprintf(error, "need command");
 		return CMD_FAILURE;
-	}
+    }
 
 	char *cmd = argnext(args);
 
@@ -828,14 +794,14 @@ cmd_error_t cmdfunc_kill(struct arguments_t *args,
 	if(ans == 'n')
 		return CMD_SUCCESS;
 
-	char *saved_name = malloc(strlen(debuggee->debuggee_name) + 1);
-	strcpy(saved_name, debuggee->debuggee_name);
+    char *saved_name = strdup(debuggee->debuggee_name);
 
 	cmdfunc_detach(NULL, 0, error);
 	
 	pid_t p;
 	char *argv[] = {"killall", "-9", saved_name, NULL};
-	int status = posix_spawnp(&p, "killall", NULL, NULL, (char * const *)argv, NULL);
+	int status = posix_spawnp(&p, "killall", NULL, NULL, 
+            (char * const *)argv, NULL);
 	
 	free(saved_name);
 
@@ -906,9 +872,8 @@ cmd_error_t cmdfunc_regsfloat(struct arguments_t *args,
 
 	/* Iterate through and show all the registers the user asked for. */
 	char *curreg = argnext(args);
-	//char *tok = strtok(args, " ");
 
-	while(curreg){//tok){
+	while(curreg){
 		debuggee->get_neon_state();
 
 		if(strcmp(curreg, "fpsr") == 0){
@@ -927,9 +892,7 @@ cmd_error_t cmdfunc_regsfloat(struct arguments_t *args,
 		char reg_type = tolower(curreg[0]);
 		
 		/* Move up a byte for the register number. */
-		//tok++;
 		memmove(curreg, curreg + 1, strlen(curreg));
-		curreg[strlen(curreg) - 1] = '\0';
 
 		int reg_num = (int)strtol_err(curreg, error);
 
@@ -990,7 +953,6 @@ cmd_error_t cmdfunc_regsfloat(struct arguments_t *args,
 		
 		printf("%*s\n", (int)(strlen(regstr) + add), regstr);
 		
-		//tok = strtok(NULL, " ");
 		curreg = argnext(args);
 	}
 
@@ -1009,7 +971,7 @@ cmd_error_t cmdfunc_regsgen(struct arguments_t *args,
 	const int sz = 8;
 
 	/* If there were no arguments, print every register. */
-	if(args->num_args == 0){
+	if(!args){
 		for(int i=0; i<29; i++){		
 			char *regstr = malloc(sz);
 			memset(regstr, '\0', sz);
@@ -1033,7 +995,6 @@ cmd_error_t cmdfunc_regsgen(struct arguments_t *args,
 
 	/* Otherwise, print every register they asked for. */
 	char *curreg = argnext(args);
-	//char *tok = strtok(args, " ");
 
 	while(curreg){
 		char reg_type = tolower(curreg[0]);
@@ -1062,14 +1023,11 @@ cmd_error_t cmdfunc_regsgen(struct arguments_t *args,
 			free(curreg_cpy);
 
 			curreg = argnext(args);
-			//tok = strtok(NULL, " ");
 			continue;
 		}
 
 		/* Move up one byte to get to the "register number". */
-		//tok++;
 		memmove(curreg, curreg + 1, strlen(curreg));
-		curreg[strlen(curreg) - 1] = '\0';
 
 		int reg_num = (int)strtol_err(curreg, error);
 
@@ -1095,7 +1053,6 @@ cmd_error_t cmdfunc_regsgen(struct arguments_t *args,
 
 		free(regstr);
 
-		//tok = strtok(NULL, " ");
 		curreg = argnext(args);
 	}
 	
