@@ -119,13 +119,14 @@ double strtod_err(char *str, char **error){
     return result;
 }
 
+#define NUM_CMDS 25
 struct dbg_cmd_t COMMANDS[NUM_CMDS];
 
 cmd_error_t help_internal(char *cmd_name){
-    //int NUM_CMDS = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
+    int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
     int cur_cmd_idx = 0;
 
-    while(cur_cmd_idx < NUM_CMDS){
+    while(cur_cmd_idx < num_cmds){
         struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
     
         /* Must not be an ambiguous command. */
@@ -180,7 +181,7 @@ cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
          */
         char *target = firstarg;
 
-        if(strcmp(firstarg, "--waitfor") == 0)
+        if(waitfor)
             target = argnext(args);
 
         if(!target){
@@ -193,7 +194,12 @@ cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
         if(ans == 'n')
             return CMD_SUCCESS;
-        
+
+        if(strcmp(target, "0") == 0){
+            asprintf(error, "no kernel debugging");
+            return CMD_FAILURE;
+        }
+
         /* Detach from what we are attached to
          * and call this function again.
          */     
@@ -345,16 +351,12 @@ cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     
     debuggee->get_thread_state();
 
-    // print frame 0, which is where we are currently at
     printf("  * frame #0: 0x%16.16llx\n", debuggee->thread_state.__pc);
-    
-    // frame 1 is what is in LR
     printf("    frame #1: 0x%16.16llx\n", debuggee->thread_state.__lr);
 
     int frame_counter = 2;
 
-    // there's a linked list-like thing of frame pointers
-    // so we can unwind the stack by following this linked list
+    /* There's a linked list of frame pointers. */
     struct frame_t {
         struct frame_t *next;
         unsigned long long frame;
@@ -399,7 +401,6 @@ cmd_error_t cmdfunc_break(struct cmd_args_t *args,
     }
 
     char *location_str = argnext(args);
-    //char *tok = strtok(args, " ");    
     
     if(!location_str){
         asprintf(error, "need location");
@@ -417,14 +418,6 @@ cmd_error_t cmdfunc_break(struct cmd_args_t *args,
         location += debuggee->aslr_slide;
 
     return breakpoint_at_address(location, BP_NO_TEMP, BP_NO_SS, error);    
-    /*
-    bp_error_t result = breakpoint_at_address(location, BP_NO_TEMP, BP_NO_SS, error);
-
-    if(result != BP_SUCCESS)
-        return CMD_FAILURE;
-
-    return CMD_SUCCESS;
-    */
 }
 
 cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
@@ -492,7 +485,6 @@ cmd_error_t cmdfunc_delete(struct cmd_args_t *args,
     }
     
     char *delete_id_str = argnext(args);
-    //tok = strtok(NULL, " ");
 
     /* If there's nothing after type, give the user
      * an option to delete all.
@@ -549,11 +541,6 @@ cmd_error_t cmdfunc_delete(struct cmd_args_t *args,
 
         printf("Watchpoint %d deleted\n", delete_id);
     }
-    // XXX I don't think I need this?
-    else{
-        asprintf(error, "unknown type '%s'\n", type);
-        return CMD_FAILURE;
-    }
 
     return CMD_SUCCESS;
 }
@@ -592,7 +579,8 @@ cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
 
         pid_t p;
         char *stop_argv[] = {"kill", "-STOP", pidstr, NULL};
-        int status = posix_spawnp(&p, "kill", NULL, NULL, (char * const *)stop_argv, NULL);
+        int status = posix_spawnp(&p, "kill", NULL, NULL, 
+                (char * const *)stop_argv, NULL);
             
         if(status == 0)
             waitpid(p, &status, 0);
@@ -610,7 +598,8 @@ cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
 
         /* Send SIGCONT so the process is running again. */
         char *cont_argv[] = {"kill", "-CONT", pidstr, NULL};
-        status = posix_spawnp(&p, "kill", NULL, NULL, (char * const *)cont_argv, NULL);
+        status = posix_spawnp(&p, "kill", NULL, NULL, 
+                (char * const *)cont_argv, NULL);
 
         if(status == 0)
             waitpid(p, &status, 0);
@@ -685,8 +674,6 @@ cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    // XXX will this introduce bugs?
-    //*error = NULL;
     int amount = (int)strtol_err(amount_str, error);
 
     if(*error)
@@ -1068,79 +1055,48 @@ cmd_error_t cmdfunc_set(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    /* Current argument: the expression which contains what we're modifying and
-     * what we're modifing it to.
-     */
-    char *curarg = argnext(args);
+    char *specifier_str = argnext(args);
 
-    if(!curarg){
+    if(!specifier_str){
         help_internal("set");
         return CMD_FAILURE;
     }
 
-    char specifier = curarg[0];
+    char specifier = specifier_str[0];
 
-    //char *argcpy = strdup(curarg);
-    char *equals = strchr(curarg, '=');
+    char *target_str = argnext(args);
 
-    if(!equals){
-        //free(argcpy);
+    if(!target_str){
         help_internal("set");
         return CMD_FAILURE;
     }
+    
+    char *value_str = argnext(args);
 
-    int cpylen = equals - curarg;//argcpy;
-
-    char *target = strndup(curarg/*argcpy*/, cpylen);
-    char *value_str = strdup(equals + 1);
-
-    if(strlen(value_str) == 0){
-        //free(argcpy);
-        free(target);
-        free(value_str);
-
+    if(!value_str){
         help_internal("set");
         return CMD_FAILURE;
     }
-
-    char *nextspace = strchr(value_str, ' ');
-
-    if(nextspace)
-        value_str[nextspace - value_str] = '\0';
 
     /* If we are writing to an offset, we've done everything needed. */
     if(specifier == '*'){
-        long value = strtol_err(value_str, error);
-
-        free(value_str);
-
-        if(*error)
-            return CMD_FAILURE;
-
-        long location = parse_expr(target + 1, error);
+        long value = parse_expr(value_str, error);
 
         if(*error){
             asprintf(error, "expression evaluation failed: %s", *error);
-            
-            free(target);
-
             return CMD_FAILURE;
         }
 
-        free(target);
-        /* Check for no ASLR. */
-        /*
-        char *tok = strtok(argcpy, " ");
-        
-        tok = strtok(NULL, " ");
+        long location = parse_expr(target_str, error);
 
-        int wants_aslr = wants_add_aslr(tok);
-        */
+        if(*error){
+            asprintf(error, "expression evaluation failed: %s", *error);
+            return CMD_FAILURE;
+        }
+
         if(args->add_aslr)
             location += debuggee->aslr_slide;
         
-        //free(argcpy);
-
         kern_return_t err = memutils_write_memory_to_location(
                 (vm_address_t)location, (vm_offset_t)value);
 
@@ -1154,8 +1110,6 @@ cmd_error_t cmdfunc_set(struct cmd_args_t *args,
     }
     /* Convenience variable or register. */
     else if(specifier == '$'){
-        //free(argcpy);
-
         /* To tell whether or not the user wants to set a 
          * convenience variable, we can pass a string to the
          * error parameter. convvar_set will bail and initialize `e`
@@ -1165,40 +1119,35 @@ cmd_error_t cmdfunc_set(struct cmd_args_t *args,
          * return after it is updated.
          */
         char *e = NULL;
-        set_convvar(target, value_str, &e);
-        
-        if(!e){
-            free(target);
-            free(value_str);
 
+        /* target_str doesn't include the '$'. */
+        char *var;
+        asprintf(&var, "$%s", target_str);
+        set_convvar(var, value_str, &e);
+        
+        free(var);
+
+        if(!e)
             return CMD_SUCCESS;
-        }
 
         /* Put this check here so the user and set convenience variables
          * without being attached to anything.
          */
         if(debuggee->pid == -1){
             help_internal("set");
-            free(target);
             return CMD_FAILURE;
         }
 
-        memmove(target, target + 1, strlen(target));
+        for(int i=0; i<strlen(target_str); i++)
+            target_str[i] = tolower(target_str[i]);
 
-        for(int i=0; i<strlen(target); i++)
-            target[i] = tolower(target[i]);
-
-        char reg_type = target[0];
-        char *reg_num_s = malloc(strlen(target + 1) + 1);
-        strcpy(reg_num_s, target + 1);
-
-        int reg_num = strtol(reg_num_s, NULL, 10);
-
-        free(reg_num_s);
+        char reg_type = target_str[0];
+        int reg_num = strtol(target_str + 1, NULL, 10);
 
         int gpr = reg_type == 'x' || reg_type == 'w';
         int fpr = (reg_type == 'q' || reg_type == 'v') || 
                 reg_type == 'd' || reg_type == 's';
+        int quadword = fpr && (reg_type == 'q' || reg_type == 'v');
 
         int good_reg_num = (reg_num >= 0 && reg_num <= 31);
         int good_reg_type = gpr || fpr;
@@ -1209,19 +1158,13 @@ cmd_error_t cmdfunc_set(struct cmd_args_t *args,
         /* Various representations of our value string. */
         int valued = (int)strtol_err(value_str, error);
 
-        if(gpr && *error){
-            free(target);
-            free(value_str);
+        if(gpr && *error)
             return CMD_FAILURE;
-        }
 
         long valuellx = strtol_err(value_str, error);
 
-        if(gpr && *error){
-            free(target);
-            free(value_str);
+        if(gpr && *error)
             return CMD_FAILURE;
-        }
 
         /* The functions above will have set error
          * if we have a floating point value, so
@@ -1231,46 +1174,34 @@ cmd_error_t cmdfunc_set(struct cmd_args_t *args,
 
         float valuef = (float)strtod_err(value_str, error);
 
-        if(fpr && *error){
-            free(target);
-            free(value_str);
+        if(fpr && !quadword && *error)
             return CMD_FAILURE;
-        }
 
         double valuedf = strtod_err(value_str, error);
 
-        if(fpr && *error){
-            free(target);
-            free(value_str);
+        if(fpr && !quadword && *error)
             return CMD_FAILURE;
-        }
 
         /* Take care of any special registers. */
-        if(strcmp(target, "fp") == 0)
+        if(strcmp(target_str, "fp") == 0)
             debuggee->thread_state.__fp = valuellx;
-        else if(strcmp(target, "lr") == 0)
+        else if(strcmp(target_str, "lr") == 0)
             debuggee->thread_state.__lr = valuellx;
-        else if(strcmp(target, "sp") == 0)
+        else if(strcmp(target_str, "sp") == 0)
             debuggee->thread_state.__sp = valuellx;
-        else if(strcmp(target, "pc") == 0)
+        else if(strcmp(target_str, "pc") == 0)
             debuggee->thread_state.__pc = valuellx;
-        else if(strcmp(target, "cpsr") == 0)
+        else if(strcmp(target_str, "cpsr") == 0)
             debuggee->thread_state.__cpsr = valued;
-        else if(strcmp(target, "fpsr") == 0)
+        else if(strcmp(target_str, "fpsr") == 0)
             debuggee->neon_state.__fpsr = valued;
-        else if(strcmp(target, "fpcr") == 0)
+        else if(strcmp(target_str, "fpcr") == 0)
             debuggee->neon_state.__fpcr = valued;
         else{
             if(!good_reg_num || !good_reg_type){
-                asprintf(error, "bad register '%s'", target);
-
-                free(target);
-                free(value_str);
-
+                asprintf(error, "bad register '%s'", target_str);
                 return CMD_FAILURE;
             }
-
-            free(target);
 
             if(gpr){
                 if(reg_type == 'x')
@@ -1285,13 +1216,11 @@ cmd_error_t cmdfunc_set(struct cmd_args_t *args,
                     if(value_str[0] != '{' || 
                             value_str[strlen(value_str) - 1] != '}'){
                         asprintf(error, "bad value '%s'", value_str);
-                        free(value_str);
                         return CMD_FAILURE;
                     }
 
                     if(strlen(value_str) == 2){
                         asprintf(error, "bad value '%s'", value_str);
-                        free(value_str);
                         return CMD_FAILURE;
                     }
                     
@@ -1358,8 +1287,6 @@ cmd_error_t cmdfunc_set(struct cmd_args_t *args,
                     debuggee->neon_state.__v[reg_num] = *(int *)&valuef;
             }
         }
-
-        free(value_str);
 
         debuggee->set_thread_state();
         debuggee->set_neon_state();
@@ -1473,20 +1400,6 @@ cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    // XXX so I need this since I disable all bps when single stepping?
-    /* Delete any single step breakpoints belonging to
-     * the other thread.
-     */
-    if(debuggee->is_single_stepping){
-        delete_ss_bps();
-
-        debuggee->is_single_stepping = 0;
-
-        debuggee->get_debug_state();
-        debuggee->debug_state.__mdscr_el1 = 0;
-        debuggee->set_debug_state();
-    }
-
     int result = machthread_setfocusgivenindex(thread_id);
     
     if(result){
@@ -1576,7 +1489,7 @@ cmd_error_t cmdfunc_watch(struct cmd_args_t *args,
         curarg = argnext(args);
 
         /* We need the location after type. */
-        if(!curarg){//argpeek(args)){
+        if(!curarg){
             help_internal("watch");
             return CMD_FAILURE;
         }
@@ -1603,17 +1516,9 @@ cmd_error_t cmdfunc_watch(struct cmd_args_t *args,
         return CMD_FAILURE;
 
     return watchpoint_at_address(location, data_len, LSC, error);
-    /*
-    wp_error_t err = watchpoint_at_address(location, data_len, LSC, error);
-
-    if(err != WP_SUCCESS)
-        return CMD_FAILURE;
-
-    return CMD_SUCCESS;*/
 }
 
 cmd_error_t execute_command(char *input, char **errstr){
-    printf("%zu\n", sizeof(COMMANDS)/sizeof(struct dbg_cmd_t));
     if(!input)
         return CMD_FAILURE;
 
@@ -1628,8 +1533,7 @@ cmd_error_t execute_command(char *input, char **errstr){
 
     input[(end - input) + 1] = '\0';
     
-    char *usercmd = malloc(strlen(input) + 1);
-    strcpy(usercmd, input);
+    char *usercmd = strdup(input);
 
     char *token = strtok(usercmd, " ");
 
@@ -1673,11 +1577,22 @@ cmd_error_t execute_command(char *input, char **errstr){
             if(strlen(input) > tokenlen)
                 args = input + tokenlen + 1;
 
-            struct cmd_args_t *parsed_args = parse_args(args, errstr,0,0,0,0);
+            struct cmd_args_t *parsed_args = parse_args(args,
+                    curcmd->rinfo.argregex,
+                    curcmd->rinfo.groupnames,
+                    curcmd->rinfo.num_groups,
+                    curcmd->rinfo.unk_num_args,
+                    errstr);
+
+            if(*errstr){
+                argfree(parsed_args);
+                free(usercmd);
+                return CMD_FAILURE;
+            }
         
             cmd_error_t result = finalfunc(parsed_args, 0, errstr);
 
-            free(parsed_args);
+            argfree(parsed_args);
             free(usercmd);
             
             return result;
@@ -1715,6 +1630,8 @@ cmd_error_t execute_command(char *input, char **errstr){
     struct dbg_cmd_t *prevcmd = NULL;
 
     size_t pclen;
+
+    struct dbg_cmd_t *matchedcmd = NULL;
 
     while(token){
         struct dbg_cmd_t *cmd = &COMMANDS[idx];
@@ -1792,7 +1709,8 @@ cmd_error_t execute_command(char *input, char **errstr){
 
             /* We found a matching command, save its function. */
             if(num_matches == 1){
-                finalfunc = cmd->function;
+                matchedcmd = cmd;
+                finalfunc = matchedcmd->function;
                 token = strtok(NULL, " ");
                 break;
             }
@@ -1867,7 +1785,8 @@ cmd_error_t execute_command(char *input, char **errstr){
             
             /* We found a matching command, save its function. */
             if(!guaranteed && strlen(finalcmd) > 0){
-                finalfunc = prevcmd->function;
+                matchedcmd = prevcmd;
+                finalfunc = matchedcmd->function;
                 token = strtok(NULL, " ");
                 break;
             }
@@ -1912,12 +1831,8 @@ cmd_error_t execute_command(char *input, char **errstr){
     /* If we've found a good command, call its function.
      * At this point, anything token contains is an argument. 
      */
-    if(!token){
-        // XXX special case
-        //struct cmd_args_t *parsed_args = parse_args(token, errstr);
-        return finalfunc(NULL/*parsed_args*/, 0, errstr);
-        //free(parsed_args);
-    }
+    if(!token)
+        return finalfunc(NULL, 0, errstr);
 
     char *args = malloc(init_buf_sz);
     memset(args, '\0', init_buf_sz);
@@ -1933,12 +1848,23 @@ cmd_error_t execute_command(char *input, char **errstr){
     /* Remove the trailing space from args. */
     args[strlen(args) - 1] = '\0';
 
-    struct cmd_args_t *parsed_args = parse_args(args, errstr,0,0,0,0);
+    struct cmd_args_t *parsed_args = parse_args(args,
+            matchedcmd->rinfo.argregex,
+            matchedcmd->rinfo.groupnames,
+            matchedcmd->rinfo.num_groups,
+            matchedcmd->rinfo.unk_num_args,
+            errstr);
+
+    if(*errstr){
+        argfree(parsed_args);
+        free(args);
+        free(usercmd);
+        return CMD_FAILURE;
+    }
 
     cmd_error_t result = finalfunc(parsed_args, 0, errstr);
 
-    free(parsed_args);
-    // XXX double free?
+    argfree(parsed_args);
     free(args);
     free(usercmd);
 
@@ -1982,7 +1908,7 @@ void initialize_commands(void){
             "\n"
             "\nOptional arguments:\n"
             "\t--waitfor\n"
-            "\t\t'--waitfor' tells iosdbg to wait for process launch and attach.\n"
+            "\t\t'--waitfor' tells iosdbg to wait for process launch.\n"
             "\nSyntax:\n"
             "\tattach --waitfor? target\n"
             "\n",
@@ -2023,7 +1949,7 @@ void initialize_commands(void){
             "This command has one mandatory argument and no optional arguments.\n"
             "\nMandatory arguments:\n"
             "\tlocation\n"
-            "\t\tThis expression will be evaluated and used as the location for the breakpoint."
+            "\t\tThis expression will be evaluated and used as the location for the breakpoint.\n"
             "\t\tThis command accepts an arbitrary amount of this argument,"
             " allowing you to set multiple breakpoints.\n"
             "\nSyntax:\n"
@@ -2041,6 +1967,26 @@ void initialize_commands(void){
     };
 
     ADD_CMD(breakpoint);
+
+    struct dbg_cmd_t cont = {
+        "continue", "c",
+            "Resume debuggee execution.\n"
+            "This command has no arguments.\n"
+            "\nSyntax:\n"
+            "\tcontinue\n"
+            "\n"
+            "\nThis command has an alias: 'c'\n"
+            "\n",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        cmdfunc_continue
+    };
+
+    ADD_CMD(cont);
 
     struct dbg_cmd_t delete = {
         "delete", "d",
@@ -2202,7 +2148,6 @@ void initialize_commands(void){
 
     ADD_CMD(quit);
 
-    /* Placeholder */
     struct dbg_cmd_t regs = {
         "regs", NULL, NULL,
         {
@@ -2275,8 +2220,8 @@ void initialize_commands(void){
             "\t\tPrefix locations in memory with '*'.\n"
             "\t\tPrefix registers and convenience variables with '$'.\n"
             "\tvalue\n"
-            "\t\tThis expression will be evaluated and interpreted as what"
-            "\t\t `target` will be changed to.\n"
+            "\t\tWhat `target` will be changed to.\n"
+            "\t\tThis is an expression only when writing to memory. (prefix = '*')\n"
             "\t\tConvenience variables can hold integers, floating point values,"
             " and strings.\n"
             "\t\tWhen setting a convenience variable, include '.' for a floating"
@@ -2289,7 +2234,7 @@ void initialize_commands(void){
         {
             "(?<type>[*$]{1})(?<target>[\\w\\d+\\-*\\/$()]+)\\s*"
                 "="
-                "\\s*(?<value>(\\{.*\\})|(\\\".*\\\")|((?!\")[.\\-\\w\\d]+))",
+                "\\s*(?<value>(\\{.*\\})|(\\\".*\\\")|((?!\")[.\\-\\w\\d+\\-*\\/$()]+))",
             3,
             0,
             { "type", "target", "value" }
@@ -2306,7 +2251,7 @@ void initialize_commands(void){
             "\nOptional arguments:\n"
             "\tvar\n"
             "\t\tWhat variable to display.\n"
-            "\t\tThis command accepts an arbitrary amount of this argument,"
+            "\t\tThis command accepts an arbitrary amount of this argument,\n"
             "\t\t allowing you to display many convenience variables at once.\n"
             "\t\tOmit this argument to display every convenience variable.\n"
             "\nSyntax:\n"
@@ -2341,7 +2286,6 @@ void initialize_commands(void){
 
     ADD_CMD(stepi);
 
-    /* Placeholder */
     struct dbg_cmd_t thread = {
         "thread", NULL, NULL,
         {
@@ -2420,8 +2364,8 @@ void initialize_commands(void){
             "\nMandatory arguments:\n"
             "\tvar\n"
             "\t\tThe convenience variable to modify.\n"
-            "\t\tThis command accepts an arbitrary amount of this argument,"
-            " allowing you to modify many convenience variables at once.\n"
+            "\t\tThis command accepts an arbitrary amount of this argument,\n"
+            "\t\t allowing you to modify many convenience variables at once.\n"
             "\nSyntax:\n"
             "\tunset var\n"
             "\n",
@@ -2442,7 +2386,7 @@ void initialize_commands(void){
             "This command has two mandatory arguments and one optional argument.\n"
             "\nMandatory arguments:\n"
             "\tlocation\n"
-            "\t\tThis expression will be evaluated and interpreted as"
+            "\t\tThis expression will be evaluated and interpreted as\n"
             "\t\t the watchpoint's location.\n"
             "\tsize\n"
             "\t\tThe size of the data to watch.\n"
@@ -2455,6 +2399,8 @@ void initialize_commands(void){
             "\t\tIf this argument is omitted, iosdbg assumes --w.\n"
             "\nSyntax:\n"
             "\twatch type? location size\n"
+            "\n"
+            "\nThis command has an alias: 'w'\n"
             "\n",
         {
             "^(?<type>--[rw]{1,2})?\\s*(?<location>[\\w+\\-*\\/\\$()]+)\\s+"
@@ -2468,7 +2414,6 @@ void initialize_commands(void){
 
     ADD_CMD(watch);
 
-    /* Placeholder */
     struct dbg_cmd_t terminator = {
         "", NULL, "",
         {

@@ -18,7 +18,6 @@ typedef int cmd_error_t;
 /* When --waitfor is included as an argument for 'attach'. */
 extern int keep_checking_for_process;
 
-#define NUM_CMDS 25
 #define MAX_GROUPS 3
 
 struct dbg_cmd_t {
@@ -37,7 +36,7 @@ struct dbg_cmd_t {
          * with one command. In these cases, the group with an unknown amount of
          * results has to be the last item in groupnames.
          */
-        int unk_num_arguments;
+        int unk_num_args;
 
         /* Names of the groups, in the order they're expected in the command. */
         const char *groupnames[MAX_GROUPS];
@@ -73,33 +72,4 @@ cmd_error_t execute_command(char *, char **);
 
 void initialize_commands(void);
 
-/*
-static struct dbg_cmd_t COMMANDS[] = {
-    { "aslr", NULL, cmdfunc_aslr, "Show the ASLR slide." },
-    { "attach", NULL, cmdfunc_attach, "Attach to a program with its PID or executable name. Syntax: attach <(PID|{--waitfor} progname)>\n\n\tInclude '--waitfor' to wait for the target process to launch." },
-    { "backtrace", "bt", cmdfunc_backtrace, "Unwind the stack." },
-    { "break", "b", cmdfunc_break, "Set a breakpoint.\n\n\tPass --no-aslr to keep ASLR from being added." },
-    { "continue", "c", cmdfunc_continue, "Resume debuggee execution." },
-    { "delete", "d", cmdfunc_delete, "Delete a breakpoint or a watchpoint via its ID. Syntax:\n\t(d|delete) <type> {id}\n\n\ttype: 'b' for breakpoint or 'w' for watchpoint.\n\tid: the *optional* id of the breakpoint or watchpoint you want to delete.\n\tIf you don't include it, you'll be given the option to delete all breakpoints or watchpoints." },
-    { "detach", NULL, cmdfunc_detach, "Detach from the debuggee." },
-    { "disassemble", "dis", cmdfunc_disassemble, "Disassemble memory from the debuggee. Syntax:\n\tdisassemble <location> <numlines>.\n\n\tPass --no-aslr to keep ASLR from being added to the location." },
-    { "examine", "x", cmdfunc_examine, "Examine debuggee memory. Syntax:\n\t(examine|x) (location|$register) <count>\n\n\tIf you want to view a register, prefix it with '$'. ASLR will not be accounted for.\n\n\tPass --no-aslr to keep ASLR from being added to the location." },
-    { "help", NULL, cmdfunc_help, "Get help for a specific command." },
-    { "kill", NULL, cmdfunc_kill, "Kill the debuggee." },
-    { "quit", "q", cmdfunc_quit, "Quit iosdbg." },
-    { "regs", NULL, NULL, NULL },
-    { "regs float", NULL, cmdfunc_regsfloat, "Show a floating point register. Syntax:\n\tregs float <reg1 reg2 ...>\n\n\tYou can list as many floating point registers as you want." },
-    { "regs gen", NULL, cmdfunc_regsgen, "Show general purpose registers. Syntax:\n\tregs gen {reg1 reg2 ...}\n\n\tThe argument is optional. All general purpose registers are dumped if there is no argument.\n\tYou can list as many general registers as you want." },
-    { "set", NULL, cmdfunc_set, "Modify debuggee memory, registers, or a convenience variable for the debugger. Syntax:\n\tset (*offset|$register|variable)=value\n\n\tYou must prefix an offset with '*'.\n\tYou must prefix a register or a convenience variable with '$'.\n\n\tIf you want to write to one of the 128 bit V registers, format value like this:\n\t\"{byte1 byte2 byte3 byte4 byte5 byte6 byte7 byte8 byte9 byte10 byte11 byte12 byte13 byte14 byte15 byte16}\".\n\n\tIf you want your value to be intepreted as hex, use '0x'.\n\n\tPass --no-aslr to prevent ASLR from being added." },
-    { "show", NULL, cmdfunc_show, "Show a convenience variable. Syntax:\n\tshow {name of convenience variable}\n\n\tGive no arguments to show all convenience variables." },
-    { "stepi", NULL, cmdfunc_stepi, "Step into the next instruction." },
-    { "thread", NULL, NULL, NULL },
-    { "thread list", NULL, cmdfunc_threadlist, "List threads from the debuggee." },
-    { "thread select", NULL, cmdfunc_threadselect, "Select a thread to focus on." },
-    { "trace", NULL, cmdfunc_trace, "Trace system calls, mach system calls, and mach messages from the debuggee. Press Ctrl+C to quit. Syntax: \n\ttrace {--dump}\n\n\tIf you include `--dump`, the trace will be dumped to ~/trace.txt." },
-    { "unset", NULL, cmdfunc_unset, "Set a convenience variable to `void`. The variable is not deleted. Syntax:\n\tunset <convenience variable, ...>" },
-    { "watch", "w", cmdfunc_watch, "Set a watchpoint. Syntax:\n\twatch {type} <addr> <size>\n\n\ttype: what kind of access to <location> you want to watch for.\n\n\tvalid values: --r (read), --w (write), --rw (read/write).\n\n\tif no type is given, iosdbg defaults to --w.\n\n\taddr: the location to watch\n\tsize: the size, in bytes, of the data at location to watch" },
-    { "", NULL, NULL, ""}
-};
-*/
 #endif

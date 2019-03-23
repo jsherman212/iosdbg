@@ -4,22 +4,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include <pcre2.h>
 
 #include "argparse.h"
-#include "linkedlist.h"
+#include "convvar.h"
 
 int wants_add_aslr(char *str){
     /* This convenience variable allows the user to tell iosdbg
      * to ignore ASLR no matter what.
      */
-    /*
     char *error;
     char *no_aslr_override = convvar_strval("$NO_ASLR_OVERRIDE", &error);
 
     if(no_aslr_override && strcmp(no_aslr_override, "void") != 0)
         return 0;
-    */
 
     if(!str)
         return 1;
@@ -33,12 +32,18 @@ struct cmd_args_t *parse_args(char *_args,
         int num_groups,
         int unk_amount_of_args,
         char **error){
-    char *args = strdup(_args);
-
     struct cmd_args_t *arguments = malloc(sizeof(struct cmd_args_t));
 
     arguments->argqueue = queue_new();
     arguments->num_args = 0;
+
+    if(!_args){
+        arguments->add_aslr = 1;
+        return arguments;
+    }
+
+    char *args = strdup(_args);
+
     arguments->add_aslr = wants_add_aslr(args);
 
     PCRE2_SIZE erroroffset;
@@ -46,7 +51,7 @@ struct cmd_args_t *parse_args(char *_args,
 
     pcre2_code *re = pcre2_compile((PCRE2_SPTR)pattern,
             PCRE2_ZERO_TERMINATED,
-            0,//PCRE2_DUPNAMES,//PCRE2_MULTILINE, //0,
+            0,
             &errornumber,
             &erroroffset,
             NULL);
@@ -55,7 +60,7 @@ struct cmd_args_t *parse_args(char *_args,
         PCRE2_UCHAR buf[2048];
         pcre2_get_error_message(errornumber, buf, sizeof(buf));
 
-        asprintf(error, "compilation failed at offset %zu: %s",
+        asprintf(error, "regex compilation failed at offset %zu: %s",
                 erroroffset, buf);
 
         free(args);
@@ -78,7 +83,7 @@ struct cmd_args_t *parse_args(char *_args,
         PCRE2_UCHAR buf[2048];
         pcre2_get_error_message(rc, buf, sizeof(buf));
 
-        asprintf(error, "your arguments could not be processed"
+        asprintf(error, "pcre2: your arguments could not be parsed"
                 " (rc = %d): %s", rc, buf);
 
         pcre2_match_data_free(match_data);
@@ -95,7 +100,7 @@ struct cmd_args_t *parse_args(char *_args,
      * Normally we'd just loop through the groupnames array,
      * but in this case, we have to do that but exclude the
      * last group name. Then we have to keep matching for that
-     * group name in another loop. TODO rephrase this rambling
+     * group name in another loop.
      */
     int idx_limit = num_groups;
 
