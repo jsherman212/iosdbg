@@ -239,23 +239,3 @@ void argfree(struct cmd_args_t *args){
     queue_free(args->argqueue);
     free(args);
 }
-
-void desc(struct cmd_args_t *args){
-    if(!args)
-        return;
-
-    char *arg = argnext(args);
-
-    if(!arg)
-        printf("no arguments\n");
-
-    int count = 1;
-
-    while(arg){
-        printf("Argument %d: '%s'\n", count++, arg);
-        arg = argnext(args);
-    }
-
-    printf("\n%d arguments, %s ASLR\n", args->num_args,
-            args->add_aslr ? "wants to add" : "doesn't want to add");
-}

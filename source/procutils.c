@@ -12,15 +12,18 @@ struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length, char **error){
 
     *length = 0;
 
-    err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, NULL, length, NULL, 0);
+    err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, NULL,
+            length, NULL, 0);
     
     if(err){
-        asprintf(error, "couldn't get the size of our kinfo_proc buffer: %s\n", strerror(errno));
+        asprintf(error, "couldn't get the size of our kinfo_proc buffer: %s\n", 
+                strerror(errno));
         return NULL;
     }
     
     result = malloc(*length);
-    err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, result, length, NULL, 0);
+    err = sysctl((int *)name, (sizeof(name) / sizeof(name[0])) - 1, result,
+            length, NULL, 0);
     
     if(err){
         asprintf(error, "second sysctl call failed: %s\n", strerror(errno));

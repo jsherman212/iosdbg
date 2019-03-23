@@ -17,6 +17,5 @@ struct cmd_args_t *parse_args(char *_args,
         char **error);
 char *argnext(struct cmd_args_t *);
 void argfree(struct cmd_args_t *);
-void desc(struct cmd_args_t *);
 
 #endif
