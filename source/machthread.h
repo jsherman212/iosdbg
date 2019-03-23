@@ -6,29 +6,29 @@
 #define MAXTHREADSIZENAME 64
 
 struct machthread {
-	/* Port to this thread. */
-	mach_port_t port;
+    /* Port to this thread. */
+    mach_port_t port;
 
-	/* Tells us if this thread is the one being focused on. */
-	int focused;
+    /* Tells us if this thread is the one being focused on. */
+    int focused;
 
-	/* Thread ID. */
-	unsigned long long tid;
+    /* Thread ID. */
+    unsigned long long tid;
 
-	/* The name of this thread. */
-	char tname[MAXTHREADSIZENAME];
+    /* The name of this thread. */
+    char tname[MAXTHREADSIZENAME];
 
-	/* iosdbg assigned thread ID. */
-	int ID;
+    /* iosdbg assigned thread ID. */
+    int ID;
 
-	/* Thread state. */
-	arm_thread_state64_t thread_state;
+    /* Thread state. */
+    arm_thread_state64_t thread_state;
 };
 
 enum comparison {
-	PORTS,
-	IDS,
-	FOCUSED
+    PORTS,
+    IDS,
+    FOCUSED
 };
 
 struct machthread *machthread_fromport(mach_port_t);

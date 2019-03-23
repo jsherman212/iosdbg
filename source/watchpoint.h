@@ -2,26 +2,26 @@
 #define _WATCHPOINT_H_
 
 struct watchpoint {
-	/* Watchpoint ID */
-	int id;
-	
-	// Watchpoint location.
-	unsigned long location;
+    /* Watchpoint ID */
+    int id;
+    
+    // Watchpoint location.
+    unsigned long location;
 
-	// How many times this watchpoint has hit.
-	int hit_count;
+    // How many times this watchpoint has hit.
+    int hit_count;
 
-	// Whatever is located at the location of this watchpoint.
-	void *data;
+    // Whatever is located at the location of this watchpoint.
+    void *data;
 
-	// Length of the data we're watching.
-	unsigned int data_len;
+    // Length of the data we're watching.
+    unsigned int data_len;
 
-	// The watchpoint register we're using.
-	int hw_wp_reg;
+    // The watchpoint register we're using.
+    int hw_wp_reg;
 
-	/* Load/store control for this watchpoint. */
-	int LSC;
+    /* Load/store control for this watchpoint. */
+    int LSC;
 };
 
 #define WT (0 << 20)

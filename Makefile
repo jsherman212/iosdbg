@@ -1,7 +1,7 @@
 SDK=/var/theos/sdks/iPhoneOS11.2.sdk
 CC=clang
 CFLAGS=-g -arch arm64 -isysroot $(SDK)
-LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo -fsanitize=address
+LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo -lpcre2-8.0 -fsanitize=address
 SRCDIR=source
 
 OBJECT_FILES = $(SRCDIR)/argparse.o \

@@ -2,12 +2,12 @@
 #define _LINKEDLIST_H_
 
 struct node_t {
-	void *data;
-	struct node_t *next;
+    void *data;
+    struct node_t *next;
 };
 
 struct linkedlist {
-	struct node_t *front;
+    struct node_t *front;
 };
 
 struct linkedlist *linkedlist_new(void);

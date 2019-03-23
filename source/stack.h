@@ -2,8 +2,8 @@
 #define _STACK_H_
 
 struct stack_t {
-	void **data;
-	int top;
+    void **data;
+    int top;
 };
 
 struct stack_t *stack_new(void);

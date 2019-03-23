@@ -119,16 +119,18 @@ double strtod_err(char *str, char **error){
     return result;
 }
 
+struct dbg_cmd_t COMMANDS[NUM_CMDS];
+
 cmd_error_t help_internal(char *cmd_name){
-    int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
+    //int NUM_CMDS = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
     int cur_cmd_idx = 0;
 
-    while(cur_cmd_idx < num_cmds){
+    while(cur_cmd_idx < NUM_CMDS){
         struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
     
         /* Must not be an ambiguous command. */
         if(strcmp(cmd->name, cmd_name) == 0 && cmd->function){
-            printf("\t%s\n", cmd->desc);
+            printf("%s", cmd->desc);
             return CMD_SUCCESS;
         }
 
@@ -138,7 +140,7 @@ cmd_error_t help_internal(char *cmd_name){
     return CMD_FAILURE;
 }
 
-cmd_error_t cmdfunc_aslr(struct arguments_t *args, 
+cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "not attached to anything");
@@ -150,7 +152,7 @@ cmd_error_t cmdfunc_aslr(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_attach(struct arguments_t *args, 
+cmd_error_t cmdfunc_attach(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         asprintf(error, "need target");
@@ -334,7 +336,7 @@ cmd_error_t cmdfunc_attach(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_backtrace(struct arguments_t *args, 
+cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "not attached to anything");
@@ -384,7 +386,7 @@ cmd_error_t cmdfunc_backtrace(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_break(struct arguments_t *args, 
+cmd_error_t cmdfunc_break(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "not attached to anything");
@@ -425,7 +427,7 @@ cmd_error_t cmdfunc_break(struct arguments_t *args,
     */
 }
 
-cmd_error_t cmdfunc_continue(struct arguments_t *args, 
+cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int do_not_print_msg, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -457,7 +459,7 @@ cmd_error_t cmdfunc_continue(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_delete(struct arguments_t *args, 
+cmd_error_t cmdfunc_delete(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -556,7 +558,7 @@ cmd_error_t cmdfunc_delete(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_detach(struct arguments_t *args, 
+cmd_error_t cmdfunc_detach(struct cmd_args_t *args, 
         int from_death, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -656,7 +658,7 @@ cmd_error_t cmdfunc_detach(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_disassemble(struct arguments_t *args, 
+cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         help_internal("disassemble");
@@ -709,7 +711,7 @@ cmd_error_t cmdfunc_disassemble(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_examine(struct arguments_t *args, 
+cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         help_internal("examine");
@@ -763,7 +765,7 @@ cmd_error_t cmdfunc_examine(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_help(struct arguments_t *args, 
+cmd_error_t cmdfunc_help(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         asprintf(error, "need command");
@@ -780,7 +782,7 @@ cmd_error_t cmdfunc_help(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_kill(struct arguments_t *args, 
+cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -815,7 +817,7 @@ cmd_error_t cmdfunc_kill(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_quit(struct arguments_t *args, 
+cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
         int arg1, char **error){
     cmdfunc_detach(NULL, 0, error);
 
@@ -853,7 +855,7 @@ cmd_error_t cmdfunc_quit(struct arguments_t *args,
     exit(0);
 }
 
-cmd_error_t cmdfunc_regsfloat(struct arguments_t *args, 
+cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -961,7 +963,7 @@ cmd_error_t cmdfunc_regsfloat(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_regsgen(struct arguments_t *args, 
+cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -1059,7 +1061,7 @@ cmd_error_t cmdfunc_regsgen(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_set(struct arguments_t *args, 
+cmd_error_t cmdfunc_set(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         help_internal("set");
@@ -1366,7 +1368,7 @@ cmd_error_t cmdfunc_set(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_show(struct arguments_t *args, 
+cmd_error_t cmdfunc_show(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         show_all_cvars();
@@ -1384,7 +1386,7 @@ cmd_error_t cmdfunc_show(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_stepi(struct arguments_t *args, 
+cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -1415,7 +1417,7 @@ cmd_error_t cmdfunc_stepi(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_threadlist(struct arguments_t *args, 
+cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!debuggee->threads)
         return CMD_FAILURE;
@@ -1438,7 +1440,7 @@ cmd_error_t cmdfunc_threadlist(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_threadselect(struct arguments_t *args, 
+cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args)
         return CMD_FAILURE;
@@ -1497,7 +1499,7 @@ cmd_error_t cmdfunc_threadselect(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_trace(struct arguments_t *args, 
+cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->tracing_disabled){
         asprintf(error, "tracing is not supported on this host");
@@ -1514,7 +1516,7 @@ cmd_error_t cmdfunc_trace(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_unset(struct arguments_t *args, 
+cmd_error_t cmdfunc_unset(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args)
         return CMD_FAILURE;
@@ -1535,7 +1537,7 @@ cmd_error_t cmdfunc_unset(struct arguments_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_watch(struct arguments_t *args, 
+cmd_error_t cmdfunc_watch(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args)
         return CMD_FAILURE;
@@ -1611,6 +1613,7 @@ cmd_error_t cmdfunc_watch(struct arguments_t *args,
 }
 
 cmd_error_t execute_command(char *input, char **errstr){
+    printf("%zu\n", sizeof(COMMANDS)/sizeof(struct dbg_cmd_t));
     if(!input)
         return CMD_FAILURE;
 
@@ -1641,7 +1644,7 @@ cmd_error_t execute_command(char *input, char **errstr){
      * If this is still NULL by the end of this function,
      * no suitable command was found.
      */
-    cmd_error_t (*finalfunc)(struct arguments_t *, int, char **) = NULL;
+    cmd_error_t (*finalfunc)(struct cmd_args_t *, int, char **) = NULL;
 
     int numcmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
     
@@ -1670,7 +1673,7 @@ cmd_error_t execute_command(char *input, char **errstr){
             if(strlen(input) > tokenlen)
                 args = input + tokenlen + 1;
 
-            struct arguments_t *parsed_args = parse_args(args, errstr);
+            struct cmd_args_t *parsed_args = parse_args(args, errstr,0,0,0,0);
         
             cmd_error_t result = finalfunc(parsed_args, 0, errstr);
 
@@ -1907,10 +1910,11 @@ cmd_error_t execute_command(char *input, char **errstr){
     }
 
     /* If we've found a good command, call its function.
-     * At this point, anything token contains is an argument. */
+     * At this point, anything token contains is an argument. 
+     */
     if(!token){
         // XXX special case
-        //struct arguments_t *parsed_args = parse_args(token, errstr);
+        //struct cmd_args_t *parsed_args = parse_args(token, errstr);
         return finalfunc(NULL/*parsed_args*/, 0, errstr);
         //free(parsed_args);
     }
@@ -1929,7 +1933,7 @@ cmd_error_t execute_command(char *input, char **errstr){
     /* Remove the trailing space from args. */
     args[strlen(args) - 1] = '\0';
 
-    struct arguments_t *parsed_args = parse_args(args, errstr);
+    struct cmd_args_t *parsed_args = parse_args(args, errstr,0,0,0,0);
 
     cmd_error_t result = finalfunc(parsed_args, 0, errstr);
 
@@ -1937,6 +1941,544 @@ cmd_error_t execute_command(char *input, char **errstr){
     // XXX double free?
     free(args);
     free(usercmd);
-    
+
     return result;
+}
+
+/* This function eliminates the messy nature of initializing structs
+ * within an array.
+ */
+void initialize_commands(void){
+    int cmdidx = 0;
+
+    #define ADD_CMD(cmd) COMMANDS[cmdidx++] = cmd
+
+    struct dbg_cmd_t aslr = {
+        "aslr", NULL, 
+            "Show debuggee's ASLR slide.\n"
+            "This command has no arguments.\n"
+            "\nSyntax:\n"
+            "\taslr\n"
+            "\n",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        cmdfunc_aslr
+    };
+
+    ADD_CMD(aslr);
+
+    struct dbg_cmd_t attach = {
+        "attach", NULL,
+            "Attach to a program via its PID or name.\n"
+            "To attach upon launch, give '--waitfor' before the program's name.\n"
+            "This command has one mandatory argument and one optional argument.\n"
+            "\nMandatory arguments:\n"
+            "\ttarget\n"
+            "\t\tWhat you want to attach to. It can be a PID or a program name.\n"
+            "\n"
+            "\nOptional arguments:\n"
+            "\t--waitfor\n"
+            "\t\t'--waitfor' tells iosdbg to wait for process launch and attach.\n"
+            "\nSyntax:\n"
+            "\tattach --waitfor? target\n"
+            "\n",
+        {
+            "(?<waitfor>--waitfor)?\\s?\"?(?<target>[^\"]+)\"?",
+            2,
+            0,
+            { "waitfor", "target" }
+        },
+        cmdfunc_attach
+    };
+
+    ADD_CMD(attach);
+    
+    struct dbg_cmd_t backtrace = {
+        "backtrace", "bt",
+            "Print a backtrace of the entire stack. All stack frames are printed.\n"
+            "This command has no arguments.\n"
+            "\nSyntax:\n"
+            "\tbacktrace\n"
+            "\n"
+            "\nThis command has an alias: 'bt'\n"
+            "\n",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        cmdfunc_backtrace
+    };
+
+    ADD_CMD(backtrace);
+
+    struct dbg_cmd_t breakpoint = {
+        "break", "b",
+            "Set a breakpoint. Include '--no-aslr' to keep ASLR from being added.\n"
+            "This command has one mandatory argument and no optional arguments.\n"
+            "\nMandatory arguments:\n"
+            "\tlocation\n"
+            "\t\tThis expression will be evaluated and used as the location for the breakpoint."
+            "\t\tThis command accepts an arbitrary amount of this argument,"
+            " allowing you to set multiple breakpoints.\n"
+            "\nSyntax:\n"
+            "\tbreak location\n"
+            "\n"
+            "\nThis command has an alias: 'b'\n"
+            "\n",
+        {
+            "(?<args>[\\w+\\-*\\/\\$()]+)",
+            1,
+            1,
+            { "args" }
+        },
+        cmdfunc_break
+    };
+
+    ADD_CMD(breakpoint);
+
+    struct dbg_cmd_t delete = {
+        "delete", "d",
+            "Delete breakpoints or watchpoints.\n"
+            "This command has one mandatory argument and one optional argument.\n"
+            "\nMandatory arguments:\n"
+            "\ttype\n"
+            "\t\tWhat you want to delete. This can be 'b' for breakpoint"
+            " or 'w' for watchpoint.\n"
+            "\nOptional arguments:\n"
+            "\tid\n"
+            "\t\tThe id of the breakpoint or watchpoint you want to delete.\n"
+            "\t\tThis command accepts an arbitrary amount of this argument,"
+            " allowing you to delete multiple breakpoints or watchpoints.\n"
+            "\t\tOmit this argument for the option to delete all breakpoints"
+            " or watchpoints.\n"
+            "\nSyntax:\n"
+            "\tdelete type id?\n"
+            "\n"
+            "\nThis command has an alias: 'd'\n"
+            "\n",
+        {
+            "(?<type>b|w)(\\s+)?(?<ids>[-\\d\\s]+)?",
+            2,
+            1,
+            { "type", "ids" }
+        },
+        cmdfunc_delete
+    };
+
+    ADD_CMD(delete);
+
+    struct dbg_cmd_t detach = {
+        "detach", NULL,
+            "Detach from the debuggee.\n"
+            "This command has no arguments.\n"
+            "\nSyntax:\n"
+            "\tdetach\n"
+            "\n",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        cmdfunc_detach
+    };
+
+    ADD_CMD(detach);
+
+    struct dbg_cmd_t disassemble = {
+        "disassemble", "dis",
+            "Disassemble debuggee memory. Include '--no-aslr' to keep ASLR from being added.\n"
+            "This command has two mandatory arguments and no optional arguments.\n"
+            "\nMandatory arguments:\n"
+            "\tlocation\n"
+            "\t\tThis expression will be evaluated and used as where iosdbg"
+            " will start disassembling.\n"
+            "\tcount\n"
+            "\t\tHow many bytes iosdbg will disassemble.\n"
+            "\nSyntax:\n"
+            "\tdisassemble location count\n"
+            "\n"
+            "\nThis command has an alias: 'dis'\n"
+            "\n",
+        {
+            "(?<args>[\\w+\\-*\\/\\$()]+)",
+            1,
+            1,
+            { "args" }
+        },
+        cmdfunc_disassemble
+    };
+
+    ADD_CMD(disassemble);
+
+    struct dbg_cmd_t examine = {
+        "examine", "x",
+            "View debuggee memory. Include '--no-aslr' to keep ASLR from being added.\n"
+            "This command has two mandatory arguments and no optional arguments.\n"
+            "\nMandatory arguments:\n"
+            "\tlocation\n"
+            "\t\tThis expression will be evaluted and used as where iosdbg"
+            " will start dumping memory.\n"
+            "\tcount\n"
+            "\t\tHow many bytes iosdbg will dump.\n"
+            "\nSyntax:\n"
+            "\texamine location count\n"
+            "\n"
+            "\nThis command has an alias: 'x'\n"
+            "\n",
+        {
+            "(?<args>[\\w+\\-*\\/\\$()]+)",
+            1,
+            1,
+            { "args" }
+        },
+        cmdfunc_examine
+    };
+
+    ADD_CMD(examine);
+
+    struct dbg_cmd_t help = {
+        "help", NULL,
+            "Get help for a command.\n"
+            "This command has one mandatory argument and no optional arguments.\n"
+            "\nMandatory arguments:\n"
+            "\tcommand\n"
+            "\t\tThe description of the command.\n"
+            "\nSyntax:\n"
+            "\thelp command\n"
+            "\n",
+        {
+            "(?J)^\"(?<cmd>[\\w\\s]+)\"|^(?<cmd>(?![\\w\\s]+\")\\w+)",
+            1,
+            0,
+            { "cmd" }
+        },
+        cmdfunc_help
+    };
+
+    ADD_CMD(help);
+
+    struct dbg_cmd_t kill = {
+        "kill", NULL,
+            "Kill the debuggee.\n"
+            "This command has no arguments.\n"
+            "\nSyntax:\n"
+            "\tkill\n"
+            "\n",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        cmdfunc_kill
+    };
+
+    ADD_CMD(kill);
+
+    struct dbg_cmd_t quit = {
+        "quit", "q",
+            "Quit iosdbg.\n"
+            "This command has no arguments.\n"
+            "\nSyntax:\n"
+            "\tquit\n"
+            "\n"
+            "\nThis command has an alias: 'q'\n"
+            "\n",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        cmdfunc_quit
+    };
+
+    ADD_CMD(quit);
+
+    /* Placeholder */
+    struct dbg_cmd_t regs = {
+        "regs", NULL, NULL,
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        NULL
+    };
+
+    ADD_CMD(regs);
+
+    struct dbg_cmd_t regsfloat = {
+        "regs float", NULL,
+            "Show floating point registers.\n"
+            "This command has one mandatory argument and no optional arguments.\n"
+            "\nMandatory arguments:\n"
+            "\treg\n"
+            "\t\tThe floating point register.\n"
+            "\t\tThis command accepts an arbitrary amount of this argument,"
+            " allowing you to view many floating point registers at once.\n"
+            "\nSyntax:\n"
+            "\tregs float reg\n"
+            "\n",
+        {
+            "\\b(?<reg>[qvdsQVDS]{1}\\d{1,2}|(fpsr|FPSR|fpcr|FPCR)+)\\b",
+            1,
+            1,
+            { "reg" }
+        },
+        cmdfunc_regsfloat
+    };
+
+    ADD_CMD(regsfloat);
+
+    struct dbg_cmd_t regsgen = {
+        "regs gen", NULL,
+            "Show general purpose registers.\n"
+            "This command has no mandatory arguments and one optional argument.\n"
+            "\nOptional arguments:\n"
+            "\treg\n"
+            "\t\tThe general purpose register.\n"
+            "\t\tThis command accepts an arbitrary amount of this argument,"
+            " allowing you to view many general purpose registers at once.\n"
+            "\t\tOmit this argument to see every general purpose register.\n"
+            "\nSyntax:\n"
+            "\tregs gen reg\n"
+            "\n",
+        {
+            "\\b(?<reg>[xwXW]{1}\\d{1,2}|(fp|FP|lr|LR|sp|SP|pc|PC|cpsr|CPSR)+)\\b",
+            1,
+            1,
+            { "reg" }
+        },
+        cmdfunc_regsgen
+    };
+
+    ADD_CMD(regsgen);
+
+    struct dbg_cmd_t set = {
+        "set", NULL,
+            "Modify debuggee memory, registers, or iosdbg convenience variables.\n"
+            "Include '--no-aslr' to keep ASLR from being added.\n"
+            "This command has two mandatory arguments and no optional arguments.\n"
+            "\nMandatory arguments:\n"
+            "\ttarget\n"
+            "\t\tThis expression will be evaluated and interpreted as what"
+            " will be changed.\n"
+            "\t\tPrefix locations in memory with '*'.\n"
+            "\t\tPrefix registers and convenience variables with '$'.\n"
+            "\tvalue\n"
+            "\t\tThis expression will be evaluated and interpreted as what"
+            "\t\t `target` will be changed to.\n"
+            "\t\tConvenience variables can hold integers, floating point values,"
+            " and strings.\n"
+            "\t\tWhen setting a convenience variable, include '.' for a floating"
+            " point value\n"
+            "\t\t and quotes for strings.\n"
+            "\t\tConvenience variables must be prefixed with '$'.\n"
+            "\nSyntax:\n"
+            "\tset target=value\n"
+            "\n",
+        {
+            "(?<type>[*$]{1})(?<target>[\\w\\d+\\-*\\/$()]+)\\s*"
+                "="
+                "\\s*(?<value>(\\{.*\\})|(\\\".*\\\")|((?!\")[.\\-\\w\\d]+))",
+            3,
+            0,
+            { "type", "target", "value" }
+        },
+        cmdfunc_set
+    };
+
+    ADD_CMD(set);
+
+    struct dbg_cmd_t show = {
+        "show", NULL,
+            "Display convenience variables.\n"
+            "This command has no mandatory arguments and one optional argument.\n"
+            "\nOptional arguments:\n"
+            "\tvar\n"
+            "\t\tWhat variable to display.\n"
+            "\t\tThis command accepts an arbitrary amount of this argument,"
+            "\t\t allowing you to display many convenience variables at once.\n"
+            "\t\tOmit this argument to display every convenience variable.\n"
+            "\nSyntax:\n"
+            "\tshow var\n"
+            "\n",
+        {
+            "(?<var>\\$[\\w\\d+\\-*\\/$()]+)",
+            1,
+            1,
+            { "var" }
+        },
+        cmdfunc_show
+    };
+
+    ADD_CMD(show);
+
+    struct dbg_cmd_t stepi = {
+        "stepi", NULL,
+            "Step into the next machine instruction.\n"
+            "This command has no arguments.\n"
+            "\nSyntax:\n"
+            "\tstepi\n"
+            "\n",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        cmdfunc_stepi
+    };
+
+    ADD_CMD(stepi);
+
+    /* Placeholder */
+    struct dbg_cmd_t thread = {
+        "thread", NULL, NULL,
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        NULL
+    };
+
+    ADD_CMD(thread);
+
+    struct dbg_cmd_t threadlist = {
+        "thread list", NULL,
+            "Inquire about existing threads of the debuggee.\n"
+            "This command has no arguments.\n"
+            "\nSyntax:\n"
+            "\tthread list\n"
+            "\n",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        cmdfunc_threadlist
+    };
+
+    ADD_CMD(threadlist);
+
+    struct dbg_cmd_t threadselect = {
+        "thread select", NULL,
+            "Select the thread to focus on while debugging.\n"
+            "This command has one mandatory argument and no optional arguments.\n"
+            "\nMandatory arguments:\n"
+            "\ttid\n"
+            "\t\tThe thread ID to focus on.\n"
+            "\nSyntax:\n"
+            "\tthread select tid\n"
+            "\n",
+        {
+            "^\\s*(?<tid>\\d+)",
+            1,
+            0,
+            { "tid" }
+        },
+        cmdfunc_threadselect
+    };
+
+    ADD_CMD(threadselect);
+
+    struct dbg_cmd_t trace = {
+        "trace", NULL,
+            "This command provides similar functionality to strace through"
+            " the kdebug interface.\n"
+            "This command has no arguments.\n"
+            "\nSyntax:\n"
+            "\ttrace\n"
+            "\n",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        cmdfunc_trace
+    };
+
+    ADD_CMD(trace);
+
+    struct dbg_cmd_t unset = {
+        "unset", NULL,
+            "Revert the value of a convenience variable to 'void'.\n"
+            "This command has one mandatory argument and no optional arguments.\n"
+            "\nMandatory arguments:\n"
+            "\tvar\n"
+            "\t\tThe convenience variable to modify.\n"
+            "\t\tThis command accepts an arbitrary amount of this argument,"
+            " allowing you to modify many convenience variables at once.\n"
+            "\nSyntax:\n"
+            "\tunset var\n"
+            "\n",
+        {
+            "(?<var>\\$\\w+)",
+            1,
+            1,
+            { "var" }
+        },
+        cmdfunc_unset
+    };
+
+    ADD_CMD(unset);
+    
+    struct dbg_cmd_t watch = {
+        "watch", "w",
+            "Set a watchpoint. ASLR is never accounted for.\n"
+            "This command has two mandatory arguments and one optional argument.\n"
+            "\nMandatory arguments:\n"
+            "\tlocation\n"
+            "\t\tThis expression will be evaluated and interpreted as"
+            "\t\t the watchpoint's location.\n"
+            "\tsize\n"
+            "\t\tThe size of the data to watch.\n"
+            "\nOptional arguments:\n"
+            "\ttype\n"
+            "\t\tThe type of the watchpoint. Acceptable values are:\n"
+            "\t\t\t'--r'  (read)\n"
+            "\t\t\t'--w'  (write)\n"
+            "\t\t\t'--rw' (read/write)\n"
+            "\t\tIf this argument is omitted, iosdbg assumes --w.\n"
+            "\nSyntax:\n"
+            "\twatch type? location size\n"
+            "\n",
+        {
+            "^(?<type>--[rw]{1,2})?\\s*(?<location>[\\w+\\-*\\/\\$()]+)\\s+"
+                "(?<size>(0[xX])?\\d+)",
+            3,
+            0,
+            { "type", "location", "size" }
+        },
+        cmdfunc_watch
+    };
+
+    ADD_CMD(watch);
+
+    /* Placeholder */
+    struct dbg_cmd_t terminator = {
+        "", NULL, "",
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        NULL
+    };
+
+    ADD_CMD(terminator);
 }

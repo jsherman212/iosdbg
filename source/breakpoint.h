@@ -2,32 +2,32 @@
 #define _BREAKPOINT_H_
 
 struct breakpoint {
-	// Breakpoint ID.
-	int id;
+    // Breakpoint ID.
+    int id;
 
-	// Location of the breakpoint.
-	unsigned long location;
+    // Location of the breakpoint.
+    unsigned long location;
 
-	// The old instruction that we overwrote to cause the exception.
-	unsigned long old_instruction;
+    // The old instruction that we overwrote to cause the exception.
+    unsigned long old_instruction;
 
-	// How many times this breakpoint has hit.
-	int hit_count;
+    // How many times this breakpoint has hit.
+    int hit_count;
 
-	// Whether or not this breakpjoint is disabled.
-	int disabled;
+    // Whether or not this breakpjoint is disabled.
+    int disabled;
 
-	// Whether or not this breakpoint deletes itself after hitting.
-	int temporary;
-	
-	// Whether or not this breakpoint is a hardware breakpoint.
-	int hw;
+    // Whether or not this breakpoint deletes itself after hitting.
+    int temporary;
+    
+    // Whether or not this breakpoint is a hardware breakpoint.
+    int hw;
 
-	// If this is a hardware breakpoint, what breakpoint register it corresponds to.
-	int hw_bp_reg;
+    // If this is a hardware breakpoint, what breakpoint register it corresponds to.
+    int hw_bp_reg;
 
-	/* If this breakpoint is used for single stepping. */
-	int ss;
+    /* If this breakpoint is used for single stepping. */
+    int ss;
 };
 
 #define BT (0 << 20)

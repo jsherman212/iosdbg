@@ -2,27 +2,27 @@
 #define _CONVVAR_H_
 
 enum convvar_kind {
-	CONVVAR_VOID_KIND,
-	CONVVAR_INTEGER,
-	CONVVAR_DOUBLE,
-	CONVVAR_STRING
+    CONVVAR_VOID_KIND,
+    CONVVAR_INTEGER,
+    CONVVAR_DOUBLE,
+    CONVVAR_STRING
 };
 
 union convvar_data {
-	long long integer;
-	char *string;
+    long long integer;
+    char *string;
 };
 
 enum convvar_state {
-	CONVVAR_VOID,
-	CONVVAR_NONVOID
+    CONVVAR_VOID,
+    CONVVAR_NONVOID
 };
 
 struct convvar {
-	char *name;
-	enum convvar_kind kind;
-	union convvar_data data;
-	enum convvar_state state;
+    char *name;
+    enum convvar_kind kind;
+    union convvar_data data;
+    enum convvar_state state;
 };
 
 void set_convvar(char *, char *, char **);

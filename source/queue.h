@@ -2,8 +2,8 @@
 #define _QUEUE_H_
 
 struct queue_t {
-	void **data;
-	int capacity;
+    void **data;
+    int capacity;
 };
 
 struct queue_t *queue_new(void);
