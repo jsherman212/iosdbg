@@ -344,9 +344,6 @@ void runmainloop(void){
                 machthread_updatestate(focused);
         }
 
-        /* Make a copy of line in case the command function modifies it. */
-        char *linecopy = strdup(line);
-        
         char *error = NULL;
         int result = execute_command(line, &error);
 
@@ -354,11 +351,10 @@ void runmainloop(void){
             printf("error: %s\n", error);
             free(error);
         }
-        
-        prevline = realloc(prevline, strlen(linecopy) + 1);
-        strcpy(prevline, linecopy);
 
-        free(linecopy);
+        prevline = realloc(prevline, strlen(line) + 1);
+        strcpy(prevline, line);
+
         free(line);
     }
 }
