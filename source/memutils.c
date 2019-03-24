@@ -58,7 +58,6 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
 
         if(active)
             instr = CFSwapInt32(active->old_instruction);
-            //instr = active->old_instruction;
         else{
             /* Format the memory given back. */
             char *bigendian = malloc((data_size * 2) + 1);
@@ -206,7 +205,7 @@ kern_return_t write_memory_to_location(vm_address_t location, vm_offset_t data){
         return KERN_INVALID_ARGUMENT;
     }
     
-    // get raw bytes from this number   
+    /* Get raw bytes from this number. */
     void *data_ptr = (uint8_t *)&data;
 
     vm_protect(debuggee->task,
