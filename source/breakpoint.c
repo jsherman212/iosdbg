@@ -46,8 +46,8 @@ int find_ready_bp_reg(void){
 }
 
 struct breakpoint *breakpoint_new(unsigned long location, int temporary, 
-        int single_step, char **error){
-    kern_return_t err = memutils_valid_location(location);
+        char **error){
+    kern_return_t err = valid_location(location);
 
     if(err){
         asprintf(error, "could not set breakpoint: %s", mach_error_string(err));
@@ -84,8 +84,9 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
             PMC |
             E;
         
-        /* Bits[1:0] must be clear in DBGBVR<n>_EL1 or else the instruction is mis-aligned,
-         * so clear those bits in the location. */
+        /* Bits[1:0] must be clear in DBGBVR<n>_EL1 or else the instruction
+         * is mis-aligned, so clear those bits in the location.
+         */
         location &= ~0x3;
 
         /* Put the location in whichever DBGBVR<n>_EL1 is available. */
@@ -97,38 +98,35 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
 
     int sz = 0x4;
     
-    void *orig_instruction = malloc(sz);
-    err = memutils_read_memory_at_location((void *)bp->location, orig_instruction, sz);
+    unsigned int *orig_instruction = malloc(sizeof(unsigned int));
+    err = read_memory_at_location((void *)bp->location, orig_instruction, sz);
 
     if(err){
-        asprintf(error, "could not set breakpoint: could not read memory at %#lx", location);
+        asprintf(error, "could not set breakpoint:"
+                " could not read memory at %#lx", location);
         free(bp);
         return NULL;
     }
 
-    bp->old_instruction = CFSwapInt32(memutils_buffer_to_number(orig_instruction, sz));
+    bp->old_instruction = *orig_instruction;
     
     free(orig_instruction);
     
     bp->hit_count = 0;
     bp->disabled = 0;
-
     bp->temporary = temporary;
-    bp->ss = single_step;
-
-    debuggee->num_breakpoints++;
-    
     bp->id = current_breakpoint_id;
     
     if(!bp->temporary)
         current_breakpoint_id++;
 
+    debuggee->num_breakpoints++;
+
     return bp;
 }
 
-// Set a breakpoint at address.
-bp_error_t breakpoint_at_address(unsigned long address, int temporary, int single_step, char **error){
-    struct breakpoint *bp = breakpoint_new(address, temporary, single_step, error);
+bp_error_t breakpoint_at_address(unsigned long address, int temporary, char **error){
+    struct breakpoint *bp = breakpoint_new(address, temporary, error);
 
     if(!bp)
         return BP_FAILURE;
@@ -137,7 +135,7 @@ bp_error_t breakpoint_at_address(unsigned long address, int temporary, int singl
      * by writing BRK #0 to bp->location.
      */
     if(!bp->hw)
-        memutils_write_memory_to_location(bp->location, CFSwapInt32(BRK));
+        write_memory_to_location(bp->location, CFSwapInt32(BRK));
 
     linkedlist_add(debuggee->breakpoints, bp);
 
@@ -190,9 +188,9 @@ void bp_set_state_internal(struct breakpoint *bp, int disabled){
     }
     else{
         if(disabled)
-            memutils_write_memory_to_location(bp->location, bp->old_instruction);   
+            write_memory_to_location(bp->location, bp->old_instruction);   
         else
-            memutils_write_memory_to_location(bp->location, CFSwapInt32(BRK));
+            write_memory_to_location(bp->location, CFSwapInt32(BRK));
     }
 
     bp->disabled = disabled;
@@ -358,23 +356,4 @@ struct breakpoint *find_bp_with_address(unsigned long addr){
     }
 
     return NULL;
-}
-
-void delete_ss_bps(void){
-    if(!debuggee->breakpoints)
-        return;
-
-    if(!debuggee->breakpoints->front)
-        return;
-
-    struct node_t *current = debuggee->breakpoints->front;
-
-    while(current){
-        struct breakpoint *current_breakpoint = (struct breakpoint *)current->data;
-
-        if(current_breakpoint->ss)
-            bp_delete_internal(current_breakpoint);
-
-        current = current->next;
-    }
 }

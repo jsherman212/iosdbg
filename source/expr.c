@@ -127,7 +127,8 @@ int invalid_expr(char *str, char cur_op, int idx){
         return 0;
     }
 
-    return is_operator(prev_op) && (!isnumber(cur_op) && !is_neg_operator(str, idx));
+    return is_operator(prev_op) && (!isnumber(cur_op) &&
+            !is_neg_operator(str, idx));
 }
 
 /* Check if we've reached the end of the number we're on
@@ -353,7 +354,8 @@ void add_mults(char **expr){
     int idx = 0;
 
     while(idx < exprlen){
-        if(idx >= 1 && (*expr)[idx] == '(' && !is_operator((*expr)[idx - 1]) && isnumber((*expr)[idx-1])){
+        if(idx >= 1 && (*expr)[idx] == '(' &&
+                !is_operator((*expr)[idx - 1]) && isnumber((*expr)[idx-1])){
             strins(expr, "*", idx);
             exprlen = strlen(*expr);
             idx++;
@@ -367,7 +369,8 @@ void add_mults(char **expr){
  * If we encounter an 'N', we have to negate what we just popped,
  * and continue the loop when we return.
  */
-long process_stacks(struct stack_t *operators, struct stack_t *operands, int *negative, char **error){
+long process_stacks(struct stack_t *operators, struct stack_t *operands,
+        int *negative, char **error){
     char operator = (char)stack_pop(operators);
 
     long second = (long)stack_pop(operands);
@@ -402,7 +405,8 @@ long evaluate(char *expr, char **error){
         if(invalid_expr(expr, expr[i], i)){
             asprintf(error, "unexpected operator '%c' at index %d\n"
                     "error around here: %c%c%c%c\n"
-                    "%*s^", expr[i], i, exprlen > 0 && expr[i-1] != '\0' ? expr[i-1] : ' ', 
+                    "%*s^", expr[i], i,
+                    exprlen > 0 && expr[i-1] != '\0' ? expr[i-1] : ' ', 
                     exprlen > 1 && expr[i] != '\0' ? expr[i] : ' ', 
                     exprlen > 2 && expr[i+1] != '\0' ? expr[i+1] : ' ', 
                     exprlen > 3 && expr[i+2] != '\0' ? expr[i+2] : ' ', 
@@ -485,7 +489,8 @@ long evaluate(char *expr, char **error){
         else if(is_operator(current)){
             char cur_op_precedence = precedence(current);
 
-            while(!stack_empty(operators) && precedence((char)stack_peek(operators)) >= cur_op_precedence){
+            while(!stack_empty(operators) &&
+                    precedence((char)stack_peek(operators)) >= cur_op_precedence){
                 int negative = 0;
                 long result = process_stacks(operators, operands, &negative, error);
 

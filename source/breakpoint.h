@@ -25,9 +25,6 @@ struct breakpoint {
 
     // If this is a hardware breakpoint, what breakpoint register it corresponds to.
     int hw_bp_reg;
-
-    /* If this breakpoint is used for single stepping. */
-    int ss;
 };
 
 #define BT (0 << 20)
@@ -43,9 +40,6 @@ typedef int bp_error_t;
 #define BP_NO_TEMP 0
 #define BP_TEMP 1
 
-#define BP_NO_SS 0
-#define BP_SS 1
-
 #define BP_ENABLED 0
 #define BP_DISABLED 1
 
@@ -54,7 +48,7 @@ static int current_breakpoint_id = 1;
 /* BRK #0 */
 static const unsigned long long BRK = 0x000020D4;
 
-bp_error_t breakpoint_at_address(unsigned long, int, int, char **);
+bp_error_t breakpoint_at_address(unsigned long, int, char **);
 void breakpoint_hit(struct breakpoint *);
 bp_error_t breakpoint_delete(int);
 bp_error_t breakpoint_disable(int);
@@ -64,6 +58,5 @@ void breakpoint_enable_all(void);
 int breakpoint_disabled(int);
 void breakpoint_delete_all(void);
 struct breakpoint *find_bp_with_address(unsigned long);
-void delete_ss_bps(void);
 
 #endif

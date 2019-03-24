@@ -1,6 +1,5 @@
-/* Implementation for a singly linked list. */
-
 #include <stdlib.h>
+
 #include "linkedlist.h"
 
 struct linkedlist *linkedlist_new(void){
@@ -14,8 +13,6 @@ struct linkedlist *linkedlist_new(void){
     return list;
 }
 
-// should be only called to set up the linked list
-// if we need to add more things, use add
 void linkedlist_add_front(struct linkedlist *list, void *data){
     if(!list->front){
         list->front = malloc(sizeof(struct node_t));
@@ -25,7 +22,6 @@ void linkedlist_add_front(struct linkedlist *list, void *data){
 }
 
 void linkedlist_add(struct linkedlist *list, void *data_to_add){
-    // empty list
     if(!list->front){
         linkedlist_add_front(list, data_to_add);
         return;
@@ -63,14 +59,12 @@ int linkedlist_contains(struct linkedlist *list, void *data){
 }
 
 void linkedlist_delete(struct linkedlist *list, void *data_to_remove){
-    // empty list
     if(!list->front)
         return;
 
     if(!data_to_remove)
         return;
 
-    // removing front
     if(list->front->data == data_to_remove){
         list->front = list->front->next;
         return;
@@ -84,7 +78,9 @@ void linkedlist_delete(struct linkedlist *list, void *data_to_remove){
         current = current->next;
 
         if(current->data == data_to_remove){
-            // now we are at the node before the node we want to remove, modify connections to skip the one we're trying to remove
+            /* We're at the node we want to remove,
+             * modify connections to skip this one.
+             */
             previous->next = current->next;
             free(current);
             current = NULL;

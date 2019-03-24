@@ -363,7 +363,7 @@ cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     };
 
     struct frame_t *current_frame = malloc(sizeof(struct frame_t));
-    kern_return_t err = memutils_read_memory_at_location(
+    kern_return_t err = read_memory_at_location(
             (void *)debuggee->thread_state.__fp, current_frame, 
             sizeof(struct frame_t));
     
@@ -376,7 +376,7 @@ cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
         printf("    frame #%d: 0x%16.16llx\n", frame_counter, 
                 current_frame->frame);
 
-        memutils_read_memory_at_location((void *)current_frame->next, 
+        read_memory_at_location((void *)current_frame->next, 
                 (void *)current_frame, sizeof(struct frame_t)); 
         frame_counter++;
     }
@@ -417,7 +417,7 @@ cmd_error_t cmdfunc_break(struct cmd_args_t *args,
     if(args->add_aslr)
         location += debuggee->aslr_slide;
 
-    return breakpoint_at_address(location, BP_NO_TEMP, BP_NO_SS, error);    
+    return breakpoint_at_address(location, BP_NO_TEMP, error);    
 }
 
 cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
@@ -741,7 +741,7 @@ cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
     if(args->add_aslr)
         location += debuggee->aslr_slide;
 
-    kern_return_t err = memutils_dump_memory(location, amount);
+    kern_return_t err = dump_memory(location, amount);
 
     if(err){
         asprintf(error, "could not dump memory from %#lx to %#lx: %s", 
@@ -1097,7 +1097,7 @@ cmd_error_t cmdfunc_set(struct cmd_args_t *args,
         if(args->add_aslr)
             location += debuggee->aslr_slide;
         
-        kern_return_t err = memutils_write_memory_to_location(
+        kern_return_t err = write_memory_to_location(
                 (vm_address_t)location, (vm_offset_t)value);
 
         if(err){

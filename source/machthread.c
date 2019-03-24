@@ -32,7 +32,8 @@ struct machthread *machthread_new(mach_port_t thread_port){
 }
 
 /* Find a machthread with a given condition, defined in compway. */
-struct machthread *find_with_cond(enum comparison compway, void *comparingwith){
+struct machthread *find_with_cond(enum comparison compway,
+        void *comparingwith){
     if(!debuggee->threads)
         return NULL;
 
@@ -122,7 +123,10 @@ void machthread_updatestate(struct machthread *mt){
     arm_thread_state64_t thread_state;
     mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 
-    kern_return_t kret = thread_get_state(mt->port, ARM_THREAD_STATE64, (thread_state_t)&thread_state, &count);
+    kern_return_t kret = thread_get_state(mt->port,
+            ARM_THREAD_STATE64,
+            (thread_state_t)&thread_state,
+            &count);
 
     if(kret)
         return;
@@ -220,7 +224,10 @@ char *get_thread_name_from_thread_port(mach_port_t thread_port){
     thread_extended_info_data_t exinfo;
     mach_msg_type_number_t count = THREAD_EXTENDED_INFO_COUNT;
 
-    kern_return_t kret = thread_info(thread_port, THREAD_EXTENDED_INFO, (thread_info_t)&exinfo, &count);
+    kern_return_t kret = thread_info(thread_port,
+            THREAD_EXTENDED_INFO,
+            (thread_info_t)&exinfo,
+            &count);
 
     if(kret)
         return NULL;
@@ -235,7 +242,10 @@ kern_return_t get_tid_from_thread_port(mach_port_t thread_port){
     thread_identifier_info_data_t ident;
     mach_msg_type_number_t count = THREAD_IDENTIFIER_INFO_COUNT;
 
-    kern_return_t kret = thread_info(thread_port, THREAD_IDENTIFIER_INFO, (thread_info_t)&ident, &count);
+    kern_return_t kret = thread_info(thread_port,
+            THREAD_IDENTIFIER_INFO,
+            (thread_info_t)&ident,
+            &count);
 
     if(kret)
         return kret;

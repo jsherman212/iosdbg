@@ -362,5 +362,6 @@ void desc_auto_convvar_error_if_needed(char *var, char *e){
     if(!e || !var)
         return;
 
-    printf("could not automatically update the convenience variable '%s': %s\n", var, e);
+    printf("could not automatically update the convenience variable '%s': %s\n",
+            var, e);
 }

@@ -26,7 +26,9 @@ unsigned long long find_slide(void){
 }
 
 kern_return_t restore_exception_ports(void){
-    for(mach_msg_type_number_t i=0; i<debuggee->original_exception_ports.count; i++)
+    for(mach_msg_type_number_t i=0;
+            i<debuggee->original_exception_ports.count;
+            i++)
         task_set_exception_ports(debuggee->task, 
                 debuggee->original_exception_ports.masks[i], 
                 debuggee->original_exception_ports.ports[i], 

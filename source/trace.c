@@ -216,10 +216,12 @@ void *trace(void *arg){
             asprintf(&returning, "%s%-10s", tidstr, "Returning:");
 
             if(current.debugid & DBG_FUNC_START)
-                printf("\e[42m\e[30m%-*s\e[0m %-35.35s", (int)strlen(calling), calling, event);
+                printf("\e[42m\e[30m%-*s\e[0m %-35.35s",
+                        (int)strlen(calling), calling, event);
 
             if(current.debugid & DBG_FUNC_END)
-                printf("\e[46m\e[30m%-*s\e[0m %-35.35s", (int)strlen(returning), returning, event);
+                printf("\e[46m\e[30m%-*s\e[0m %-35.35s",
+                        (int)strlen(returning), returning, event);
 
             free(calling);
             free(returning);
@@ -231,7 +233,8 @@ void *trace(void *arg){
             asprintf(&arg3desc, "\e[38;5;208marg3\e[0m = 0x%16.16llx", current.arg3);
             asprintf(&arg4desc, "\e[38;5;124marg4\e[0m = 0x%16.16llx", current.arg4);
 
-            printf("%1s%s%2s%s%2s%s%2s%s\n", "", arg1desc, "", arg2desc, "", arg3desc, "", arg4desc);
+            printf("%1s%s%2s%s%2s%s%2s%s\n",
+                    "", arg1desc, "", arg2desc, "", arg3desc, "", arg4desc);
 
             free(arg1desc);
             free(arg2desc);
@@ -271,7 +274,8 @@ void start_trace(void){
     }
 
     if(debuggee->interrupted)
-        printf("Warning: debuggee is currently suspended, type c and hit enter to continue\n");
+        printf("Warning: debuggee is currently suspended,"
+                " type c and hit enter to continue\n");
 
     pthread_t trace_thread;
     pthread_create(&trace_thread, NULL, trace, NULL);

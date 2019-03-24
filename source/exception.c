@@ -66,22 +66,20 @@ void set_single_step(int enabled){
 
 void describe_hit_watchpoint(void *prev_data, void *cur_data, 
         unsigned int sz){
-    long long old_val = memutils_buffer_to_number(prev_data, sz);
-    long long new_val = memutils_buffer_to_number(cur_data, sz);
+    long old_val = *(long *)prev_data;
+    long new_val = *(long *)cur_data;
 
     /* I'd like output in hex, but %x specifies unsigned int, 
      * and data could be negative. This is a hacky workaround.
      */
-    if(sz == sizeof(char))
+    if(sz == sizeof(char)){
         printf("Old value: %s%#x\nNew value: %s%#x\n\n", 
                 (char)old_val < 0 ? "-" : "", 
                 (char)old_val < 0 ? (char)-old_val : (char)old_val, 
                 (char)new_val < 0 ? "-" : "", 
                 (char)new_val < 0 ? (char)-new_val : (char)new_val);
+    }
     else if(sz == sizeof(short) || sz == sizeof(int)){
-        old_val = (int)CFSwapInt32(old_val);
-        new_val = (int)CFSwapInt32(new_val);
-
         printf("Old value: %s%#x\nNew value: %s%#x\n\n", 
                 (int)old_val < 0 ? "-" : "", 
                 (int)old_val < 0 ? (int)-old_val : (int)old_val, 
@@ -89,9 +87,6 @@ void describe_hit_watchpoint(void *prev_data, void *cur_data,
                 (int)new_val < 0 ? (int)-new_val : (int)new_val);
     }
     else{
-        old_val = (long)CFSwapInt64(old_val);
-        new_val = (long)CFSwapInt64(new_val);
-
         printf("Old value: %s%#lx\nNew value: %s%#lx\n\n", 
                 (long)old_val < 0 ? "-" : "", 
                 (long)old_val < 0 ? (long)-old_val : (long)old_val, 
@@ -147,7 +142,7 @@ void handle_hit_watchpoint(void){
     void *prev_data = malloc(sz);
     memcpy(prev_data, hit->data, sz);
 
-    memutils_read_memory_at_location((void *)hit->location, hit->data, sz);
+    read_memory_at_location((void *)hit->location, hit->data, sz);
     
     printf("\nWatchpoint %d hit:\n\n", hit->id);
 

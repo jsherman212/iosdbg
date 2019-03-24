@@ -14,7 +14,8 @@
 /* Thanks https://opensource.apple.com/source/CF/CF-299/Base.subproj/CFByteOrder.h */
 unsigned int CFSwapInt32(unsigned int arg){
     unsigned int result;
-    result = ((arg & 0xFF) << 24) | ((arg & 0xFF00) << 8) | ((arg >> 8) & 0xFF00) | ((arg >> 24) & 0xFF);
+    result = ((arg & 0xFF) << 24) | ((arg & 0xFF00) << 8) 
+        | ((arg >> 8) & 0xFF00) | ((arg >> 24) & 0xFF);
     return result;
 }
 
@@ -29,12 +30,12 @@ unsigned long long CFSwapInt64(unsigned long long arg){
     return result.sv;
 }
 
-kern_return_t disassemble_at_location(unsigned long long location, int num_instrs){
+kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
     const int data_size = 0x4;
-    unsigned long long current_location = location;
+    unsigned long current_location = location;
 
     char *locstr;
-    asprintf(&locstr, "%#llx", location);
+    asprintf(&locstr, "%#lx", location);
 
     char *error = NULL;
     set_convvar("$_", locstr, &error);
@@ -45,7 +46,8 @@ kern_return_t disassemble_at_location(unsigned long long location, int num_instr
 
     while(current_location < (location + (num_instrs * data_size))){
         char *data = malloc(data_size);
-        kern_return_t err = memutils_read_memory_at_location((void *)current_location, data, data_size);
+        kern_return_t err = read_memory_at_location((void *)current_location,
+                data, data_size);
 
         unsigned long instr;
 
@@ -56,6 +58,7 @@ kern_return_t disassemble_at_location(unsigned long long location, int num_instr
 
         if(active)
             instr = CFSwapInt32(active->old_instruction);
+            //instr = active->old_instruction;
         else{
             /* Format the memory given back. */
             char *bigendian = malloc((data_size * 2) + 1);
@@ -82,7 +85,9 @@ kern_return_t disassemble_at_location(unsigned long long location, int num_instr
 
         debuggee->get_thread_state();
 
-        printf("%s%#llx:  %s\n", debuggee->thread_state.__pc == current_location ? "->  " : "    ", current_location, disassembled);
+        printf("%s%#lx:  %s\n",
+                debuggee->thread_state.__pc == current_location
+                ? "->  " : "    ", current_location, disassembled);
 
         free(disassembled);
 
@@ -92,11 +97,10 @@ kern_return_t disassemble_at_location(unsigned long long location, int num_instr
     return KERN_SUCCESS;
 }
 
-kern_return_t memutils_dump_memory(unsigned long long location, vm_size_t amount){
+kern_return_t dump_memory(unsigned long long location, vm_size_t amount){
     if(amount == 0)
         return KERN_SUCCESS;
 
-    // display memory in rows of 0x10 bytes
     const int row_size = 0x10;
 
     int amount_dumped = 0;
@@ -106,7 +110,8 @@ kern_return_t memutils_dump_memory(unsigned long long location, vm_size_t amount
         char *membuffer = malloc(row_size);
         memset(membuffer, '\0', row_size);
 
-        kern_return_t ret = memutils_read_memory_at_location((void *)current_location, membuffer, row_size);
+        kern_return_t ret = read_memory_at_location((void *)current_location,
+                membuffer, row_size);
 
         if(ret)
             return ret;
@@ -129,15 +134,15 @@ kern_return_t memutils_dump_memory(unsigned long long location, vm_size_t amount
             printf("%02x ", data_array[i]);
 
         if(current_row_length < 0x10){
-            // print filler spaces
-            // 2 spaces for would be '%02x', one more for the space after
+            /* Print filler spaces.
+             * Two spaces for would be '%02x', one more for the space after.
+             */
             for(int i=current_row_length; i<row_size; i++)
                 printf("   ");
         }
         
         printf("  ");
 
-        // print what the bytes represent
         for(int i=0; i<current_row_length; i++){
             unsigned char cur_char = data_array[i];
 
@@ -156,25 +161,34 @@ kern_return_t memutils_dump_memory(unsigned long long location, vm_size_t amount
     return KERN_SUCCESS;
 }
 
-// This function reads memory from an address and places the data into buffer.
-// Before writing this data back call CFSwapInt32 on it
-kern_return_t memutils_read_memory_at_location(void *location, void *buffer, vm_size_t length){
-    return vm_read_overwrite(debuggee->task, (vm_address_t)location, length, (vm_address_t)buffer, &length);
+kern_return_t read_memory_at_location(void *location, void *buffer,
+        vm_size_t length){
+    return vm_read_overwrite(debuggee->task,
+            (vm_address_t)location,
+            length,
+            (vm_address_t)buffer,
+            &length);
 }
 
-// This function writes data to location.
-kern_return_t memutils_write_memory_to_location(vm_address_t location, vm_offset_t data){
+kern_return_t write_memory_to_location(vm_address_t location, vm_offset_t data){
     kern_return_t ret;
 
-    // get old protections and figure out whether the location we're writing to exists
+    /* Get old protections and figure out whether the
+     * location we're writing to exists.
+     */
     vm_region_basic_info_data_64_t info;
-    // we don't want to modify the real location...
     vm_address_t region_location = location;
     vm_size_t region_size;
     mach_port_t object_name;
     mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
     
-    ret = vm_region_64(debuggee->task, &region_location, &region_size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
+    ret = vm_region_64(debuggee->task,
+            &region_location,
+            &region_size,
+            VM_REGION_BASIC_INFO,
+            (vm_region_info_t)&info,
+            &info_count,
+            &object_name);
     
     if(ret)
         return ret;
@@ -195,38 +209,38 @@ kern_return_t memutils_write_memory_to_location(vm_address_t location, vm_offset
     // get raw bytes from this number   
     void *data_ptr = (uint8_t *)&data;
 
-    vm_protect(debuggee->task, location, size, 0, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
-    ret = vm_write(debuggee->task, location, (pointer_t)data_ptr, size);
-    vm_protect(debuggee->task, location, size, 0, info.protection);
+    vm_protect(debuggee->task,
+            location,
+            size,
+            0,
+            VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
+
+    ret = vm_write(debuggee->task,
+            location,
+            (pointer_t)data_ptr,
+            size);
+    
+    vm_protect(debuggee->task,
+            location,
+            size,
+            0,
+            info.protection);
     
     return ret;
 }
 
-long long memutils_buffer_to_number(void *buffer, int length){
-    if(!buffer)
-        return -1;
-
-    char *fullhex = malloc((length * 2) + 1);
-    memset(fullhex, '\0', length);
-
-    for(int i=0; i<length; i++)
-        sprintf(fullhex, "%s%02x", fullhex, *(unsigned char *)(buffer + i));
-
-    long long val;
-    sscanf(fullhex, "%llx", &val);
-
-    free(fullhex);
-
-    return val;
-}
-
-// Test a location to see if it's out of bounds or invalid
-kern_return_t memutils_valid_location(unsigned long location){
+kern_return_t valid_location(unsigned long location){
     vm_region_basic_info_data_64_t info;
     vm_address_t loc = location;
     vm_size_t region_size;
     mach_port_t object_name;
     mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
     
-    return vm_region_64(debuggee->task, &loc, &region_size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info, &info_count, &object_name);
+    return vm_region_64(debuggee->task, 
+            &loc,
+            &region_size,
+            VM_REGION_BASIC_INFO,
+            (vm_region_info_t)&info,
+            &info_count,
+            &object_name);
 }

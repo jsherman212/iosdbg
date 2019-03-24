@@ -101,7 +101,8 @@ void initialize_readline(void){
     rl_input_available_hook = &reset_colors_hook;
 }
 
-void get_code_and_event_from_line(char *line, char **code, char **event, char **freethis){
+void get_code_and_event_from_line(char *line, char **code, char **event,
+        char **freethis){
     char *linecopy = strdup(line);
     size_t linelen = strlen(line);
 
@@ -132,7 +133,8 @@ int setup_tracing(void){
     FILE *tracecodes = fopen("/usr/share/misc/trace.codes", "r");
 
     if(!tracecodes){
-        printf("Could not read /usr/share/misc/trace.codes. Tracing is disabled.\n");
+        printf("Could not read /usr/share/misc/trace.codes."
+                "Tracing is disabled.\n");
         
         debuggee->tracing_disabled = 1;
 
@@ -169,14 +171,18 @@ int setup_tracing(void){
         if(strnstr(event, "BSC", 3)){
             int eventidx = (codenum & 0xfff) / 4;
 
-            /* There's a couple more not following the "increment by 4" code pattern. */
+            /* There's a couple more not following the
+             * "increment by 4" code pattern.
+             */
             if(codenum > 0x40c0824){
                 eventidx = (codenum & ~0xff00000) / 4;
 
-                bsd_syscalls = realloc(bsd_syscalls, sizeof(char *) * (curline + eventidx));
+                bsd_syscalls = realloc(bsd_syscalls, sizeof(char *) *
+                        (curline + eventidx));
             }
             else
-                bsd_syscalls = realloc(bsd_syscalls, sizeof(char *) * (curline + 1));
+                bsd_syscalls = realloc(bsd_syscalls, sizeof(char *) *
+                        (curline + 1));
 
             bsd_syscalls_arr_len = eventidx;
         }
@@ -194,7 +200,8 @@ int setup_tracing(void){
                 int num_ptrs_to_allocate = eventidx - largest_mach_msg_entry;
                 int cur_array_size = largest_mach_msg_entry;
 
-                mach_messages = realloc(mach_messages, sizeof(char *) * (cur_array_size + num_ptrs_to_allocate + 1));
+                mach_messages = realloc(mach_messages, sizeof(char *) *
+                        (cur_array_size + num_ptrs_to_allocate + 1));
 
                 largest_mach_msg_entry = eventidx + 1;
             }
@@ -290,11 +297,13 @@ void setup_initial_debuggee(void){
     /* Figure out how many hardware breakpoints/watchpoints are supported. */
     size_t len = sizeof(int);
 
-    sysctlbyname("hw.optional.breakpoint", &debuggee->num_hw_bps, &len, NULL, 0);
+    sysctlbyname("hw.optional.breakpoint", &debuggee->num_hw_bps,
+            &len, NULL, 0);
     
     len = sizeof(int);
 
-    sysctlbyname("hw.optional.watchpoint", &debuggee->num_hw_wps, &len, NULL, 0);
+    sysctlbyname("hw.optional.watchpoint", &debuggee->num_hw_wps,
+            &len, NULL, 0);
 
     /* Create some iosdbg managed convenience variables. */
     char *error = NULL;
@@ -306,6 +315,26 @@ void setup_initial_debuggee(void){
 
     /* The user can set this so iosdbg never adds ASLR. */
     set_convvar("$NO_ASLR_OVERRIDE", "", &error);
+}
+
+void threadupdate(void){
+    if(debuggee->pid != -1){
+        thread_act_port_array_t threads;
+        debuggee->update_threads(&threads);
+        
+        machthread_updatethreads(threads);
+
+        struct machthread *focused = machthread_getfocused();
+
+        if(!focused){
+            printf("[Previously selected thread dead, selecting thread #1]\n\n");
+            machthread_setfocused(threads[0]);
+            focused = machthread_getfocused();
+        }
+
+        if(focused)
+            machthread_updatestate(focused);
+    }
 }
 
 void runmainloop(void){
@@ -321,28 +350,12 @@ void runmainloop(void){
             line = realloc(line, strlen(prevline) + 1);
             strcpy(line, prevline);
         }
-        else if(strlen(line) > 0 && (!prevline || (prevline && strcmp(line, prevline) != 0)))
+        else if(strlen(line) > 0 &&
+                (!prevline || (prevline && strcmp(line, prevline) != 0))){
             add_history(line);
-        
-        // update the debuggee's linkedlist of threads
-        if(debuggee->pid != -1){
-            thread_act_port_array_t threads;
-            debuggee->update_threads(&threads);
-            
-            machthread_updatethreads(threads);
-
-            struct machthread *focused = machthread_getfocused();
-
-            // we have to set a focused thread first, so set it to the first thread
-            if(!focused){
-                printf("[Previously selected thread dead, selecting thread #1]\n\n");
-                machthread_setfocused(threads[0]);
-                focused = machthread_getfocused();
-            }
-
-            if(focused)
-                machthread_updatestate(focused);
         }
+        
+        threadupdate();
 
         char *error = NULL;
         int result = execute_command(line, &error);
