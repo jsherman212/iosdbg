@@ -32,7 +32,6 @@ void *dequeue(struct queue_t *queue){
     if(queue->capacity == -1)
         return NULL;
 
-    //void *ret = queue->data[0];
     void *ret = *queue->data;
     
     /* Move everything back one. */

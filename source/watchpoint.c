@@ -23,7 +23,7 @@ int find_ready_wp_reg(void){
         wp_map[i] = -1;
 
     while(current){
-        struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
+        struct watchpoint *current_watchpoint = current->data;
 
         wp_map[current_watchpoint->hw_wp_reg] = 0;
 
@@ -202,7 +202,7 @@ wp_error_t watchpoint_delete(int wp_id){
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){
-        struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
+        struct watchpoint *current_watchpoint = current->data;
 
         if(current_watchpoint->id == wp_id){        
             wp_delete_internal(current_watchpoint);
@@ -222,7 +222,7 @@ void watchpoint_enable_all(void){
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){
-        struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
+        struct watchpoint *current_watchpoint = current->data;
 
         wp_set_state_internal(current_watchpoint, WP_ENABLED);
 
@@ -237,7 +237,7 @@ void watchpoint_disable_all(void){
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){
-        struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
+        struct watchpoint *current_watchpoint = current->data;
         
         wp_set_state_internal(current_watchpoint, WP_DISABLED);
 
@@ -252,7 +252,7 @@ void watchpoint_delete_all(void){
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){
-        struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
+        struct watchpoint *current_watchpoint = current->data;
         
         wp_delete_internal(current_watchpoint);
         
@@ -267,7 +267,7 @@ struct watchpoint *find_wp_with_address(unsigned long addr){
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){
-        struct watchpoint *current_watchpoint = (struct watchpoint *)current->data;
+        struct watchpoint *current_watchpoint = current->data;
 
         if(current_watchpoint->location == addr)
             return current_watchpoint;

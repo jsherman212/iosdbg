@@ -391,11 +391,6 @@ long process_stacks(struct stack_t *operators, struct stack_t *operands,
  * `error` is set on error.
  */
 long evaluate(char *expr, char **error){
-    if(!expr || (expr && strlen(expr) == 0)){
-        asprintf(error, "empty expression string");
-        return LONG_MIN;
-    }
-
     size_t exprlen = strlen(expr);
 
     /* Check for any "syntax errors" before we
