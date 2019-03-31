@@ -9,7 +9,7 @@
 
 #include "breakpoint.h"
 #include "dbgcmd.h"
-#include "defs.h"
+#include "exception.h"      /* Includes defs.h */
 #include "machthread.h"
 #include "memutils.h"
 #include "printutils.h"
@@ -104,12 +104,7 @@ void describe_hit_watchpoint(void *prev_data, void *cur_data,
 }
 
 void clear_signal(mach_port_t thread){
-    void *h = dlopen(0, RTLD_GLOBAL | RTLD_NOW);
-    int (*ptrace)(int, pid_t, caddr_t, int) = dlsym(h, "ptrace");
-
     ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
-
-    dlclose(h);
 }
 
 void handle_soft_signal(mach_port_t thread, long subcode, char **desc){
@@ -181,8 +176,17 @@ void handle_single_step(void){
          * right after a breakpoint hit, just print the disassembly.
          */
         if(!debuggee->is_single_stepping){
-            char *e;
-            cmdfunc_continue(NULL, 1, &e);
+            // XXX placeholder until I move this code into another file
+            reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
+            debuggee->resume();
+            debuggee->interrupted = 0;
+            if(debuggee->currently_tracing){
+                rl_already_prompted = 1;
+                printf("\n");
+            }
+            
+            //char *e;
+            //cmdfunc_continue(NULL, 1, &e);
         }
         else
             disassemble_at_location(debuggee->thread_state.__pc, 4);
@@ -303,8 +307,14 @@ void handle_exception(Request *request){
         set_single_step(1);
         
         /* Continue execution so the software step exception occurs. */
-        char *e;
-        cmdfunc_continue(NULL, 1, &e);
+        // XXX placeholder until I move this code into another file
+        reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
+        debuggee->resume();
+        debuggee->interrupted = 0;
+        if(debuggee->currently_tracing){
+            rl_already_prompted = 1;
+            printf("\n");
+        }
 
         free(tname);
     }

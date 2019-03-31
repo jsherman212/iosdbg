@@ -9,7 +9,7 @@
 #include "breakpoint.h"
 #include "convvar.h"
 #include "dbgcmd.h"         /* Includes argparse.h */
-#include "dbgutils.h"
+#include "dbgops.h"
 #include "exception.h"      /* Includes defs.h */
 #include "expr.h"
 #include "linkedlist.h"
@@ -19,6 +19,29 @@
 #include "servers.h"
 #include "trace.h"
 #include "watchpoint.h"
+
+enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_attach(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_break(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_continue(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_delete(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_detach(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_examine(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_help(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_kill(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_quit(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_set(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_show(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_trace(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_unset(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_watch(struct cmd_args_t *, int, char **);
 
 int keep_checking_for_process;
 
@@ -119,10 +142,9 @@ double strtod_err(char *str, char **error){
     return result;
 }
 
-#define NUM_CMDS 25
 struct dbg_cmd_t COMMANDS[NUM_CMDS];
 
-cmd_error_t help_internal(char *cmd_name){
+enum cmd_error_t help_internal(char *cmd_name){
     int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
     int cur_cmd_idx = 0;
 
@@ -141,7 +163,7 @@ cmd_error_t help_internal(char *cmd_name){
     return CMD_FAILURE;
 }
 
-cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "not attached to anything");
@@ -153,7 +175,7 @@ cmd_error_t cmdfunc_aslr(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_attach(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         asprintf(error, "need target");
@@ -321,20 +343,9 @@ cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     printf("Attached to %s (pid: %d), slide: %#llx.\n",
             debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
-    /* ptrace.h is unavailable on iOS. */
-    void *h = dlopen(0, RTLD_GLOBAL | RTLD_NOW);
-    int (*ptrace)(int, pid_t, caddr_t, int) = dlsym(h, "ptrace");
-
     /* Have Unix signals be sent as Mach exceptions. */
     ptrace(PT_ATTACHEXC, debuggee->pid, 0, 0);
     ptrace(PT_SIGEXC, debuggee->pid, 0, 0);
-    
-    dlclose(h);
-
-    /* Since SIGSTOP is going to be caught right after
-     * this function, don't reprint the (iosdbg) prompt.
-     */
-    rl_already_prompted = 1;
 
     void_convvar("$_exitcode");
     void_convvar("$_exitsignal");
@@ -342,7 +353,7 @@ cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "not attached to anything");
@@ -388,7 +399,7 @@ cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_break(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_break(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "not attached to anything");
@@ -420,7 +431,7 @@ cmd_error_t cmdfunc_break(struct cmd_args_t *args,
     return breakpoint_at_address(location, BP_NO_TEMP, error);    
 }
 
-cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int do_not_print_msg, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -428,17 +439,7 @@ cmd_error_t cmdfunc_continue(struct cmd_args_t *args,
     if(!debuggee->interrupted)
         return CMD_FAILURE;
     
-    if(debuggee->pending_messages > 0)
-        reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
-
-    kern_return_t err = debuggee->resume();
-
-    if(err){
-        asprintf(error, "cannot resume: %s", mach_error_string(err));
-        return CMD_FAILURE;
-    }
-
-    debuggee->interrupted = 0;
+    ops_resume();
 
     if(!do_not_print_msg)
         printf("Process %d resuming\n", debuggee->pid);
@@ -452,7 +453,7 @@ cmd_error_t cmdfunc_continue(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_delete(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_delete(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -545,7 +546,7 @@ cmd_error_t cmdfunc_delete(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_detach(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args, 
         int from_death, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -553,101 +554,20 @@ cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
     if(!debuggee->tracing_disabled)
         stop_trace();
     
-    debuggee->want_detach = 1;
+    char *n = strdup(debuggee->debuggee_name);
+    pid_t p = debuggee->pid;
 
-    void_convvar("$_");
-    void_convvar("$__");
-
-    breakpoint_delete_all();
-    watchpoint_delete_all();
-
-    /* Disable hardware single stepping. */
-    debuggee->get_debug_state();
-    debuggee->debug_state.__mdscr_el1 = 0;
-    debuggee->set_debug_state();
-
-    cmdfunc_continue(NULL, 1, error);
-
-    /* Send SIGSTOP to set debuggee's process status to
-     * SSTOP so we can detach. Calling ptrace with PT_THUPDATE
-     * to handle Unix signals sets this status to SRUN, and ptrace 
-     * bails if this status is SRUN. See bsd/kern/mach_process.c
-     */
-    if(!from_death){
-        char *pidstr;
-        asprintf(&pidstr, "%d", debuggee->pid);
-
-        pid_t p;
-        char *stop_argv[] = {"kill", "-STOP", pidstr, NULL};
-        int status = posix_spawnp(&p, "kill", NULL, NULL, 
-                (char * const *)stop_argv, NULL);
-            
-        if(status == 0)
-            waitpid(p, &status, 0);
-        else{
-            asprintf(error, "posix_spawnp for SIGSTOP failed");
-            return CMD_FAILURE;
-        }
-
-        void *h = dlopen(0, RTLD_GLOBAL | RTLD_NOW);
-        int (*ptrace)(int, pid_t, caddr_t, int) = dlsym(h, "ptrace");
-        
-        ptrace(PT_DETACH, debuggee->pid, 0, 0);
-
-        dlclose(h);
-
-        /* Send SIGCONT so the process is running again. */
-        char *cont_argv[] = {"kill", "-CONT", pidstr, NULL};
-        status = posix_spawnp(&p, "kill", NULL, NULL, 
-                (char * const *)cont_argv, NULL);
-
-        if(status == 0)
-            waitpid(p, &status, 0);
-        else{
-            asprintf(error, "posix_spawnp for SIGCONT failed");
-            return CMD_FAILURE;
-        }
-
-        free(pidstr);
-    }
-
-    debuggee->restore_exception_ports();
-
-    debuggee->interrupted = 0;
-
-    linkedlist_free(debuggee->breakpoints);
-    debuggee->breakpoints = NULL;
-
-    linkedlist_free(debuggee->watchpoints);
-    debuggee->watchpoints = NULL;
-
-    linkedlist_free(debuggee->threads);
-    debuggee->threads = NULL;
-
-    debuggee->num_breakpoints = 0;
-    debuggee->num_watchpoints = 0;
-
-    debuggee->last_hit_bkpt_ID = 0;
-    
-    debuggee->last_hit_wp_loc = 0;
-    debuggee->last_hit_wp_PC = 0;
-
-    debuggee->deallocate_ports();
+    ops_detach(from_death);
 
     if(!from_death)
-        printf("Detached from %s (%d)\n", debuggee->debuggee_name, debuggee->pid);
+        printf("Detached from %s (%d)\n", n, p);
 
-    debuggee->pid = -1;
-
-    free(debuggee->debuggee_name);
-    debuggee->debuggee_name = NULL;
-
-    debuggee->want_detach = 0;
+    free(n);
 
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         help_internal("disassemble");
@@ -698,7 +618,7 @@ cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         help_internal("examine");
@@ -752,7 +672,7 @@ cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_help(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_help(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         asprintf(error, "need command");
@@ -769,7 +689,7 @@ cmd_error_t cmdfunc_help(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -804,7 +724,7 @@ cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
         int arg1, char **error){
     cmdfunc_detach(NULL, 0, error);
 
@@ -842,7 +762,7 @@ cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
     exit(0);
 }
 
-cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -950,7 +870,7 @@ cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -1048,7 +968,7 @@ cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_set(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_set(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         help_internal("set");
@@ -1295,7 +1215,7 @@ cmd_error_t cmdfunc_set(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_show(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_show(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         show_all_cvars();
@@ -1313,7 +1233,7 @@ cmd_error_t cmdfunc_show(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -1344,7 +1264,7 @@ cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!debuggee->threads)
         return CMD_FAILURE;
@@ -1367,7 +1287,7 @@ cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args)
         return CMD_FAILURE;
@@ -1412,7 +1332,7 @@ cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->tracing_disabled){
         asprintf(error, "tracing is not supported on this host");
@@ -1429,7 +1349,7 @@ cmd_error_t cmdfunc_trace(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_unset(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_unset(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args)
         return CMD_FAILURE;
@@ -1450,7 +1370,7 @@ cmd_error_t cmdfunc_unset(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-cmd_error_t cmdfunc_watch(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_watch(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args)
         return CMD_FAILURE;
@@ -1518,7 +1438,7 @@ cmd_error_t cmdfunc_watch(struct cmd_args_t *args,
     return watchpoint_at_address(location, data_len, LSC, error);
 }
 
-cmd_error_t execute_command(char *input, char **errstr){
+enum cmd_error_t execute_command(char *input, char **errstr){
     if(!input)
         return CMD_FAILURE;
 
@@ -1548,7 +1468,7 @@ cmd_error_t execute_command(char *input, char **errstr){
      * If this is still NULL by the end of this function,
      * no suitable command was found.
      */
-    cmd_error_t (*finalfunc)(struct cmd_args_t *, int, char **) = NULL;
+    enum cmd_error_t (*finalfunc)(struct cmd_args_t *, int, char **) = NULL;
 
     int numcmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
     
@@ -1590,7 +1510,7 @@ cmd_error_t execute_command(char *input, char **errstr){
                 return CMD_FAILURE;
             }
         
-            cmd_error_t result = finalfunc(parsed_args, 0, errstr);
+            enum cmd_error_t result = finalfunc(parsed_args, 0, errstr);
 
             argfree(parsed_args);
             free(usercmd);
@@ -1862,7 +1782,7 @@ cmd_error_t execute_command(char *input, char **errstr){
         return CMD_FAILURE;
     }
 
-    cmd_error_t result = finalfunc(parsed_args, 0, errstr);
+    enum cmd_error_t result = finalfunc(parsed_args, 0, errstr);
 
     argfree(parsed_args);
     free(args);
@@ -2148,6 +2068,7 @@ void initialize_commands(void){
 
     ADD_CMD(quit);
 
+    /* Command class: regs */
     struct dbg_cmd_t regs = {
         "regs", NULL, NULL,
         {
@@ -2273,6 +2194,37 @@ void initialize_commands(void){
 
     ADD_CMD(show);
 
+    /* Command class: signal */
+    struct dbg_cmd_t _signal_class = {
+        "signal", NULL, NULL,
+        {
+            "",
+            0,
+            0,
+            {}
+        },
+        NULL
+    };
+
+    ADD_CMD(_signal_class);
+
+    struct dbg_cmd_t signalhandle = {
+        "signal handle", NULL,
+            "TODO fill this in\n",
+        {
+            "^(?<signals>[\\w\\s]+[^--])"
+                "\\s+--?(n(otify)?)\\s+(?<notify>0|1|(true|false)\\b)"
+                "\\s+--?(p(ass)?)\\s+(?<pass>0|1|(true|false)\\b)"
+                "\\s+--?(s(top)?)\\s+(?<stop>0|1|(true|false)\\b)",
+            4,
+            0,
+            { "signals", "notify", "pass", "stop" }
+        },
+        cmdfunc_signalhandle
+    };
+
+    ADD_CMD(signalhandle);
+
     struct dbg_cmd_t stepi = {
         "stepi", NULL,
             "Step into the next machine instruction.\n"
@@ -2291,6 +2243,7 @@ void initialize_commands(void){
 
     ADD_CMD(stepi);
 
+    /* Command class: thread */
     struct dbg_cmd_t thread = {
         "thread", NULL, NULL,
         {

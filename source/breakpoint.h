@@ -2,19 +2,19 @@
 #define _BREAKPOINT_H_
 
 struct breakpoint {
-    // Breakpoint ID.
+    /* Breakpoint ID */
     int id;
 
-    // Location of the breakpoint.
+    /* Breakpoint location */
     unsigned long location;
 
-    // The old instruction that we overwrote to cause the exception.
+    /* Instruction at this location */
     unsigned long old_instruction;
 
-    // How many times this breakpoint has hit.
+    /* How many times this breakpoint has hit. */
     int hit_count;
 
-    // Whether or not this breakpjoint is disabled.
+    /* Whether or not this breakpoint is disabled. */
     int disabled;
 
     // Whether or not this breakpoint deletes itself after hitting.

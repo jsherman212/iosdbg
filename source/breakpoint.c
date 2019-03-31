@@ -157,7 +157,6 @@ void breakpoint_hit(struct breakpoint *bp){
         bp->hit_count++;
 }
 
-
 void enable_hw_bp(struct breakpoint *bp){
     debuggee->get_debug_state();
 

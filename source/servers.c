@@ -8,6 +8,7 @@
 
 #include "convvar.h"
 #include "dbgcmd.h"
+#include "dbgops.h"
 #include "exception.h"      /* Includes defs.h */
 #include "printutils.h"
 #include "trace.h"
@@ -98,11 +99,12 @@ void *death_server(void *arg){
 
         free(arg);
         
-        error = NULL;
-        cmdfunc_detach(NULL, 1, &error);
+        ops_detach(1);
+        //error = NULL;
+        //cmdfunc_detach(NULL, 1, &error);
         
-        if(error)
-            printf("could not detach: %s\n", error);
+        //if(error)
+          //  printf("could not detach: %s\n", error);
 
         close(kqid);
         safe_reprompt();

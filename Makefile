@@ -1,13 +1,14 @@
 SDK=/var/theos/sdks/iPhoneOS11.2.sdk
 CC=clang
-CFLAGS=-arch arm64 -isysroot $(SDK)
-LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo -lpcre2-8.0
+CFLAGS=-g -arch arm64 -isysroot $(SDK)
+LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo -lpcre2-8.0 -fsanitize=address
 SRCDIR=source
 
 OBJECT_FILES = $(SRCDIR)/argparse.o \
 	$(SRCDIR)/breakpoint.o \
 	$(SRCDIR)/convvar.o \
 	$(SRCDIR)/dbgcmd.o \
+	$(SRCDIR)/dbgops.o \
 	$(SRCDIR)/exception.o \
 	$(SRCDIR)/expr.o \
 	$(SRCDIR)/iosdbg.o \
@@ -19,6 +20,8 @@ OBJECT_FILES = $(SRCDIR)/argparse.o \
 	$(SRCDIR)/procutils.o \
 	$(SRCDIR)/queue.o \
 	$(SRCDIR)/servers.o \
+	$(SRCDIR)/sigcmd.o \
+	$(SRCDIR)/sigsupport.o \
 	$(SRCDIR)/stack.o \
 	$(SRCDIR)/trace.o \
 	$(SRCDIR)/watchpoint.o

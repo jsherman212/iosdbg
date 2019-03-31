@@ -4,6 +4,13 @@
 #include <mach/mach.h>
 #include <sys/types.h>
 
+extern int ptrace(int arg0, pid_t arg1, caddr_t arg2, int arg3);
+
+#define PT_DETACH   11
+#define PT_SIGEXC   12
+#define PT_ATTACHEXC    14
+#define PT_THUPDATE 13
+
 static const char *prompt = "\e[2m(iosdbg) ";
 
 extern char **bsd_syscalls;
@@ -13,6 +20,11 @@ extern char **mach_messages;
 extern int bsd_syscalls_arr_len;
 extern int mach_traps_arr_len;
 extern int mach_messages_arr_len;
+
+enum cmd_error_t {
+    CMD_SUCCESS,
+    CMD_FAILURE
+};
 
 #define MAX_EXCEPTION_PORTS 16
 

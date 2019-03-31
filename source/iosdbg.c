@@ -14,6 +14,7 @@
 #include "machthread.h"
 #include "memutils.h"
 #include "printutils.h"
+#include "sigsupport.h"
 #include "trace.h"
 
 struct debuggee *debuggee;
@@ -378,6 +379,26 @@ int main(int argc, char **argv, const char **envp){
         return 1;
     }   
 
+    /* By default, don't pass SIGINT and SIGTRAP to debuggee. */
+    int notify = 1, pass = 0, stop = 1;
+    char *error = NULL;
+
+    sigsettings(SIGINT, &notify, &pass, &stop, 1, &error);
+
+    if(error){
+        printf("error: %s\n", error);
+        free(error);
+        return 1;
+    }
+
+    sigsettings(SIGTRAP, &notify, &pass, &stop, 1, &error);
+
+    if(error){
+        printf("error: %s\n", error);
+        free(error);
+        return 1;
+    }
+
     setup_initial_debuggee();
     install_handlers();
     initialize_readline();
@@ -397,6 +418,7 @@ int main(int argc, char **argv, const char **envp){
         printf("Could not setup for future tracing. Tracing is disabled.\n");
     
     signal(SIGINT, interrupt);
+
 
     runmainloop();
 
