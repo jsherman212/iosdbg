@@ -1,3 +1,7 @@
+4-5-19
+- take advantage of readline powered tab completion
+- remove execute_command
+
 3-23-19
 - new regex based argument system
 - proper documentation for commands

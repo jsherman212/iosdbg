@@ -4,7 +4,7 @@
 #include <string.h>
 #include <sys/sysctl.h>
 
-struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length, char **error){
+static struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length, char **error){
     int err;
     struct kinfo_proc *result = NULL;
 

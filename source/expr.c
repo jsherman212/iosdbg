@@ -7,11 +7,13 @@
 #include "convvar.h"
 #include "defs.h"
 #include "stack.h"
+#include "strext.h"
 
 /* Use 'N' to express a unary negation. */
 #define NEGATION 'N'
 
-long perform_operation(long left, long right, char operator, char **error){
+static long perform_operation(
+        long left, long right, char operator, char **error){
     if(operator == '+')
         return left + right;
     else if(operator == '-')
@@ -32,7 +34,7 @@ long perform_operation(long left, long right, char operator, char **error){
     }
 }
 
-int precedence(char operator){
+static int precedence(char operator){
     if(operator == '+' || operator == '-')
         return 1;
     else if(operator == '/' || operator == '*')
@@ -43,26 +45,8 @@ int precedence(char operator){
         return 0;
 }
 
-/* Return a substring of [start, start+len].
- * Must be freed.
- */
-char *substr(char *str, int start, int len){
-    if(!str)
-        return NULL;
-
-    size_t slen = strlen(str);
-
-    if(start < 0 || start > slen)
-        return NULL;
-
-    if(len <= 0 || (start + len) > slen)
-        return NULL;
-
-    return strndup(str + start, len);
-}
-
 /* Check if str[start, start+len] is a convenience variable. */
-int is_conv_var(char *str, int start, int len){
+static int is_conv_var(char *str, int start, int len){
     char *target = substr(str, start, len);
 
     if(!target)
@@ -84,14 +68,14 @@ int is_conv_var(char *str, int start, int len){
     return 1;
 }
 
-int is_operator(char c){
+static int is_operator(char c){
     return c == '+' ||
         c == '-' ||
         c == '*' ||
         c == '/';
 }
 
-int is_neg_operator(char *str, int idx){
+static int is_neg_operator(char *str, int idx){
     if(idx < 0)
         return 0;
 
@@ -108,7 +92,7 @@ int is_neg_operator(char *str, int idx){
 /* Check if there are two operators in a row that
  * wouldn't make sense together.
  */
-int invalid_expr(char *str, char cur_op, int idx){
+static int invalid_expr(char *str, char cur_op, int idx){
     if(idx == 0)
         return 0;
 
@@ -134,7 +118,7 @@ int invalid_expr(char *str, char cur_op, int idx){
 /* Check if we've reached the end of the number we're on
  * given a string and an index.
  */
-int is_end_of_number(char *str, int idx){
+static int is_end_of_number(char *str, int idx){
     if(!str)
         return 1;
 
@@ -149,7 +133,7 @@ int is_end_of_number(char *str, int idx){
 /* Return the index of the end of the operand we
  * started on in `str`.
  */
-int find_end_of_operand(char *str, int start){
+static int find_end_of_operand(char *str, int start){
     if(!str)
         return -1;
 
@@ -168,72 +152,13 @@ int find_end_of_operand(char *str, int start){
 
 /* Turn a number into a string.
  * Caller must free the string returned. */
-char *num_to_str(long num){
+static char *num_to_str(long num){
     char *buf;
     asprintf(&buf, "%ld", num);
     return buf;
 }
 
-/* Insert `str` at `where` in `target`. */
-void strins(char **target, char *str, int where){
-    if(!target || !(*target))
-        return;
-
-    if(!str)
-        return;
-
-    size_t targetlen = strlen(*target);
-
-    if(where < 0 || where > targetlen)
-        return;
-
-    size_t slen = strlen(str);
-
-    if(slen == 0)
-        return;
-
-    *target = realloc(*target, targetlen + slen + 1);
-    (*target)[targetlen + slen] = '\0';
-    char *saved = strdup(*target + where);
-    strncpy(*target + where, str, slen);
-    strncpy(*target + slen + where, saved, strlen(saved));
-    free(saved);
-}
-
-/* Cut [start, start+bytes] from `target`. */
-void strcut(char **target, int start, int bytes){
-    if(!target || !(*target))
-        return;
-
-    size_t targetlen = strlen(*target);
-
-    if(start < 0 || start > targetlen)
-        return;
-
-    int endidx = start + bytes;
-
-    if(bytes <= 0 || endidx > targetlen)
-        return;
-
-    char *saved = strdup(*target + endidx);
-    size_t savedlen = strlen(saved);
-    strncpy(*target + start, saved, savedlen);
-    free(saved);
-    (*target)[start + savedlen] = '\0';
-}
-
-/* Remove any whitespace from the beginning
- * and end of `target`.
- */
-void strclean(char **target){
-    while(isblank((*target)[0]))
-        memmove((*target), (*target) + 1, strlen((*target)));
-
-    while(isblank((*target)[strlen((*target)) - 1]))
-        (*target)[strlen((*target)) - 1] = '\0';
-}
-
-char *lookup_register(char *reg, char **error){
+static char *lookup_register(char *reg, char **error){
     if(!reg)
         return NULL;
 
@@ -296,7 +221,7 @@ char *lookup_register(char *reg, char **error){
 /* Replace any convenience variables in the expression
  * with their values.
  */
-void sub_conv_vars(char **expr, char **error){
+static void sub_conv_vars(char **expr, char **error){
     if(!expr || !(*expr))
         return;
 
@@ -346,7 +271,7 @@ void sub_conv_vars(char **expr, char **error){
 /* 6*2 and 6(2) mean the same thing. This function adds multiplication
  * operators in order to turn 6(2) and other expressions to 6*(2).
  */
-void add_mults(char **expr){
+static void add_mults(char **expr){
     if(!expr || !(*expr))
         return;
 
@@ -369,7 +294,7 @@ void add_mults(char **expr){
  * If we encounter an 'N', we have to negate what we just popped,
  * and continue the loop when we return.
  */
-long process_stacks(struct stack_t *operators, struct stack_t *operands,
+static long process_stacks(struct stack_t *operators, struct stack_t *operands,
         int *negative, char **error){
     char operator = (char)stack_pop(operators);
 
@@ -390,7 +315,7 @@ long process_stacks(struct stack_t *operators, struct stack_t *operands,
 /* Parse an expression.
  * `error` is set on error.
  */
-long evaluate(char *expr, char **error){
+static long evaluate(char *expr, char **error){
     size_t exprlen = strlen(expr);
 
     /* Check for any "syntax errors" before we

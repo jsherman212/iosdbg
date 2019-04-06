@@ -13,7 +13,7 @@
 #include "printutils.h"
 #include "trace.h"
 
-void *exception_server(void *arg){
+static void *exception_server(void *arg){
     struct msg {
         mach_msg_header_t hdr;
         char data[256];
@@ -37,7 +37,7 @@ void *exception_server(void *arg){
     }
 }
 
-void *death_server(void *arg){
+static void *death_server(void *arg){
     int kqid = *(int *)arg;
 
     while(1){
@@ -100,11 +100,6 @@ void *death_server(void *arg){
         free(arg);
         
         ops_detach(1);
-        //error = NULL;
-        //cmdfunc_detach(NULL, 1, &error);
-        
-        //if(error)
-          //  printf("could not detach: %s\n", error);
 
         close(kqid);
         safe_reprompt();

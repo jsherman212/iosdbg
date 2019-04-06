@@ -6,6 +6,7 @@ SRCDIR=source
 
 OBJECT_FILES = $(SRCDIR)/argparse.o \
 	$(SRCDIR)/breakpoint.o \
+	$(SRCDIR)/completer.o \
 	$(SRCDIR)/convvar.o \
 	$(SRCDIR)/dbgcmd.o \
 	$(SRCDIR)/dbgops.o \
@@ -23,6 +24,7 @@ OBJECT_FILES = $(SRCDIR)/argparse.o \
 	$(SRCDIR)/sigcmd.o \
 	$(SRCDIR)/sigsupport.o \
 	$(SRCDIR)/stack.o \
+	$(SRCDIR)/strext.o \
 	$(SRCDIR)/trace.o \
 	$(SRCDIR)/watchpoint.o
 

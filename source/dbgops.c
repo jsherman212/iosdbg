@@ -17,6 +17,7 @@
 #include "dbgops.h"
 #include "exception.h"
 #include "linkedlist.h"
+#include "machthread.h"
 #include "sigsupport.h"
 #include "watchpoint.h"
 
@@ -115,4 +116,22 @@ void ops_resume(void){
     reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
     debuggee->resume();
     debuggee->interrupted = 0;
+}
+
+void ops_threadupdate(void){
+    thread_act_port_array_t threads;
+    debuggee->update_threads(&threads);
+
+    machthread_updatethreads(threads);
+
+    struct machthread *focused = machthread_getfocused();
+
+    if(!focused){
+        printf("[Previously selected thread dead, selecting thread #1]\n\n");
+        machthread_setfocused(threads[0]);
+        focused = machthread_getfocused();
+    }
+
+    if(focused)
+        machthread_updatestate(focused);
 }

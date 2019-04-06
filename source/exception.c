@@ -20,7 +20,7 @@ int JUST_HIT_WATCHPOINT;
 int JUST_HIT_BREAKPOINT;
 int JUST_HIT_SW_BREAKPOINT;
 
-const char *exc_str(exception_type_t exception){
+static const char *exc_str(exception_type_t exception){
     switch(exception){
         case EXC_BAD_ACCESS:
             return "EXC_BAD_ACCESS";
@@ -53,7 +53,7 @@ const char *exc_str(exception_type_t exception){
     }
 }
 
-void set_single_step(int enabled){
+static void set_single_step(int enabled){
     debuggee->get_debug_state();
 
     if(enabled)
@@ -64,7 +64,7 @@ void set_single_step(int enabled){
     debuggee->set_debug_state();
 }
 
-void describe_hit_watchpoint(void *prev_data, void *cur_data, 
+static void describe_hit_watchpoint(void *prev_data, void *cur_data, 
         unsigned int sz){
     long old_val = *(long *)prev_data;
     long new_val = *(long *)cur_data;
@@ -103,11 +103,11 @@ void describe_hit_watchpoint(void *prev_data, void *cur_data,
     }
 }
 
-void clear_signal(mach_port_t thread){
+static void clear_signal(mach_port_t thread){
     ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
 }
 
-void handle_soft_signal(mach_port_t thread, long subcode, char **desc){
+static void handle_soft_signal(mach_port_t thread, long subcode, char **desc){
     if(debuggee->want_detach){
         debuggee->resume();
         debuggee->interrupted = 0;
@@ -132,7 +132,7 @@ void handle_soft_signal(mach_port_t thread, long subcode, char **desc){
         clear_signal(thread);
 }
 
-void handle_hit_watchpoint(void){
+static void handle_hit_watchpoint(void){
     struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
 
     /* This should never happen... but just in case? */
@@ -158,7 +158,7 @@ void handle_hit_watchpoint(void){
     debuggee->last_hit_wp_PC = 0;
 }
 
-void handle_single_step(void){
+static void handle_single_step(void){
     /* Re-enable all the breakpoints we disabled while performing the
      * single step. This function is called when the CPU raises the software
      * step exception after the single step occurs.
@@ -206,7 +206,7 @@ void handle_single_step(void){
     debuggee->is_single_stepping = 0;
 }
 
-void handle_hit_breakpoint(long subcode, char **desc){
+static void handle_hit_breakpoint(long subcode, char **desc){
     struct breakpoint *hit = find_bp_with_address(subcode);
 
     if(!hit){

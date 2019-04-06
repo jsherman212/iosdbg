@@ -10,7 +10,7 @@
 #include "argparse.h"
 #include "convvar.h"
 
-int wants_add_aslr(char *str){
+static int wants_add_aslr(char *str){
     /* This convenience variable allows the user to tell iosdbg
      * to ignore ASLR no matter what.
      */

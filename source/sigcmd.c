@@ -1,10 +1,11 @@
 #include <stdio.h>
 
+#include "argparse.h"
 #include "dbgops.h"
 #include "defs.h"
 #include "sigcmd.h"
 
-enum cmd_error_t cmdfunc_signalhandle(struct cmd_args_t *args, 
+static enum cmd_error_t cmdfunc_signalhandle(struct cmd_args_t *args, 
         int arg1, char **error){
     ops_printsiginfo();
     if(!args){

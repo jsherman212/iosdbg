@@ -4,7 +4,7 @@
 #include "machthread.h"
 #include "linkedlist.h"
 
-struct machthread *machthread_new(mach_port_t thread_port){
+static struct machthread *machthread_new(mach_port_t thread_port){
     struct machthread *mt = malloc(sizeof(struct machthread));
 
     mt->port = thread_port;
@@ -32,7 +32,7 @@ struct machthread *machthread_new(mach_port_t thread_port){
 }
 
 /* Find a machthread with a given condition, defined in compway. */
-struct machthread *find_with_cond(enum comparison compway,
+static struct machthread *find_with_cond(enum comparison compway,
         void *comparingwith){
     if(!debuggee->threads)
         return NULL;
@@ -235,7 +235,7 @@ char *get_thread_name_from_thread_port(mach_port_t thread_port){
     return strdup(exinfo.pth_name);
 }
 
-kern_return_t get_tid_from_thread_port(mach_port_t thread_port){
+unsigned int get_tid_from_thread_port(mach_port_t thread_port){
     if(thread_port == MACH_PORT_NULL)
         return KERN_FAILURE;
 

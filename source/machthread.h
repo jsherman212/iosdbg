@@ -40,7 +40,7 @@ void machthread_updatethreads(thread_act_port_array_t);
 void machthread_setfocused(mach_port_t);
 
 char *get_thread_name_from_thread_port(mach_port_t);
-kern_return_t get_tid_from_thread_port(mach_port_t);
+unsigned int get_tid_from_thread_port(mach_port_t);
 
 void resetmtid(void);
 

@@ -13,7 +13,7 @@
 static int stop = 0;
 static int done_processing = 0;
 
-int initialize_ktrace_buffer(void){
+static int initialize_ktrace_buffer(void){
     int mib[3];
 
     mib[0] = CTL_KERN;
@@ -25,7 +25,7 @@ int initialize_ktrace_buffer(void){
     return sysctl(mib, 3, NULL, &needed, NULL, 0);
 }
 
-int get_kbufinfo_buffer(kbufinfo_t *out){
+static int get_kbufinfo_buffer(kbufinfo_t *out){
     int mib[3];
 
     mib[0] = CTL_KERN;
@@ -37,7 +37,7 @@ int get_kbufinfo_buffer(kbufinfo_t *out){
     return sysctl(mib, 3, out, &needed, NULL, 0);
 }
 
-int read_ktrace_buffer(kd_buf **out, size_t *needed){
+static int read_ktrace_buffer(kd_buf **out, size_t *needed){
     int mib[3];
 
     mib[0] = CTL_KERN;
@@ -49,7 +49,7 @@ int read_ktrace_buffer(kd_buf **out, size_t *needed){
     return sysctl(mib, 3, *out, needed, NULL, 0);
 }
 
-int reset_ktrace_buffers(void){
+static int reset_ktrace_buffers(void){
     int mib[3];
 
     mib[0] = CTL_KERN;
@@ -61,7 +61,7 @@ int reset_ktrace_buffers(void){
     return sysctl(mib, 3, NULL, &needed, NULL, 0);
 }
 
-int set_kdebug_trace_pid(int pid, int value){
+static int set_kdebug_trace_pid(int pid, int value){
     int mib[3];
 
     mib[0] = CTL_KERN;
@@ -75,7 +75,7 @@ int set_kdebug_trace_pid(int pid, int value){
     return sysctl(mib, 3, &kdregtype, &needed, NULL, 0);
 }
 
-int set_kdebug_trace_excluded_pid(int pid, int value){
+static int set_kdebug_trace_excluded_pid(int pid, int value){
     int mib[3];
 
     mib[0] = CTL_KERN;
@@ -89,7 +89,7 @@ int set_kdebug_trace_excluded_pid(int pid, int value){
     return sysctl(mib, 3, &kdregtype, &needed, NULL, 0);
 }
 
-int kdebug_wait(void){
+static int kdebug_wait(void){
     int mib[3];
 
     mib[0] = CTL_KERN;
@@ -101,7 +101,7 @@ int kdebug_wait(void){
     return sysctl(mib, 3, NULL, &needed, NULL, 0);
 }
 
-int set_kdebug_enabled(int value){
+static int set_kdebug_enabled(int value){
     int mib[4];
 
     mib[0] = CTL_KERN;
@@ -112,7 +112,7 @@ int set_kdebug_enabled(int value){
     return sysctl(mib, 4, NULL, 0, NULL, 0);
 }
 
-void cleanup(void){
+static void cleanup(void){
     reset_ktrace_buffers();
     set_kdebug_enabled(0);
 
@@ -121,7 +121,7 @@ void cleanup(void){
     done_processing = 1;
 }
 
-void *trace(void *arg){
+static void *trace(void *arg){
     while(1){
         /* Spin until we are attached to something. */
         while(debuggee->pid == -1 && !stop)

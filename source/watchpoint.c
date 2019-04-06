@@ -8,7 +8,7 @@
 #include "watchpoint.h"
 
 /* Find an available hardware watchpoint register.*/
-int find_ready_wp_reg(void){
+static int find_ready_wp_reg(void){
     struct node_t *current = debuggee->watchpoints->front;
     
     /* Keep track of what hardware watchpoint registers are used
@@ -155,7 +155,7 @@ void watchpoint_hit(struct watchpoint *wp){
     wp->hit_count++;
 }
 
-void enable_wp(struct watchpoint *wp){
+static void enable_wp(struct watchpoint *wp){
     debuggee->get_debug_state();
     
     int BAS_ = (((1 << wp->data_len) - 1) << 5);
@@ -172,20 +172,20 @@ void enable_wp(struct watchpoint *wp){
     debuggee->set_debug_state();
 }
 
-void disable_wp(struct watchpoint *wp){
+static void disable_wp(struct watchpoint *wp){
     debuggee->get_debug_state();
     debuggee->debug_state.__wcr[wp->hw_wp_reg] = 0;
     debuggee->set_debug_state();
 }
 
-void wp_set_state_internal(struct watchpoint *wp, int disabled){
+static void wp_set_state_internal(struct watchpoint *wp, int disabled){
     if(disabled)
         disable_wp(wp);
     else
         enable_wp(wp);
 }
 
-void wp_delete_internal(struct watchpoint *wp){
+static void wp_delete_internal(struct watchpoint *wp){
     disable_wp(wp);
     linkedlist_delete(debuggee->watchpoints, wp);
 

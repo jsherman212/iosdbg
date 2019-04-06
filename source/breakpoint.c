@@ -8,7 +8,7 @@
 #include "memutils.h"
 
 /* Find an available hardware breakpoint register.*/
-int find_ready_bp_reg(void){
+static int find_ready_bp_reg(void){
     struct node_t *current = debuggee->breakpoints->front;
     
     /* Keep track of what hardware breakpoint registers are used
@@ -157,7 +157,7 @@ void breakpoint_hit(struct breakpoint *bp){
         bp->hit_count++;
 }
 
-void enable_hw_bp(struct breakpoint *bp){
+static void enable_hw_bp(struct breakpoint *bp){
     debuggee->get_debug_state();
 
     debuggee->debug_state.__bcr[bp->hw_bp_reg] = 
@@ -171,7 +171,7 @@ void enable_hw_bp(struct breakpoint *bp){
     debuggee->set_debug_state();
 }
 
-void disable_hw_bp(struct breakpoint *bp){
+static void disable_hw_bp(struct breakpoint *bp){
     debuggee->get_debug_state();
     debuggee->debug_state.__bcr[bp->hw_bp_reg] = 0;
     debuggee->set_debug_state();
@@ -180,7 +180,7 @@ void disable_hw_bp(struct breakpoint *bp){
 /* Set whether or not a breakpoint is disabled or enabled,
  * and take action accordingly.
  */
-void bp_set_state_internal(struct breakpoint *bp, int disabled){
+static void bp_set_state_internal(struct breakpoint *bp, int disabled){
     if(bp->hw){
         if(disabled)
             disable_hw_bp(bp);
@@ -197,7 +197,7 @@ void bp_set_state_internal(struct breakpoint *bp, int disabled){
     bp->disabled = disabled;
 }
 
-void bp_delete_internal(struct breakpoint *bp){
+static void bp_delete_internal(struct breakpoint *bp){
     bp_set_state_internal(bp, BP_DISABLED);
     linkedlist_delete(debuggee->breakpoints, bp);
     
@@ -249,7 +249,6 @@ bp_error_t breakpoint_disable(int breakpoint_id){
 
     return BP_FAILURE;  
 }
-
 
 bp_error_t breakpoint_enable(int breakpoint_id){
     if(!debuggee->breakpoints->front)

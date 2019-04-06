@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -6,9 +7,12 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include "completer.h"
 #include "convvar.h"
+#include "cmd.h"
 #include "defs.h"
 #include "dbgcmd.h"
+#include "dbgops.h"
 #include "handlers.h"
 #include "linkedlist.h"
 #include "machthread.h"
@@ -27,7 +31,7 @@ int bsd_syscalls_arr_len;
 int mach_traps_arr_len;
 int mach_messages_arr_len;
 
-void interrupt(int x1){
+static void interrupt(int x1){
     if(keep_checking_for_process)
         printf("\n");
 
@@ -64,7 +68,7 @@ void interrupt(int x1){
     }
 }
 
-void install_handlers(void){
+static void install_handlers(void){
     debuggee->find_slide = &find_slide;
     debuggee->restore_exception_ports = &restore_exception_ports;
     debuggee->resume = &resume;
@@ -86,7 +90,7 @@ int reset_colors_hook(void){
     return 0;
 }
 
-void initialize_readline(void){
+static void initialize_readline(void){
     rl_catch_signals = 0;
     rl_erase_empty_line = 1;
     
@@ -100,10 +104,12 @@ void initialize_readline(void){
      */ 
     rl_event_hook = &reset_colors_hook;
     rl_input_available_hook = &reset_colors_hook;
+
+    rl_attempted_completion_function = completer;
 }
 
-void get_code_and_event_from_line(char *line, char **code, char **event,
-        char **freethis){
+static void get_code_and_event_from_line(char *line,
+        char **code, char **event, char **freethis){
     char *linecopy = strdup(line);
     size_t linelen = strlen(line);
 
@@ -130,7 +136,7 @@ void get_code_and_event_from_line(char *line, char **code, char **event,
     *freethis = linecopy;
 }
 
-int setup_tracing(void){
+static int setup_tracing(void){
     FILE *tracecodes = fopen("/usr/share/misc/trace.codes", "r");
 
     if(!tracecodes){
@@ -271,7 +277,7 @@ int setup_tracing(void){
     return 0;
 }
 
-void setup_initial_debuggee(void){
+static void setup_initial_debuggee(void){
     debuggee = malloc(sizeof(struct debuggee));
 
     /* If we aren't attached to anything, debuggee's pid is -1. */
@@ -318,32 +324,85 @@ void setup_initial_debuggee(void){
     set_convvar("$NO_ASLR_OVERRIDE", "", &error);
 }
 
-void threadupdate(void){
-    if(debuggee->pid != -1){
-        thread_act_port_array_t threads;
-        debuggee->update_threads(&threads);
-        
-        machthread_updatethreads(threads);
-
-        struct machthread *focused = machthread_getfocused();
-
-        if(!focused){
-            printf("[Previously selected thread dead, selecting thread #1]\n\n");
-            machthread_setfocused(threads[0]);
-            focused = machthread_getfocused();
-        }
-
-        if(focused)
-            machthread_updatestate(focused);
-    }
+static void threadupdate(void){
+    if(debuggee->pid != -1)
+        ops_threadupdate();
 }
 
-void runmainloop(void){
+// XXX handle help command in this file
+
+static struct dbg_cmd_t *common_initialization(const char *name,
+        const char *alias, const char *documentation, int level,
+        const char *argregex, int num_groups, int unk_num_args,
+        const char *groupnames[MAX_GROUPS],
+        enum cmd_error_t (*function)(struct cmd_args_t *, int, char **)){
+    struct dbg_cmd_t *c = malloc(sizeof(struct dbg_cmd_t));
+
+    c->name = strdup(name);
+    
+    if(!alias)
+        c->alias = NULL;
+    else
+        c->alias = strdup(alias);
+
+    c->documentation = strdup(documentation);
+    
+    c->rinfo.argregex = strdup(argregex);
+    c->rinfo.num_groups = num_groups;
+    c->rinfo.unk_num_args = unk_num_args;
+
+    for(int i=0; i<c->rinfo.num_groups; i++)
+        c->rinfo.groupnames[i] = strdup(groupnames[i]);
+    
+    c->level = level;
+    c->function = function;
+
+    return c;
+}
+
+static struct dbg_cmd_t *create_parent_cmd(const char *name,
+        const char *alias, const char *documentation, int level,
+        const char *argregex, int num_groups, int unk_num_args,
+        const char *groupnames[MAX_GROUPS], int numsubcmds,
+        enum cmd_error_t (*function)(struct cmd_args_t *, int, char **)){
+    struct dbg_cmd_t *c = common_initialization(name,
+            alias, documentation, level, argregex, num_groups,
+            unk_num_args, groupnames, function);
+
+    c->parentcmd = 1;
+
+    c->subcmds = malloc(sizeof(struct dbg_cmd_t) * (numsubcmds + 1));
+    c->subcmds[numsubcmds] = NULL;
+
+    return c;
+}
+
+static struct dbg_cmd_t *create_child_cmd(const char *name,
+        const char *alias, const char *documentation, const char *argregex,
+        int num_groups, int unk_num_args, const char *groupnames[MAX_GROUPS],
+        int level, 
+        enum cmd_error_t (*function)(struct cmd_args_t *, int, char **)){
+    struct dbg_cmd_t *c = common_initialization(name,
+            alias, documentation, level, argregex, num_groups,
+            unk_num_args, groupnames, function);
+
+    c->parentcmd = 0;
+    c->subcmds = NULL;
+
+    return c;
+}
+
+static void initialize_commands(void){
+
+}
+
+static void inputloop(void){
     char *line = NULL;
     char *prevline = NULL;
     
     while((line = readline(prompt)) != NULL){
-        /* If the user hits enter, repeat the last command,
+        /* 
+         * If the user hits enter, repeat the last command,
          * and do not add to the command history if the length
          * of line is 0.
          */
@@ -358,13 +417,14 @@ void runmainloop(void){
         
         threadupdate();
 
-        char *error = NULL;
+        printf("You put '%s'\n", line);
+        /*char *error = NULL;
         int result = execute_command(line, &error);
 
         if(result && error){
             printf("error: %s\n", error);
             free(error);
-        }
+        }*/
 
         prevline = realloc(prevline, strlen(line) + 1);
         strcpy(prevline, line);
@@ -377,7 +437,7 @@ int main(int argc, char **argv, const char **envp){
     if(getuid() && geteuid()){
         printf("iosdbg requires root to operate correctly\n");
         return 1;
-    }   
+    }
 
     /* By default, don't pass SIGINT and SIGTRAP to debuggee. */
     int notify = 1, pass = 0, stop = 1;
@@ -403,6 +463,8 @@ int main(int argc, char **argv, const char **envp){
     install_handlers();
     initialize_readline();
     initialize_commands();
+
+    signal(SIGINT, interrupt);
     
     bsd_syscalls = NULL;
     mach_traps = NULL;
@@ -416,11 +478,8 @@ int main(int argc, char **argv, const char **envp){
 
     if(err)
         printf("Could not setup for future tracing. Tracing is disabled.\n");
-    
-    signal(SIGINT, interrupt);
 
-
-    runmainloop();
+    inputloop();
 
     return 0;
 }

@@ -10,7 +10,7 @@
 static struct linkedlist *vars;
 
 /* A convenience variable cannot have the same name as a system register. */
-static const char *bad_names[] = {
+static const char *const bad_names[] = {
     "$x0", "$x1", "$x2", "$x3", "$x4", "$x5", 
     "$x6", "$x7", "$x8", "$x9", "$x10", "$x11", "$x12", 
     "$x13", "$x14", "$x15", "$x16", "$x17", "$x18", 
@@ -97,7 +97,7 @@ static const char *bad_names[] = {
     "$CPSR", "$FPSR", "$FPCR"
 };
 
-int invalid_name(char *name){
+static int invalid_name(char *name){
     if(!name)
         return 1;
 
@@ -109,6 +109,111 @@ int invalid_name(char *name){
     }
 
     return 0;
+}
+
+static int convvar_exists(char *name, char **error){
+    if(!vars)
+        return 0;
+
+    if(name && name[0] != '$'){
+        asprintf(error, "names of convenience variables must start with '$'");
+        return 0;
+    }
+
+    return lookup_convvar(name) != NULL;
+}
+
+static enum convvar_kind determine_kind(char *value, char **error){
+    if(value && strlen(value) == 0)
+        return CONVVAR_VOID_KIND;
+
+    char *first_decimal = strchr(value, '.');
+    char *last_decimal = strrchr(value, '.');
+
+    /* If the user wants to store a string, there will be
+     * value will contain quotations.
+     */
+    if(value[0] == '"'){
+        if(!strrchr(value, '"')){
+            asprintf(error, "missing closing quotation for string '%s'", value);
+            return -1;
+        }
+
+        return CONVVAR_STRING;
+    }
+    else if(first_decimal != last_decimal){
+        asprintf(error, "malformed floating point number '%s'", value);
+        return -1;
+    }
+    else if(first_decimal)
+        return CONVVAR_DOUBLE;
+    else
+        return CONVVAR_INTEGER;
+}
+
+static void update_convvar(struct convvar *var, char *value, char **error){
+    if(!value){
+        asprintf(error, "NULL value");
+        return;
+    }
+
+    if(strlen(value) == 0){
+        var->state = CONVVAR_VOID;
+        return;
+    }
+
+    char *endptr = NULL;
+    
+    if(var->kind == CONVVAR_INTEGER)
+        var->data.integer = strtoll(value, &endptr, 0);
+    else if(var->kind == CONVVAR_DOUBLE){
+        double d = strtod(value, &endptr);
+        var->data.integer = *(long long *)&d;
+    }
+    else if(var->kind == CONVVAR_STRING){
+        /* Don't include the quotation marks. */
+        size_t valuelen = strlen(value);
+        memmove(value, value + 1, valuelen);
+        value[valuelen - 2] = '\0';
+
+        var->data.string = strdup(value);
+    }   
+
+    if(endptr && *endptr != '\0'){
+        asprintf(error, "invalid number '%s'", value);
+        convvar_free(var);
+        
+        return;
+    }
+
+    var->state = CONVVAR_NONVOID;
+}
+
+static void create_convvar(char *name, char *value, char **error){
+    enum convvar_kind kind = determine_kind(value, error);
+
+    if(*error)
+        return;
+
+    struct convvar *var = malloc(sizeof(struct convvar));
+    var->name = strdup(name);
+
+    if(kind == CONVVAR_VOID_KIND)
+        var->state = CONVVAR_VOID;
+    else
+        var->state = CONVVAR_NONVOID;
+
+    var->kind = kind;
+
+    update_convvar(var, value, error);
+    
+    if(*error)
+        return;
+
+    if(!vars)
+        vars = linkedlist_new();
+
+    linkedlist_add(vars, var);
 }
 
 struct convvar *lookup_convvar(char *name){
@@ -174,110 +279,6 @@ void void_convvar(char *name){
     target->state = CONVVAR_VOID;
 }
 
-int convvar_exists(char *name, char **error){
-    if(!vars)
-        return 0;
-
-    if(name && name[0] != '$'){
-        asprintf(error, "names of convenience variables must start with '$'");
-        return 0;
-    }
-
-    return lookup_convvar(name) != NULL;
-}
-
-enum convvar_kind determine_kind(char *value, char **error){
-    if(value && strlen(value) == 0)
-        return CONVVAR_VOID_KIND;
-
-    char *first_decimal = strchr(value, '.');
-    char *last_decimal = strrchr(value, '.');
-
-    /* If the user wants to store a string, there will be
-     * value will contain quotations.
-     */
-    if(value[0] == '"'){
-        if(!strrchr(value, '"')){
-            asprintf(error, "missing closing quotation for string '%s'", value);
-            return -1;
-        }
-
-        return CONVVAR_STRING;
-    }
-    else if(first_decimal != last_decimal){
-        asprintf(error, "malformed floating point number '%s'", value);
-        return -1;
-    }
-    else if(first_decimal)
-        return CONVVAR_DOUBLE;
-    else
-        return CONVVAR_INTEGER;
-}
-
-void update_convvar(struct convvar *var, char *value, char **error){
-    if(!value){
-        asprintf(error, "NULL value");
-        return;
-    }
-
-    if(strlen(value) == 0){
-        var->state = CONVVAR_VOID;
-        return;
-    }
-
-    char *endptr = NULL;
-    
-    if(var->kind == CONVVAR_INTEGER)
-        var->data.integer = strtoll(value, &endptr, 0);
-    else if(var->kind == CONVVAR_DOUBLE){
-        double d = strtod(value, &endptr);
-        var->data.integer = *(long long *)&d;
-    }
-    else if(var->kind == CONVVAR_STRING){
-        /* Don't include the quotation marks. */
-        size_t valuelen = strlen(value);
-        memmove(value, value + 1, valuelen);
-        value[valuelen - 2] = '\0';
-
-        var->data.string = strdup(value);
-    }   
-
-    if(endptr && *endptr != '\0'){
-        asprintf(error, "invalid number '%s'", value);
-        convvar_free(var);
-        
-        return;
-    }
-
-    var->state = CONVVAR_NONVOID;
-}
-
-void create_convvar(char *name, char *value, char **error){
-    enum convvar_kind kind = determine_kind(value, error);
-
-    if(*error)
-        return;
-
-    struct convvar *var = malloc(sizeof(struct convvar));
-    var->name = strdup(name);
-
-    if(kind == CONVVAR_VOID_KIND)
-        var->state = CONVVAR_VOID;
-    else
-        var->state = CONVVAR_NONVOID;
-
-    var->kind = kind;
-
-    update_convvar(var, value, error);
-    
-    if(*error)
-        return;
-
-    if(!vars)
-        vars = linkedlist_new();
-
-    linkedlist_add(vars, var);
-}
 
 /* `name` and `value` must be malloc'ed */
 void set_convvar(char *name, char *value, char **error){
@@ -348,6 +349,14 @@ void show_all_cvars(void){
     }
 }
 
+void desc_auto_convvar_error_if_needed(char *var, char *e){
+    if(!e || !var)
+        return;
+
+    printf("could not automatically update the convenience variable '%s': %s\n",
+            var, e);
+}
+
 void convvar_free(struct convvar *var){
     if(!var)
         return;
@@ -356,12 +365,4 @@ void convvar_free(struct convvar *var){
         free(var->name);
 
     free(var);
-}
-
-void desc_auto_convvar_error_if_needed(char *var, char *e){
-    if(!e || !var)
-        return;
-
-    printf("could not automatically update the convenience variable '%s': %s\n",
-            var, e);
 }
