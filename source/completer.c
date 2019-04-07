@@ -11,16 +11,46 @@
 static struct matchedcmdinfo_t CURRENT_MATCH_INFO = {0};
 
 static void _reset_matchedcmdinfo(void){
+    if(CURRENT_MATCH_INFO.rinfo.argregex)
+        free(CURRENT_MATCH_INFO.rinfo.argregex);
+
+    CURRENT_MATCH_INFO.rinfo.argregex = NULL;
     CURRENT_MATCH_INFO.function = NULL;
 }
 
-static void prepare_and_call_cmdfunc(void){
+enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
     if(!CURRENT_MATCH_INFO.function){
-        printf("%s: function is NULL\n", __func__);
-        return;
+        //printf("%s: function is NULL\n", __func__);
+        return CMD_FAILURE;
     }
 
+    printf("Got args '%s'\n", args);
+
+    struct cmd_args_t *parsed_args = parse_args(args,
+            CURRENT_MATCH_INFO.rinfo.argregex,
+            (const char **)(CURRENT_MATCH_INFO.rinfo.groupnames),
+            CURRENT_MATCH_INFO.rinfo.num_groups,
+            CURRENT_MATCH_INFO.rinfo.unk_num_args,
+            error);
+
+    if(*error){
+        argfree(parsed_args);
+        return CMD_FAILURE;
+    }
+
+    enum cmd_error_t result = CURRENT_MATCH_INFO.function(parsed_args,
+            0, error);
+
+    argfree(parsed_args);
+
     _reset_matchedcmdinfo();
+
+    return result;
+}
+
+static void copy_groupnames(struct dbg_cmd_t *from){
+    for(int idx=0; idx<MAX_GROUPS; idx++)
+        CURRENT_MATCH_INFO.rinfo.groupnames[idx] = from->rinfo.groupnames[idx];
 }
 
 /*
@@ -137,6 +167,16 @@ static void match_at_level(const char *text, int target_level,
                             if(!matches)
                                 (*num_matches)++;
                             else{
+                                CURRENT_MATCH_INFO.rinfo.argregex =
+                                    strdup(cursubcmd->rinfo.argregex);
+                                CURRENT_MATCH_INFO.rinfo.num_groups =
+                                    cursubcmd->rinfo.num_groups;
+                                CURRENT_MATCH_INFO.rinfo.unk_num_args =
+                                    cursubcmd->rinfo.unk_num_args;
+                                //CURRENT_MATCH_INFO.rinfo.groupnames =
+                                  //  cursubcmd->rinfo.groupnames;
+                                copy_groupnames(cursubcmd);
+                                
                                 CURRENT_MATCH_INFO.function = cursubcmd->function;
 
                                 (*matches)[(*num_matches)++] = strdup(cursubcmd->name);
@@ -156,6 +196,15 @@ static void match_at_level(const char *text, int target_level,
                 if(!matches)
                     (*num_matches)++;
                 else{
+                    CURRENT_MATCH_INFO.rinfo.argregex =
+                        strdup(current->rinfo.argregex);
+                    CURRENT_MATCH_INFO.rinfo.num_groups =
+                        current->rinfo.num_groups;
+                    CURRENT_MATCH_INFO.rinfo.unk_num_args =
+                        current->rinfo.unk_num_args;
+                    //CURRENT_MATCH_INFO.rinfo.groupnames =
+                      //  current->rinfo.groupnames;
+                    copy_groupnames(current);
                     CURRENT_MATCH_INFO.function = current->function;
 
                     (*matches)[(*num_matches)++] = strdup(current->name);
@@ -230,7 +279,6 @@ char *completion_generator(const char *text, int state){
 }
 
 char **completer(const char *text, int start, int end){
-    //printf("%s: text '%s' start %d end %d\n", __func__, text, start, end);
     rl_attempted_completion_over = 1;
 
     return rl_completion_matches(text, completion_generator);

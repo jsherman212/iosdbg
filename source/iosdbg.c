@@ -9,8 +9,8 @@
 
 #include "completer.h"
 #include "convvar.h"
-#include "cmd.h"
-#include "defs.h"
+#include "cmd.h"    /* Includes defs.h */
+//#include "defs.h"
 #include "dbgcmd.h"
 #include "dbgops.h"
 #include "handlers.h"
@@ -569,6 +569,7 @@ static void inputloop(void){
     char *line = NULL;
     char *prevline = NULL;
     
+    // XXX XXX XXX XXX CMD ALIAS SUPPORT!!!
     while((line = readline(prompt)) != NULL){
         /* 
          * If the user hits enter, repeat the last command,
@@ -587,17 +588,65 @@ static void inputloop(void){
         threadupdate();
 
         printf("You put '%s'\n", line);
-        /*char *error = NULL;
-        int result = execute_command(line, &error);
+        char *linecpy = strdup(line);
 
-        if(result && error){
-            printf("error: %s\n", error);
-            free(error);
-        }*/
+        if(strlen(line) > 0){
+            char *tok = strtok_r(line, " ", &line);
 
-        prevline = realloc(prevline, strlen(line) + 1);
-        strcpy(prevline, line);
+            int current_start = 0;
+            char **completions = NULL;
+            char *arguments = strdup("");
 
+            while(tok){
+                /* Force matching to figure out the command. */
+                completions = completer(tok, current_start, strlen(tok));
+                
+                /* If there were no matches, we can assume the following
+                 * is arguments.
+                 */
+                if(!completions){
+                    asprintf(&arguments, "%s%s ", arguments, tok);
+                    //printf("tok: '%s'\n", tok);
+                }
+
+                current_start += strlen(tok);
+                tok = strtok_r(NULL, " ", &line);
+            }
+
+            arguments[strlen(arguments) - 1] = '\0';
+            printf("Got arguments: '%s'\n", arguments);
+
+            if(completions && *(completions + 1)){
+                char *ambiguous_cmd_str;
+                asprintf(&ambiguous_cmd_str, "Ambiguous command '%s': ", linecpy);
+
+                for(int i=1; completions[i]; i++)
+                    asprintf(&ambiguous_cmd_str, "%s%s, ",
+                            ambiguous_cmd_str, completions[i]);
+
+                /*
+                 * Get rid of the trailing comma.
+                 */
+
+                ambiguous_cmd_str[strlen(ambiguous_cmd_str) - 2] = '\0';
+
+                printf("%s\n", ambiguous_cmd_str);
+
+                free(ambiguous_cmd_str);
+            }
+
+            char *error = NULL;
+            enum cmd_error_t result = prepare_and_call_cmdfunc(arguments, &error);
+
+            if(result && error){
+                printf("error: %s\n", error);
+                free(error);
+            }
+        }
+
+        prevline = strdup(linecpy);
+        
+        free(linecpy);
         free(line);
     }
 }

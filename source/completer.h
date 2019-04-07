@@ -5,9 +5,7 @@
 
 #include "defs.h"
 
-//void initialize_commands(void);
-//void inputloop(void);
-
+enum cmd_error_t prepare_and_call_cmdfunc(char *, char **);
 char **completer(const char *, int, int);
 
 #endif

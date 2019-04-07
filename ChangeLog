@@ -1,3 +1,6 @@
+4-6-19
+- almost done implementing new command completion system
+
 4-5-19
 - take advantage of readline powered tab completion
 - remove execute_command
