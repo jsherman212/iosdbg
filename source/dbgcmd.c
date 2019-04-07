@@ -10,6 +10,7 @@
 #include "argparse.h"
 #include "breakpoint.h"
 #include "convvar.h"
+#include "dbgcmd.h"
 #include "dbgops.h"
 #include "exception.h"      /* Includes defs.h */
 #include "expr.h"
@@ -20,29 +21,6 @@
 #include "servers.h"
 #include "trace.h"
 #include "watchpoint.h"
-
-static enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_attach(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_break(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_continue(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_delete(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_detach(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_examine(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_help(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_kill(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_quit(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_set(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_show(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_trace(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_unset(struct cmd_args_t *, int, char **);
-static enum cmd_error_t cmdfunc_watch(struct cmd_args_t *, int, char **);
 
 int keep_checking_for_process;
 
@@ -162,7 +140,7 @@ static enum cmd_error_t help_internal(char *cmd_name){
     return CMD_FAILURE;
 }
 
-static enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "not attached to anything");
@@ -174,7 +152,7 @@ static enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         asprintf(error, "need target");
@@ -352,7 +330,7 @@ static enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "not attached to anything");
@@ -398,7 +376,7 @@ static enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_break(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_break(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "not attached to anything");
@@ -430,7 +408,7 @@ static enum cmd_error_t cmdfunc_break(struct cmd_args_t *args,
     return breakpoint_at_address(location, BP_NO_TEMP, error);    
 }
 
-static enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int do_not_print_msg, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -452,7 +430,7 @@ static enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_delete(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_delete(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -545,7 +523,7 @@ static enum cmd_error_t cmdfunc_delete(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args, 
         int from_death, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -566,7 +544,7 @@ static enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         help_internal("disassemble");
@@ -617,7 +595,7 @@ static enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         help_internal("examine");
@@ -671,7 +649,7 @@ static enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_help(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_help(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         asprintf(error, "need command");
@@ -688,7 +666,7 @@ static enum cmd_error_t cmdfunc_help(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -723,7 +701,7 @@ static enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
         int arg1, char **error){
     cmdfunc_detach(NULL, 0, error);
 
@@ -761,7 +739,7 @@ static enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
     exit(0);
 }
 
-static enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -869,7 +847,7 @@ static enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -967,7 +945,7 @@ static enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_set(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_set(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         help_internal("set");
@@ -1214,7 +1192,7 @@ static enum cmd_error_t cmdfunc_set(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_show(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_show(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args){
         show_all_cvars();
@@ -1232,7 +1210,7 @@ static enum cmd_error_t cmdfunc_show(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -1263,7 +1241,7 @@ static enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!debuggee->threads)
         return CMD_FAILURE;
@@ -1286,7 +1264,7 @@ static enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args)
         return CMD_FAILURE;
@@ -1331,7 +1309,7 @@ static enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->tracing_disabled){
         asprintf(error, "tracing is not supported on this host");
@@ -1348,7 +1326,7 @@ static enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_unset(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_unset(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args)
         return CMD_FAILURE;
@@ -1369,7 +1347,7 @@ static enum cmd_error_t cmdfunc_unset(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-static enum cmd_error_t cmdfunc_watch(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_watch(struct cmd_args_t *args, 
         int arg1, char **error){
     if(!args)
         return CMD_FAILURE;

@@ -27,12 +27,10 @@ static void prepare_and_call_cmdfunc(void){
  * Return a string of everything before `text` from rl_line_buffer.
  */
 static char *everything_before(const char *text, int ignore_spaces){
-    char *rl_line_buffer_cpy = strdup(rl_line_buffer);
-
     char *substr_end = strrstr(rl_line_buffer, (char*)text);
     int len = substr_end - rl_line_buffer;
 
-    return substr(rl_line_buffer_cpy, 0, ignore_spaces ? len - 1 : len);
+    return substr(rl_line_buffer, 0, ignore_spaces ? len - 1 : len);
 }
 
 /*
