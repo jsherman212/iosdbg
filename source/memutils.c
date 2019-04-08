@@ -82,7 +82,12 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
 
         char *disassembled = ArmadilloDisassembleB(instr, current_location);
 
-        debuggee->get_thread_state();
+        err = debuggee->get_thread_state();
+        
+        if(err){
+            free(disassembled);
+            return KERN_FAILURE;
+        }
 
         printf("%s%#lx:  %s\n",
                 debuggee->thread_state.__pc == current_location

@@ -569,7 +569,6 @@ static void inputloop(void){
     char *line = NULL;
     char *prevline = NULL;
     
-    // XXX XXX XXX XXX CMD ALIAS SUPPORT!!!
     while((line = readline(prompt)) != NULL){
         /* 
          * If the user hits enter, repeat the last command,
@@ -587,7 +586,7 @@ static void inputloop(void){
         
         threadupdate();
 
-        printf("You put '%s'\n", line);
+        //printf("You put '%s'\n", line);
         char *linecpy = strdup(line);
 
         if(strlen(line) > 0){
@@ -598,18 +597,21 @@ static void inputloop(void){
             char *arguments = strdup("");
 
             while(tok){
+                size_t toklen = strlen(tok);
+
                 /* Force matching to figure out the command. */
-                completions = completer(tok, current_start, strlen(tok));
+                completions = completer(tok, current_start, toklen);
+
                 
                 /* If there were no matches, we can assume the following
-                 * is arguments.
+                 * are arguments.
                  */
                 if(!completions){
                     asprintf(&arguments, "%s%s ", arguments, tok);
                     //printf("tok: '%s'\n", tok);
                 }
 
-                current_start += strlen(tok);
+                current_start += toklen;
                 tok = strtok_r(NULL, " ", &line);
             }
 
@@ -618,7 +620,8 @@ static void inputloop(void){
 
             if(completions && *(completions + 1)){
                 char *ambiguous_cmd_str;
-                asprintf(&ambiguous_cmd_str, "Ambiguous command '%s': ", linecpy);
+                asprintf(&ambiguous_cmd_str, "Ambiguous command '%s': ",
+                        linecpy);
 
                 for(int i=1; completions[i]; i++)
                     asprintf(&ambiguous_cmd_str, "%s%s, ",
@@ -642,6 +645,8 @@ static void inputloop(void){
                 printf("error: %s\n", error);
                 free(error);
             }
+
+            free(arguments);
         }
 
         prevline = strdup(linecpy);

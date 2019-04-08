@@ -154,6 +154,9 @@ kern_return_t get_thread_state(void){
 
     struct machthread *focused = machthread_getfocused();
 
+    if(!focused)
+        return KERN_FAILURE;
+
     kern_return_t kret = thread_get_state(focused->port,
             ARM_THREAD_STATE64,
             (thread_state_t)&debuggee->thread_state,
