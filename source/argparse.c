@@ -83,8 +83,7 @@ struct cmd_args_t *parse_args(char *_args,
         PCRE2_UCHAR buf[2048];
         pcre2_get_error_message(rc, buf, sizeof(buf));
 
-        asprintf(error, "pcre2: your arguments could not be parsed"
-                " (rc = %d): %s", rc, buf);
+        asprintf(error, "malformed arguments");
 
         pcre2_match_data_free(match_data);
         pcre2_code_free(re);

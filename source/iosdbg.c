@@ -10,7 +10,6 @@
 #include "completer.h"
 #include "convvar.h"
 #include "cmd.h"    /* Includes defs.h */
-//#include "defs.h"
 #include "dbgcmd.h"
 #include "dbgops.h"
 #include "handlers.h"
@@ -85,26 +84,9 @@ static void install_handlers(void){
     debuggee->set_neon_state = &set_neon_state;
 }
 
-int reset_colors_hook(void){
-    printf("\e[0m");
-
-    return 0;
-}
-
 static void initialize_readline(void){
     rl_catch_signals = 0;
     rl_erase_empty_line = 1;
-    
-    /* Our prompt is colored, so we need to reset colors
-     * when Readline is ready for input.
-     */
-    rl_pre_input_hook = &reset_colors_hook;
-    
-    /* rl_event_hook is used to reset colors on SIGINT and
-     * enter button press to repeat the previous command.
-     */ 
-    rl_event_hook = &reset_colors_hook;
-    rl_input_available_hook = &reset_colors_hook;
 
     rl_attempted_completion_function = completer;
 }
@@ -330,8 +312,6 @@ static void threadupdate(void){
         ops_threadupdate();
 }
 
-// XXX handle help command in this file
-
 static struct dbg_cmd_t *common_initialization(const char *name,
         const char *alias, const char *documentation, int level,
         const char *argregex, int num_groups, int unk_num_args,
@@ -347,7 +327,7 @@ static struct dbg_cmd_t *common_initialization(const char *name,
         c->alias = strdup(alias);
 
     if(!documentation)
-        c->documentation = strdup("\tHit <TAB> for sub-commands.");
+        c->documentation = strdup("\tHit <TAB> to see sub-commands.");
     else
         c->documentation = strdup(documentation);
     
@@ -566,6 +546,12 @@ static void initialize_commands(void){
     ADD_CMD(watch);
 }
 
+static void _rl_line_buffer_replace(char *with){
+    rl_delete_text(0, rl_end);
+    rl_point = rl_end = rl_mark = 0;
+    rl_insert_text(with);
+}
+
 static void expand_aliases(char **line){
     /* Only top level commands (level 0) can have aliases,
      * so we only need to test the first "word".
@@ -581,30 +567,19 @@ static void expand_aliases(char **line){
     else
         token = strdup(*line);
 
-    //printf("%s: got first word '%s'\n", __func__, token);
-
     /* Check for an alias. */
     for(int i=0; i<NUM_TOP_LEVEL_COMMANDS; i++){
         struct dbg_cmd_t *current = COMMANDS[i];
 
         if(current->alias && strcmp(current->alias, token) == 0){
-            //printf("%s: got a command '%s' for alias: '%s'\n", __func__, current->name, current->alias);
-
-            //printf("line before strcut: '%s'\n", *line);
+            /* Replace the alias with its command. */
             strcut(line, 0, bytes_until_space);
-            //printf("line after strcut: '%s'\n", *line);
             strins(line, current->name, 0);
-            //printf("line after strins: '%s'\n", *line);
 
-            //printf("rl_line_buffer before rl_delete_text: '%s'\n", rl_line_buffer);
-            rl_delete_text(0, rl_end);
-            //printf("rl_line_buffer after rl_delete_text: '%s'\n", rl_line_buffer);
-            rl_point = rl_end = rl_mark = 0;
-            rl_insert_text(*line);
-            //printf("rl_line_buffer after rl_insert_text: '%s'\n", rl_line_buffer);
-
+            _rl_line_buffer_replace(*line);
 
             free(token);
+
             return;
         }
     }
@@ -617,87 +592,91 @@ static void inputloop(void){
     char *prevline = NULL;
     
     while((line = readline(prompt)) != NULL){
-        /* 
-         * If the user hits enter, repeat the last command,
+        /* If the user hits enter, repeat the last command,
          * and do not add to the command history if the length
          * of line is 0.
          */
         if(strlen(line) == 0 && prevline){
             line = realloc(line, strlen(prevline) + 1);
             strcpy(line, prevline);
+
+            /* If the user hits enter right away, rl_line_buffer will be empty.
+             * The completer relies on rl_line_buffer reflecting the
+             * contents of line, so make that so.
+             */
+            _rl_line_buffer_replace(line);
         }
         else if(strlen(line) > 0 &&
                 (!prevline || (prevline && strcmp(line, prevline) != 0))){
             add_history(line);
         }
 
-        printf("You put '%s'\n", line);
         char *linecpy = strdup(line);
         
         threadupdate();
         expand_aliases(&line);
 
-        if(strlen(line) > 0){
-            char *tok = strtok_r(line, " ", &line);
+        int current_start = 0;
 
-            int current_start = 0;
-            char **completions = NULL;
-            char *arguments = strdup("");
+        char *tok = strtok_r(line, " ", &line);
+        char *arguments = strdup("");
 
-            while(tok){
-                size_t toklen = strlen(tok);
+        char **completions = NULL;
 
-                /* Force matching to figure out the command. */
-                completions = completer(tok, current_start, toklen);
-                
-                /* If there were no matches, we can assume the following
-                 * are arguments.
-                 */
-                if(!completions){
+        while(tok){
+            size_t toklen = strlen(tok);
+
+            /* Force matching to figure out the command. */
+            completions = completer(tok, current_start, toklen);
+
+            /* If there were no matches, we can assume the following
+             * are arguments.
+             */
+            if(!completions){
+                while(tok){
                     asprintf(&arguments, "%s%s ", arguments, tok);
-                    //printf("tok: '%s'\n", tok);
+                    tok = strtok_r(NULL, " ", &line);
                 }
 
-                current_start += toklen;
-                tok = strtok_r(NULL, " ", &line);
+                break;
             }
 
-            arguments[strlen(arguments) - 1] = '\0';
-            printf("Got arguments: '%s'\n", arguments);
-
-            if(completions && *(completions + 1)){
-                char *ambiguous_cmd_str;
-                asprintf(&ambiguous_cmd_str, "Ambiguous command '%s': ",
-                        linecpy);
-
-                for(int i=1; completions[i]; i++)
-                    asprintf(&ambiguous_cmd_str, "%s%s, ",
-                            ambiguous_cmd_str, completions[i]);
-
-                /*
-                 * Get rid of the trailing comma.
-                 */
-
-                ambiguous_cmd_str[strlen(ambiguous_cmd_str) - 2] = '\0';
-
-                printf("%s\n", ambiguous_cmd_str);
-
-                free(ambiguous_cmd_str);
-            }
-
-            char *error = NULL;
-            enum cmd_error_t result =
-                prepare_and_call_cmdfunc(arguments, &error);
-
-            if(result && error){
-                printf("error: %s\n", error);
-                free(error);
-            }
-
-            free(arguments);
+            current_start += toklen;
+            tok = strtok_r(NULL, " ", &line);
         }
 
-        prevline = strdup(linecpy);
+        arguments[strlen(arguments) - 1] = '\0';
+
+        if(completions && *(completions + 1)){
+            char *ambiguous_cmd_str;
+            asprintf(&ambiguous_cmd_str, "Ambiguous command \"%s\": ",
+                    linecpy);
+
+            for(int i=1; completions[i]; i++)
+                asprintf(&ambiguous_cmd_str, "%s%s, ",
+                        ambiguous_cmd_str, completions[i]);
+
+            /* Get rid of the trailing comma. */
+            ambiguous_cmd_str[strlen(ambiguous_cmd_str) - 2] = '\0';
+
+            printf("%s\n", ambiguous_cmd_str);
+
+            free(ambiguous_cmd_str);
+        }
+
+        char *error = NULL;
+        enum cmd_error_t result =
+            prepare_and_call_cmdfunc(arguments, &error);
+
+        if(result && error){
+            printf("error: %s\n", error);
+            free(error);
+        }
+
+        free(arguments);
+
+        prevline = realloc(prevline, strlen(linecpy) + 1);
+        strcpy(prevline, linecpy);
         
         free(linecpy);
         free(line);
@@ -749,6 +728,9 @@ int main(int argc, char **argv, const char **envp){
 
     if(err)
         printf("Could not setup for future tracing. Tracing is disabled.\n");
+
+    printf("For help, type \"help\".\n"
+            "Command name abbreviations are allowed if unambiguous.\n");
 
     inputloop();
 

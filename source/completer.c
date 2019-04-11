@@ -19,12 +19,8 @@ static void _reset_matchedcmdinfo(void){
 }
 
 enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
-    if(!CURRENT_MATCH_INFO.function){
-        printf("CURRENT_MATCH_INFO.function is NULL\n");
+    if(!CURRENT_MATCH_INFO.function)
         return CMD_FAILURE;
-    }
-
-    printf("%s: Got args '%s', calling parse_args\n", __func__, args);
 
     struct cmd_args_t *parsed_args = parse_args(args,
             CURRENT_MATCH_INFO.rinfo.argregex,
@@ -33,17 +29,19 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
             CURRENT_MATCH_INFO.rinfo.unk_num_args,
             error);
 
+    enum cmd_error_t (*cmdfunc)(struct cmd_args_t *, int, char **) =
+        CURRENT_MATCH_INFO.function;
+
+    _reset_matchedcmdinfo();
+
     if(*error){
         argfree(parsed_args);
         return CMD_FAILURE;
     }
 
-    enum cmd_error_t result = CURRENT_MATCH_INFO.function(parsed_args,
-            0, error);
+    enum cmd_error_t result = cmdfunc(parsed_args, 0, error);
 
     argfree(parsed_args);
-
-    _reset_matchedcmdinfo();
 
     return result;
 }
@@ -254,7 +252,6 @@ char *completion_generator(const char *text, int state){
         int no_ambiguity_before_text = no_ambiguity_before(text);
         
         if(!no_ambiguity_before_text){
-            printf("!no_ambiguity_before_text for text '%s'\n", text);
             _reset_matchedcmdinfo();
             return NULL;
         }
@@ -264,10 +261,8 @@ char *completion_generator(const char *text, int state){
 
         match_at_level(text, level_to_match, &num_matches, &matches);
 
-        if(num_matches > 1){
-            printf("resetting, num_matches (%d) > 1\n", num_matches);
+        if(num_matches > 1)
             _reset_matchedcmdinfo();
-        }
     }
 
     return *(matches + counter++);

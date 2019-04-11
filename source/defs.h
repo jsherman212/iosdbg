@@ -11,7 +11,7 @@ extern int ptrace(int arg0, pid_t arg1, caddr_t arg2, int arg3);
 #define PT_ATTACHEXC    14
 #define PT_THUPDATE 13
 
-static const char *prompt = "\e[2m(iosdbg) ";
+static const char *prompt = "\e[2m(iosdbg) \e[0m";
 
 extern char **bsd_syscalls;
 extern char **mach_traps;
