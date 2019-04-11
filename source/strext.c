@@ -40,6 +40,11 @@ void strcut(char **target, int start, int bytes){
 
     int endidx = start + bytes;
 
+    if(start == 0 && endidx == 0){
+        (*target)[0] = '\0';
+        return;
+    }
+
     if(bytes <= 0 || endidx > targetlen)
         return;
 

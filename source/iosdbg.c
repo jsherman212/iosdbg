@@ -19,6 +19,7 @@
 #include "memutils.h"
 #include "printutils.h"
 #include "sigsupport.h"
+#include "strext.h"
 #include "trace.h"
 
 struct debuggee *debuggee;
@@ -565,6 +566,52 @@ static void initialize_commands(void){
     ADD_CMD(watch);
 }
 
+static void expand_aliases(char **line){
+    /* Only top level commands (level 0) can have aliases,
+     * so we only need to test the first "word".
+     */
+    char *space = strchr(*line, ' ');
+    int bytes_until_space = 0;
+    char *token = NULL;
+
+    if(space){
+        bytes_until_space = space - (*line);
+        token = substr(*line, 0, bytes_until_space);
+    }
+    else
+        token = strdup(*line);
+
+    //printf("%s: got first word '%s'\n", __func__, token);
+
+    /* Check for an alias. */
+    for(int i=0; i<NUM_TOP_LEVEL_COMMANDS; i++){
+        struct dbg_cmd_t *current = COMMANDS[i];
+
+        if(current->alias && strcmp(current->alias, token) == 0){
+            //printf("%s: got a command '%s' for alias: '%s'\n", __func__, current->name, current->alias);
+
+            //printf("line before strcut: '%s'\n", *line);
+            strcut(line, 0, bytes_until_space);
+            //printf("line after strcut: '%s'\n", *line);
+            strins(line, current->name, 0);
+            //printf("line after strins: '%s'\n", *line);
+
+            //printf("rl_line_buffer before rl_delete_text: '%s'\n", rl_line_buffer);
+            rl_delete_text(0, rl_end);
+            //printf("rl_line_buffer after rl_delete_text: '%s'\n", rl_line_buffer);
+            rl_point = rl_end = rl_mark = 0;
+            rl_insert_text(*line);
+            //printf("rl_line_buffer after rl_insert_text: '%s'\n", rl_line_buffer);
+
+
+            free(token);
+            return;
+        }
+    }
+
+    free(token);
+}
+
 static void inputloop(void){
     char *line = NULL;
     char *prevline = NULL;
@@ -583,11 +630,12 @@ static void inputloop(void){
                 (!prevline || (prevline && strcmp(line, prevline) != 0))){
             add_history(line);
         }
+
+        printf("You put '%s'\n", line);
+        char *linecpy = strdup(line);
         
         threadupdate();
-
-        //printf("You put '%s'\n", line);
-        char *linecpy = strdup(line);
+        expand_aliases(&line);
 
         if(strlen(line) > 0){
             char *tok = strtok_r(line, " ", &line);
@@ -601,7 +649,6 @@ static void inputloop(void){
 
                 /* Force matching to figure out the command. */
                 completions = completer(tok, current_start, toklen);
-
                 
                 /* If there were no matches, we can assume the following
                  * are arguments.
@@ -639,7 +686,8 @@ static void inputloop(void){
             }
 
             char *error = NULL;
-            enum cmd_error_t result = prepare_and_call_cmdfunc(arguments, &error);
+            enum cmd_error_t result =
+                prepare_and_call_cmdfunc(arguments, &error);
 
             if(result && error){
                 printf("error: %s\n", error);

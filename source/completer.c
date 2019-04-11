@@ -9,11 +9,11 @@
 #include "strext.h"
 
 static struct matchedcmdinfo_t CURRENT_MATCH_INFO = {0};
-//static int alias = 0;
+
 static void _reset_matchedcmdinfo(void){
     if(CURRENT_MATCH_INFO.rinfo.argregex)
         free(CURRENT_MATCH_INFO.rinfo.argregex);
-//alias=0;
+
     CURRENT_MATCH_INFO.rinfo.argregex = NULL;
     CURRENT_MATCH_INFO.function = NULL;
 }
@@ -24,7 +24,7 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
         return CMD_FAILURE;
     }
 
-    printf("%s: Got args '%s'\n", __func__, args);
+    printf("%s: Got args '%s', calling parse_args\n", __func__, args);
 
     struct cmd_args_t *parsed_args = parse_args(args,
             CURRENT_MATCH_INFO.rinfo.argregex,
@@ -50,17 +50,18 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
 
 static void copy_groupnames(struct dbg_cmd_t *from){
     for(int idx=0; idx<MAX_GROUPS; idx++)
-        CURRENT_MATCH_INFO.rinfo.groupnames[idx] = from->rinfo.groupnames[idx];
+        CURRENT_MATCH_INFO.rinfo.groupnames[idx] = 
+            from->rinfo.groupnames[idx];
 }
 
 /*
  * Return a string of everything before `text` from rl_line_buffer.
  */
-static char *everything_before(const char *text, int ignore_spaces){
-    char *substr_end = strrstr(rl_line_buffer, (char*)text);
+static char *everything_before(const char *text){
+    char *substr_end = strrstr(rl_line_buffer, (char *)text);
     int len = substr_end - rl_line_buffer;
 
-    return substr(rl_line_buffer, 0, ignore_spaces ? len - 1 : len);
+    return substr(rl_line_buffer, 0, len);
 }
 
 /*
@@ -76,7 +77,7 @@ static int count_spaces_before(const char *text){
     if(len == 0)
         before_text = substr(rl_line_buffer, 0, strlen(rl_line_buffer));
     else
-        before_text = everything_before(text, 0);
+        before_text = everything_before(text);
 
     if(!before_text)
         return 0;
@@ -189,8 +190,7 @@ static void match_at_level(const char *text, int target_level,
             }
         }
         else{
-            if(strncmp(current->name, text, len) == 0 ||
-                    (current->alias && strcmp(current->alias, text) == 0)){
+            if(strncmp(current->name, text, len) == 0){
                 if(!matches)
                     (*num_matches)++;
                 else{
@@ -222,14 +222,11 @@ static int ambiguous_command_at_level(char *cmd, int target_level){
     return num_matches > 1;
 }
 
-static int no_ambiguity_before(const char *text, int *nothing_before,
-        int alias){
-    char *text_before = everything_before(text, 0);
+static int no_ambiguity_before(const char *text){
+    char *text_before = everything_before(text);
 
-    if(!text_before){
-        *nothing_before = 1;
+    if(!text_before)
         return 1;
-    }
 
     int ambiguous = 0, cur_level = 0;
     char *token = strtok_r(text_before, " ", &text_before);
@@ -238,8 +235,8 @@ static int no_ambiguity_before(const char *text, int *nothing_before,
         if(ambiguous_command_at_level(token, cur_level))
             return 0;
 
-        if(!alias)
-            cur_level++;
+        cur_level++;
+
         token = strtok_r(NULL, " ", &text_before);
     }
 
@@ -249,31 +246,12 @@ static int no_ambiguity_before(const char *text, int *nothing_before,
 char *completion_generator(const char *text, int state){
     static char **matches;
     static int counter;
-    static int got_alias;
-    static char *alias_name;
-    static int num_matches;
     
     if(state == 0){
         counter = 0;
-        got_alias = 0;
-        alias_name = NULL;
-        num_matches = 0;
 
-        for(int i=0; i<NUM_TOP_LEVEL_COMMANDS; i++){
-            struct dbg_cmd_t *cur = COMMANDS[i];
-
-            if(cur->alias && strcmp(text, cur->alias) == 0){
-                printf("completer: found alias '%s' for '%s'\n", text, cur->name);
-                got_alias = 1;
-                alias_name = cur->name;
-                break;
-            }
-        }
         int level_to_match = count_spaces_before(text);
-
-        int nothing_before_text = 0;
-        int no_ambiguity_before_text = no_ambiguity_before(text,
-                &nothing_before_text, got_alias);
+        int no_ambiguity_before_text = no_ambiguity_before(text);
         
         if(!no_ambiguity_before_text){
             printf("!no_ambiguity_before_text for text '%s'\n", text);
@@ -281,27 +259,15 @@ char *completion_generator(const char *text, int state){
             return NULL;
         }
 
-        //int num_matches = 0;
         matches = malloc(sizeof(char *));
+        int num_matches = 0;
 
-
-        match_at_level(text, got_alias ? 0 : level_to_match, &num_matches, &matches);
+        match_at_level(text, level_to_match, &num_matches, &matches);
 
         if(num_matches > 1){
-            printf("resetting, got_alias %d\n", got_alias);
+            printf("resetting, num_matches (%d) > 1\n", num_matches);
             _reset_matchedcmdinfo();
         }
-    }
-
-    if(got_alias){
-        got_alias = 0;
-        
-        printf("got_alias: num_matches %d\n", num_matches);
-        free(matches[0]);
-        matches[0] = NULL;
-        memmove(matches, matches + 1, sizeof(void*)*num_matches);
-        
-        return strdup(alias_name);
     }
 
     return *(matches + counter++);
