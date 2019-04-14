@@ -9,10 +9,12 @@
 
 #include "breakpoint.h"
 #include "dbgcmd.h"
+#include "dbgops.h"
 #include "exception.h"      /* Includes defs.h */
 #include "machthread.h"
 #include "memutils.h"
 #include "printutils.h"
+#include "sigsupport.h"
 #include "trace.h"
 #include "watchpoint.h"
 
@@ -103,15 +105,10 @@ static void describe_hit_watchpoint(void *prev_data, void *cur_data,
     }
 }
 
-static void clear_signal(mach_port_t thread){
-    ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
-}
-
-static void handle_soft_signal(mach_port_t thread, long subcode, char **desc){
+static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
+        int notify, int pass, int stop){
     if(debuggee->want_detach){
-        debuggee->resume();
-        debuggee->interrupted = 0;
-
+        ops_resume();
         return;
     }
 
@@ -125,11 +122,27 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc){
 
     free(sigstr);
 
+    /*
+    int notify, pass, stop;
+    char *error = NULL;
+
+    sigsettings(subcode, &notify, &pass, &stop, 0, &error);
+
+    if(error){
+        printf("error: %s\n", error);
+        free(error);
+    }
+*/
+    /* If we're passing signals, don't clear them. */
+    if(pass)
+        return;
+
+    ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
     /* TODO let user decide which signals to clear, will be easier
      * now that I'm manually handling exceptions...
      */
-    if(subcode == SIGINT || subcode == SIGTRAP)
-        clear_signal(thread);
+//    if(subcode == SIGINT || subcode == SIGTRAP)
+  //      clear_signal(thread);
 }
 
 static void handle_hit_watchpoint(void){
@@ -158,6 +171,16 @@ static void handle_hit_watchpoint(void){
     debuggee->last_hit_wp_PC = 0;
 }
 
+static void resume_after_exception(void){
+    reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
+    ops_resume();
+
+    if(debuggee->currently_tracing){
+        rl_already_prompted = 1;
+        printf("\n");
+    }
+}
+
 static void handle_single_step(void){
     /* Re-enable all the breakpoints we disabled while performing the
      * single step. This function is called when the CPU raises the software
@@ -175,19 +198,8 @@ static void handle_single_step(void){
          * just continue as normal. Otherwise, if we manually single step
          * right after a breakpoint hit, just print the disassembly.
          */
-        if(!debuggee->is_single_stepping){
-            // XXX placeholder until I move this code into another file
-            reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
-            debuggee->resume();
-            debuggee->interrupted = 0;
-            if(debuggee->currently_tracing){
-                rl_already_prompted = 1;
-                printf("\n");
-            }
-            
-            //char *e;
-            //cmdfunc_continue(NULL, 1, &e);
-        }
+        if(!debuggee->is_single_stepping)
+            resume_after_exception();
         else
             disassemble_at_location(debuggee->thread_state.__pc, 4);
 
@@ -228,6 +240,10 @@ static void handle_hit_breakpoint(long subcode, char **desc){
 }
 
 void handle_exception(Request *request){
+    /* When an exception occurs, there is a left over (iosdbg) prompt,
+     * and this gets rid of it.
+     */
+    rl_clear_visible_line();
     rl_already_prompted = 0;
 
     if(!request){
@@ -278,11 +294,30 @@ void handle_exception(Request *request){
      */
     /* Unix soft signal. */
     if(exception == EXC_SOFTWARE && code == EXC_SOFT_SIGNAL){
-        asprintf(&desc, "%s, '%s' received signal ", desc, tname);
-        handle_soft_signal(thread, subcode, &desc);
-        asprintf(&desc, "%s%#llx in debuggee.\n", desc,
-                debuggee->thread_state.__pc);
+        int notify, pass, stop;
+        char *error = NULL;
 
+        sigsettings(subcode, &notify, &pass, &stop, 0, &error);
+
+        if(error){
+            printf("error: %s\n", error);
+            free(error);
+        }
+        
+        if(!notify){
+            free(desc);
+            safe_reprompt();
+            return;
+        }
+
+        asprintf(&desc, "%s, '%s' received signal ", desc, tname);
+        handle_soft_signal(thread, subcode, &desc, notify, pass, stop);
+        
+        if(stop){
+            asprintf(&desc, "%s%#llx in debuggee.\n", desc,
+                    debuggee->thread_state.__pc);
+        }
+        
         /* Don't print any of this if we're detaching. */
         if(!debuggee->want_detach){
             printf("%s", desc);
@@ -307,14 +342,7 @@ void handle_exception(Request *request){
         set_single_step(1);
         
         /* Continue execution so the software step exception occurs. */
-        // XXX placeholder until I move this code into another file
-        reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
-        debuggee->resume();
-        debuggee->interrupted = 0;
-        if(debuggee->currently_tracing){
-            rl_already_prompted = 1;
-            printf("\n");
-        }
+        resume_after_exception();
 
         free(tname);
     }

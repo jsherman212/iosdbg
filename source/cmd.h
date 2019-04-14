@@ -2,7 +2,7 @@
 #define _CMD_H_
 
 #define MAX_GROUPS 4
-#define NUM_TOP_LEVEL_COMMANDS 20
+#define NUM_TOP_LEVEL_COMMANDS 21
 
 #include "argparse.h"
 #include "defs.h"
@@ -257,6 +257,9 @@ static const char *SHOW_COMMAND_DOCUMENTATION =
     "\tshow var\n"
     "\n";
 
+static const char *SIGNAL_HANDLE_COMMAND_DOCUMENTATION =
+    "TODO\n";
+
 static const char *STEPI_COMMAND_DOCUMENTATION =
     "Step into the next machine instruction.\n"
     "This command has no arguments.\n"
@@ -360,6 +363,12 @@ static const char *SET_COMMAND_REGEX =
 static const char *SHOW_COMMAND_REGEX =
     "(?<var>\\$[\\w\\d+\\-*\\/$()]+)";
 
+static const char *SIGNAL_HANDLE_COMMAND_REGEX =
+    "^(?<signals>[\\w\\s]+[^--])\\s+"
+    "--?(n(otify)?)\\s+(?<notify>0|1|(true|false)\\b)\\s+"
+    "--?(p(ass)?)\\s+(?<pass>0|1|(true|false)\\b)\\s+"
+    "--?(s(top)?)\\s+(?<stop>0|1|(true|false)\\b)";
+
 static const char *THREAD_SELECT_COMMAND_REGEX =
     "^\\s*(?<tid>\\d+)";
 
@@ -404,6 +413,9 @@ static const char *SET_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
 
 static const char *SHOW_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "var" };
+
+static const char *SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
+    { "signals", "notify", "pass", "stop" };
 
 static const char *THREAD_SELECT_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "tid" };

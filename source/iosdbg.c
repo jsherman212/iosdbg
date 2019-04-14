@@ -9,7 +9,7 @@
 
 #include "completer.h"
 #include "convvar.h"
-#include "cmd.h"    /* Includes defs.h */
+#include "cmd.h"        /* Includes defs.h */
 #include "dbgcmd.h"
 #include "dbgops.h"
 #include "handlers.h"
@@ -17,6 +17,7 @@
 #include "machthread.h"
 #include "memutils.h"
 #include "printutils.h"
+#include "sigcmd.h"
 #include "sigsupport.h"
 #include "strext.h"
 #include "trace.h"
@@ -498,6 +499,20 @@ static void initialize_commands(void){
 
     ADD_CMD(show);
 
+    struct dbg_cmd_t *signal = create_parent_cmd("signal",
+            NULL, NULL, 0,
+            NO_ARGUMENT_REGEX, 0, 0,
+            NO_GROUPS, 1, NULL);
+
+    struct dbg_cmd_t *signal_handle = create_child_cmd("handle",
+            NULL, SIGNAL_HANDLE_COMMAND_DOCUMENTATION, 1,
+            SIGNAL_HANDLE_COMMAND_REGEX, 4, 0,
+            SIGNAL_HANDLE_COMMAND_REGEX_GROUPS, cmdfunc_signalhandle);
+
+    signal->subcmds[0] = signal_handle;
+
+    ADD_CMD(signal);
+
     struct dbg_cmd_t *stepi = create_parent_cmd("stepi",
             NULL, STEPI_COMMAND_DOCUMENTATION, 0,
             NO_ARGUMENT_REGEX, 0, 0,
@@ -728,9 +743,6 @@ int main(int argc, char **argv, const char **envp){
 
     if(err)
         printf("Could not setup for future tracing. Tracing is disabled.\n");
-
-    printf("For help, type \"help\".\n"
-            "Command name abbreviations are allowed if unambiguous.\n");
 
     inputloop();
 
