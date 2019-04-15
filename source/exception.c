@@ -122,27 +122,11 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
 
     free(sigstr);
 
-    /*
-    int notify, pass, stop;
-    char *error = NULL;
-
-    sigsettings(subcode, &notify, &pass, &stop, 0, &error);
-
-    if(error){
-        printf("error: %s\n", error);
-        free(error);
-    }
-*/
     /* If we're passing signals, don't clear them. */
     if(pass)
         return;
 
     ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
-    /* TODO let user decide which signals to clear, will be easier
-     * now that I'm manually handling exceptions...
-     */
-//    if(subcode == SIGINT || subcode == SIGTRAP)
-  //      clear_signal(thread);
 }
 
 static void handle_hit_watchpoint(void){
@@ -304,12 +288,6 @@ void handle_exception(Request *request){
             free(error);
         }
         
-        if(!notify){
-            free(desc);
-            safe_reprompt();
-            return;
-        }
-
         asprintf(&desc, "%s, '%s' received signal ", desc, tname);
         handle_soft_signal(thread, subcode, &desc, notify, pass, stop);
         
@@ -317,11 +295,17 @@ void handle_exception(Request *request){
             asprintf(&desc, "%s%#llx in debuggee.\n", desc,
                     debuggee->thread_state.__pc);
         }
+        else{
+            asprintf(&desc, "%sResuming execution.", desc);
+            ops_resume();
+        }
         
         /* Don't print any of this if we're detaching. */
-        if(!debuggee->want_detach){
+        if(notify && !debuggee->want_detach){
             printf("%s", desc);
-            disassemble_at_location(debuggee->thread_state.__pc, 4);
+
+            if(stop)
+                disassemble_at_location(debuggee->thread_state.__pc, 4);
         }
 
         free(tname);

@@ -6,6 +6,8 @@
 #include <sys/event.h>
 #include <unistd.h>
 
+#include <readline/readline.h>
+
 #include "convvar.h"
 #include "dbgcmd.h"
 #include "dbgops.h"
@@ -59,7 +61,7 @@ static void *death_server(void *arg){
         }
         
         wait_for_trace();
-        
+
         /* Figure out how the debuggee exited. */
         int status;
         waitpid(debuggee->pid, &status, 0);

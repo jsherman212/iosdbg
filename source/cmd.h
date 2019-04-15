@@ -364,10 +364,10 @@ static const char *SHOW_COMMAND_REGEX =
     "(?<var>\\$[\\w\\d+\\-*\\/$()]+)";
 
 static const char *SIGNAL_HANDLE_COMMAND_REGEX =
-    "^(?<signals>[\\w\\s]+[^--])\\s+"
+    "(^(?<signals>[\\w\\s]+[^--])\\s+"
     "--?(n(otify)?)\\s+(?<notify>0|1|(true|false)\\b)\\s+"
     "--?(p(ass)?)\\s+(?<pass>0|1|(true|false)\\b)\\s+"
-    "--?(s(top)?)\\s+(?<stop>0|1|(true|false)\\b)";
+    "--?(s(top)?)\\s+(?<stop>0|1|(true|false)\\b))?";
 
 static const char *THREAD_SELECT_COMMAND_REGEX =
     "^\\s*(?<tid>\\d+)";

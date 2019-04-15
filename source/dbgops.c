@@ -25,10 +25,9 @@ void ops_printsiginfo(void){
     printf("%-11s %-5s %-5s %-6s\n", "NAME", "PASS", "STOP", "NOTIFY");
     printf("=========== ===== ===== ======\n");
 
-    /* Signals start at one. */
     int signo = 0;
 
-    while(signo++ < NSIG){
+    while(signo++ < (NSIG - 1)){
         int notify, pass, stop;
         char *e = NULL;
 
@@ -54,7 +53,7 @@ void ops_printsiginfo(void){
         const char *stop_str = stop ? "true" : "false";
 
         printf("%-11s %-5s %-5s %-6s\n",
-                fullsig, pass_str, notify_str, stop_str);
+                fullsig, pass_str, stop_str, notify_str);
 
         free(fullsig);
     }
