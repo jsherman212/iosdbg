@@ -40,13 +40,16 @@ struct dbg_cmd_t {
     int level;
     int parentcmd;
 
-    enum cmd_error_t (*function)(struct cmd_args_t *, int, char **);
+    enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **);
+    void (*audit_function)(struct cmd_args_t *, char **);
 };
 
 struct matchedcmdinfo_t {
     char *args;
     struct regexinfo rinfo;
-    enum cmd_error_t (*function)(struct cmd_args_t *, int, char **);
+    struct dbg_cmd_t *cmd;
+    enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **);
+    void (*audit_function)(struct cmd_args_t *, char **);
 };
 
 struct dbg_cmd_t *COMMANDS[NUM_TOP_LEVEL_COMMANDS];
@@ -170,7 +173,7 @@ static const char *HELP_COMMAND_DOCUMENTATION =
     "This command has one mandatory argument and no optional arguments.\n"
     "\nMandatory arguments:\n"
     "\tcommand\n"
-    "\t\tThe description of the command.\n"
+    "\t\tThe command you'll be shown documentation for.\n"
     "\nSyntax:\n"
     "\thelp command\n"
     "\n";
@@ -190,6 +193,9 @@ static const char *QUIT_COMMAND_DOCUMENTATION =
     "\n"
     "\nThis command has an alias: 'q'\n"
     "\n";
+
+static const char *REGS_COMMAND_DOCUMENTATION =
+    "'regs' describes the group of commands which deal with register viewing.\n";
 
 static const char *REGS_FLOAT_COMMAND_DOCUMENTATION =
     "Show floating point registers.\n"
@@ -257,8 +263,25 @@ static const char *SHOW_COMMAND_DOCUMENTATION =
     "\tshow var\n"
     "\n";
 
+static const char *SIGNAL_COMMAND_DOCUMENTATION =
+    "'signal' describes the group of commands which deal with signals.\n";
+
 static const char *SIGNAL_HANDLE_COMMAND_DOCUMENTATION =
-    "TODO\n";
+    "Change how iosdbg will handle signals sent from the OS to the debuggee.\n"
+    "This command has no mandatory arguments and four optional arguments:\n"
+    "\nOptional arguments:\n"
+    "\tsignals\n"
+    "\t\tThe signal(s) you're updating.\n"
+    "\tnotify\n"
+    "\t\tWhether or not iosdbg notifies you if the signal has been received.\n"
+    "\tpass\n"
+    "\t\tWhether or not the signal will be passed to the debuggee.\n"
+    "\tstop\n"
+    "\t\tWhether or not the debuggee will be stopped upon receiving this signal.\n"
+    "\nIf none of these arguments are given, the current policy is shown.\n"
+    "\nSyntax:\n"
+    "\tsignal handle signals --notify <boolean> --pass <boolean> --stop <boolean>\n"
+    "\n";
 
 static const char *STEPI_COMMAND_DOCUMENTATION =
     "Step into the next machine instruction.\n"
@@ -266,6 +289,10 @@ static const char *STEPI_COMMAND_DOCUMENTATION =
     "\nSyntax:\n"
     "\tstepi\n"
     "\n";
+
+static const char *THREAD_COMMAND_DOCUMENTATION =
+    "'thread' describes the group of commmands which deal with "
+    "managing debuggee threads.\n";
 
 static const char *THREAD_LIST_COMMAND_DOCUMENTATION =
     "Inquire about existing threads of the debuggee.\n"
@@ -332,7 +359,7 @@ static const char *WATCH_COMMAND_DOCUMENTATION =
 static const char *NO_ARGUMENT_REGEX = "";
 
 static const char *ATTACH_COMMAND_REGEX =
-    "(?<waitfor>--waitfor)?\\s?\"?(?<target>[^\"]+)\"?";
+    "(?J)((?<waitfor>--waitfor)\\s+(\"(?<target>.*)\"|(?!.*\")(?<target>\\w+)))|^\\s*((\"(?<target>.*)\")|(?!.*\")(?<target>\\w+))";
 
 static const char *BREAKPOINT_COMMAND_REGEX =
     "(?<args>[\\w+\\-*\\/\\$()]+)";
@@ -341,10 +368,10 @@ static const char *DELETE_COMMAND_REGEX =
     "(?<type>b|w)(\\s+)?(?<ids>[-\\d\\s]+)?";
 
 static const char *DISASSEMBLE_COMMAND_REGEX =
-    "(?<args>[\\w+\\-*\\/\\$()]+)";
+    "(?<location>[\\w+\\-*\\/\\$()]+)\\s+(?<count>[\\w+\\-*\\/\\$()]+)";
 
 static const char *EXAMINE_COMMAND_REGEX =
-    "(?<args>[\\w+\\-*\\/\\$()]+)";
+    "(?<location>[\\w+\\-*\\/\\$()]+)\\s+(?<count>[\\w+\\-*\\/\\$()]+)";
 
 static const char *HELP_COMMAND_REGEX =
     "(?J)^\"(?<cmd>[\\w\\s]+)\"|^(?<cmd>(?![\\w\\s]+\")\\w+)";
@@ -353,7 +380,7 @@ static const char *REGS_FLOAT_COMMAND_REGEX =
     "\\b(?<reg>[qvdsQVDS]{1}\\d{1,2}|(fpsr|FPSR|fpcr|FPCR)+)\\b";
 
 static const char *REGS_GEN_COMMAND_REGEX =
-    "\\b(?<reg>[xwXW]{1}\\d{1,2}|(fp|FP|lr|LR|sp|SP|pc|PC|cpsr|CPSR)+)\\b";
+    "(?<reg>(\\b([xwXW]{1}\\d{1,2}|(fp|FP|lr|LR|sp|SP|pc|PC|cpsr|CPSR)+)\\b))|(?=$)";
 
 static const char *SET_COMMAND_REGEX =
     "(?<type>[*$]{1})(?<target>[\\w\\d+\\-*\\/$()]+)\\s*"
@@ -361,7 +388,7 @@ static const char *SET_COMMAND_REGEX =
     "\\s*(?<value>(\\{.*\\})|(\\\".*\\\")|((?!\")[.\\-\\w\\d+\\-*\\/$()]+))";
 
 static const char *SHOW_COMMAND_REGEX =
-    "(?<var>\\$[\\w\\d+\\-*\\/$()]+)";
+    "(?<var>\\$[\\w\\d+\\-*\\/$()]+)?";
 
 static const char *SIGNAL_HANDLE_COMMAND_REGEX =
     "(^(?<signals>[\\w\\s]+[^--])\\s+"
@@ -394,10 +421,10 @@ static const char *DELETE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "type", "ids" };
 
 static const char *DISASSEMBLE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "args" };
+    { "location", "count" };
 
 static const char *EXAMINE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "args" };
+    { "location", "count" };
 
 static const char *HELP_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "cmd" };

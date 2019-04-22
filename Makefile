@@ -1,32 +1,34 @@
 SDK=/var/theos/sdks/iPhoneOS11.2.sdk
 CC=clang
-CFLAGS=-g -arch arm64 -isysroot $(SDK)
-LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo -lpcre2-8.0 -fsanitize=address
-SRCDIR=source
+CFLAGS=-arch arm64 -isysroot $(SDK)
+LDFLAGS=-lreadline7.0 -lhistory7.0 -lncurses -larmadillo -lpcre2-8.0
+SRC=source
 
-OBJECT_FILES = $(SRCDIR)/argparse.o \
-	$(SRCDIR)/breakpoint.o \
-	$(SRCDIR)/completer.o \
-	$(SRCDIR)/convvar.o \
-	$(SRCDIR)/dbgcmd.o \
-	$(SRCDIR)/dbgops.o \
-	$(SRCDIR)/exception.o \
-	$(SRCDIR)/expr.o \
-	$(SRCDIR)/iosdbg.o \
-	$(SRCDIR)/handlers.o \
-	$(SRCDIR)/linkedlist.o \
-	$(SRCDIR)/machthread.o \
-	$(SRCDIR)/memutils.o \
-	$(SRCDIR)/printutils.o \
-	$(SRCDIR)/procutils.o \
-	$(SRCDIR)/queue.o \
-	$(SRCDIR)/servers.o \
-	$(SRCDIR)/sigcmd.o \
-	$(SRCDIR)/sigsupport.o \
-	$(SRCDIR)/stack.o \
-	$(SRCDIR)/strext.o \
-	$(SRCDIR)/trace.o \
-	$(SRCDIR)/watchpoint.o
+OBJECT_FILES = $(SRC)/argparse.o \
+			   $(SRC)/audit.o \
+			   $(SRC)/breakpoint.o \
+			   $(SRC)/completer.o \
+			   $(SRC)/convvar.o \
+			   $(SRC)/dbgcmd.o \
+			   $(SRC)/dbgops.o \
+			   $(SRC)/docfunc.o \
+			   $(SRC)/exception.o \
+			   $(SRC)/expr.o \
+			   $(SRC)/iosdbg.o \
+			   $(SRC)/handlers.o \
+			   $(SRC)/linkedlist.o \
+			   $(SRC)/machthread.o \
+			   $(SRC)/memutils.o \
+			   $(SRC)/printutils.o \
+			   $(SRC)/procutils.o \
+			   $(SRC)/queue.o \
+			   $(SRC)/servers.o \
+			   $(SRC)/sigcmd.o \
+			   $(SRC)/sigsupport.o \
+			   $(SRC)/stack.o \
+			   $(SRC)/strext.o \
+			   $(SRC)/trace.o \
+			   $(SRC)/watchpoint.o
 
 iosdbg : $(OBJECT_FILES)
 	$(CC) -isysroot $(SDK) $(OBJECT_FILES) $(LDFLAGS) -o iosdbg
