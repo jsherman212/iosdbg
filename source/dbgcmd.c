@@ -12,6 +12,7 @@
 #include "convvar.h"
 #include "dbgcmd.h"
 #include "dbgops.h"
+#include "docfunc.h"
 #include "exception.h"      /* Includes defs.h */
 #include "expr.h"
 #include "linkedlist.h"
@@ -19,6 +20,7 @@
 #include "memutils.h"
 #include "procutils.h"
 #include "servers.h"
+#include "strext.h"
 #include "trace.h"
 #include "watchpoint.h"
 
@@ -71,133 +73,42 @@ static char answer(const char *question, ...){
     return ret;
 }
 
-static int is_number(char *str){
-    size_t len = strlen(str);
-
-    for(int i=0; i<len; i++){
-        if(!isdigit(str[i]))
-            return 0;
-    }
-
-    return 1;
-}
-
-static long strtol_err(char *str, char **error){
-    if(!str){
-        asprintf(error, "NULL argument `str`");
-        return -1;
-    }
-
-    char *endptr = NULL;
-    long result = strtol(str, &endptr, 0);
-
-    if(endptr && *endptr != '\0'){
-        asprintf(error, "invalid number '%s'", str);
-        return -1;
-    }
-
-    return result;
-}
-
 static pid_t parse_pid(char *pidstr, char **err){
-    return is_number(pidstr) ? (pid_t)strtol_err(pidstr, err) 
+    return is_number_fast(pidstr) ? (pid_t)strtol_err(pidstr, err) 
         : pid_of_program(pidstr, err);
-}
-
-static double strtod_err(char *str, char **error){
-    if(!str){
-        asprintf(error, "NULL argument `str`");
-        return -1.0;
-    }
-
-    char *endptr = NULL;
-    double result = strtod(str, &endptr);
-
-    if(endptr && *endptr != '\0'){
-        asprintf(error, "invalid number '%s'", str);
-        return -1.0;
-    }
-
-    return result;
-}
-
-
-static enum cmd_error_t help_internal(char *cmd_name){
-    /*int num_cmds = sizeof(COMMANDS) / sizeof(struct dbg_cmd_t);
-    int cur_cmd_idx = 0;
-
-    while(cur_cmd_idx < num_cmds){
-        struct dbg_cmd_t *cmd = &COMMANDS[cur_cmd_idx];
-    
-        if(strcmp(cmd->name, cmd_name) == 0 && cmd->function){
-            printf("%s", cmd->desc);
-            return CMD_SUCCESS;
-        }
-
-        cur_cmd_idx++;
-    }
-*/
-    return CMD_FAILURE;
 }
 
 enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(debuggee->pid == -1){
-        asprintf(error, "not attached to anything");
-        return CMD_FAILURE;
-    }
-
     printf("%7s%#llx\n", "", debuggee->aslr_slide);
-    
     return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!args){
-        asprintf(error, "need target");
-        return CMD_FAILURE;
-    }
-
     /* First argument could either be '--waitfor' or what the user
      * wants to attach to.
      */
     char *firstarg = argnext(args);
-
-    if(!firstarg){
-        asprintf(error, "need target");
-        return CMD_FAILURE;
-    }
-
     int waitfor = strcmp(firstarg, "--waitfor") == 0;
+
+    /* If we got '--waitfor' as the first argument, whatever the user
+     * wants to attach to will be next.
+     */
+    char *target = firstarg;
+
+    if(waitfor)
+        target = argnext(args);
 
     /* Check if the user wants to attach to something else while attached
      * to something.
      */
     if(debuggee->pid != -1){
-        /* If we got '--waitfor' as the first argument, whatever the user
-         * wants to attach to will be next.
-         */
-        char *target = firstarg;
-
-        if(waitfor)
-            target = argnext(args);
-
-        if(!target){
-            asprintf(error, "need target");
-            return CMD_FAILURE;
-        }
-
         char ans = answer("Detach from %s and reattach to %s? (y/n) ", 
                 debuggee->debuggee_name, target);
 
         if(ans == 'n')
             return CMD_SUCCESS;
-
-        if(strcmp(target, "0") == 0){
-            asprintf(error, "no kernel debugging");
-            return CMD_FAILURE;
-        }
 
         /* Detach from what we are attached to
          * and call this function again.
@@ -211,32 +122,12 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         return cmdfunc_attach(args, 0, error);
     }
 
-    char *target = firstarg;
-    
-    if(waitfor)
-        target = argnext(args);
-
-    if(!target){
-        asprintf(error, "need target");
-        return CMD_FAILURE;
-    }
-
-    if(strcmp(target, "iosdbg") == 0){
-        asprintf(error, "cannot attach to myself");
-        return CMD_FAILURE;
-    }
-
     pid_t target_pid;
 
     /* Check for '--waitfor', and if we have it,
      * constantly check if this process has launched.
      */
     if(waitfor){
-        if(is_number(target)){
-            asprintf(error, "cannot wait for PIDs");
-            return CMD_FAILURE;
-        }
-
         printf("Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", 
                 target);
 
@@ -259,15 +150,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     else
         target_pid = parse_pid(target, error);
 
-    if(*error)
-        return CMD_FAILURE;
-
-    if(target_pid == 0){
-        asprintf(error, "no kernel debugging");
-        return CMD_FAILURE;
-    }
-
-    if(target_pid == -1)
+    if(*error || target_pid == -1)
         return CMD_FAILURE;
 
     kern_return_t err = task_for_pid(mach_task_self(), 
@@ -283,7 +166,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     debuggee->pid = target_pid;
     debuggee->aslr_slide = debuggee->find_slide();
     
-    if(is_number(target)){
+    if(is_number_fast(target)){
         char *name = progname_from_pid(debuggee->pid, error);
 
         if(*error)
@@ -332,11 +215,6 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(debuggee->pid == -1){
-        asprintf(error, "not attached to anything");
-        return CMD_FAILURE;
-    }
-    
     debuggee->get_thread_state();
 
     printf("  * frame #0: 0x%16.16llx\n", debuggee->thread_state.__pc);
@@ -378,23 +256,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_break(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(debuggee->pid == -1){
-        asprintf(error, "not attached to anything");
-        return CMD_FAILURE;
-    }
-
-    if(!args){
-        help_internal("break");
-        return CMD_FAILURE;
-    }
-
     char *location_str = argnext(args);
-    
-    if(!location_str){
-        asprintf(error, "need location");
-        return CMD_FAILURE;
-    }
-
     long location = parse_expr(location_str, error);
 
     if(*error){
@@ -410,12 +272,9 @@ enum cmd_error_t cmdfunc_break(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int do_not_print_msg, char **error){
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-    
     if(!debuggee->interrupted)
         return CMD_FAILURE;
-    
+
     ops_resume();
 
     if(!do_not_print_msg)
@@ -432,25 +291,7 @@ enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_delete(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-    
-    if(!args){
-        help_internal("delete");
-        return CMD_FAILURE;
-    }
-
     char *type = argnext(args);
-
-    if(!type){
-        asprintf(error, "need type");
-        return CMD_FAILURE;
-    }
-
-    if(strcmp(type, "b") != 0 && strcmp(type, "w") != 0){
-        asprintf(error, "unknown type '%s'", type);
-        return CMD_FAILURE;
-    }
 
     if(strcmp(type, "b") == 0 && debuggee->num_breakpoints == 0){
         asprintf(error, "no breakpoints to delete");
@@ -525,9 +366,6 @@ enum cmd_error_t cmdfunc_delete(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args, 
         int from_death, char **error){
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-
     if(!debuggee->tracing_disabled)
         stop_trace();
     
@@ -546,31 +384,13 @@ enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!args){
-        help_internal("disassemble");
-        return CMD_FAILURE;
-    }
-
     char *location_str = argnext(args);
-    
-    if(!location_str){
-        asprintf(error, "need location");
-        return CMD_FAILURE;
-    }
-
     long location = parse_expr(location_str, error);
 
     if(*error)
         return CMD_FAILURE;
 
-    /* Get the amount of instructions to disassemble. */
     char *amount_str = argnext(args);
-
-    if(!amount_str){
-        asprintf(error, "need amount");
-        return CMD_FAILURE;
-    }
-
     int amount = (int)strtol_err(amount_str, error);
 
     if(*error)
@@ -597,21 +417,7 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!args){
-        help_internal("examine");
-        return CMD_FAILURE;
-    }
-
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-
     char *location_str = argnext(args);
-    
-    if(!location_str){
-        asprintf(error, "need location");
-        return CMD_FAILURE;
-    }
-
     long location = parse_expr(location_str, error);
 
     if(*error)
@@ -619,12 +425,6 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
 
     /* Next, however many bytes are wanted. */
     char *size = argnext(args);
-
-    if(!size){
-        asprintf(error, "need size");
-        return CMD_FAILURE;
-    }
-    
     int amount = (int)strtol_err(size, error);
 
     if(*error)
@@ -651,29 +451,17 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_help(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!args){
-        asprintf(error, "need command");
-        return CMD_FAILURE;
-    }
-
     char *cmd = argnext(args);
+    documentation_for_cmdname(cmd, error);
 
-    while(cmd){
-        help_internal(cmd);
-        cmd = argnext(args);
-    }
-    
+    if(*error)
+        return CMD_FAILURE;
+
     return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-
-    if(!debuggee->debuggee_name)
-        return CMD_FAILURE;
-
     char ans = answer("Do you really want to kill %s? (y/n) ", 
             debuggee->debuggee_name);
 
@@ -703,7 +491,8 @@ enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
         int arg1, char **error){
-    cmdfunc_detach(NULL, 0, error);
+    if(debuggee->pid != -1)
+        cmdfunc_detach(NULL, 0, error);
 
     if(*error)
         return CMD_FAILURE;
@@ -741,14 +530,6 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-
-    if(args && args->num_args == 0){
-        asprintf(error, "need a register");
-        return CMD_FAILURE;
-    }
-
     /* If the user wants a quadword register,
      * the max string length would be 87.
      */
@@ -849,9 +630,6 @@ enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-    
     debuggee->get_thread_state();
 
     const int sz = 8;
@@ -947,33 +725,11 @@ enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_set(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!args){
-        help_internal("set");
-        return CMD_FAILURE;
-    }
-
     char *specifier_str = argnext(args);
-
-    if(!specifier_str){
-        help_internal("set");
-        return CMD_FAILURE;
-    }
-
-    char specifier = specifier_str[0];
-
     char *target_str = argnext(args);
-
-    if(!target_str){
-        help_internal("set");
-        return CMD_FAILURE;
-    }
-    
     char *value_str = argnext(args);
 
-    if(!value_str){
-        help_internal("set");
-        return CMD_FAILURE;
-    }
+    char specifier = *specifier_str;
 
     /* If we are writing to an offset, we've done everything needed. */
     if(specifier == '*'){
@@ -1027,13 +783,11 @@ enum cmd_error_t cmdfunc_set(struct cmd_args_t *args,
         if(!e)
             return CMD_SUCCESS;
 
-        /* Put this check here so the user and set convenience variables
+        /* Put this check here so the user can set convenience variables
          * without being attached to anything.
          */
-        if(debuggee->pid == -1){
-            help_internal("set");
+        if(debuggee->pid == -1)
             return CMD_FAILURE;
-        }
 
         for(int i=0; i<strlen(target_str); i++)
             target_str[i] = tolower(target_str[i]);
@@ -1194,7 +948,7 @@ enum cmd_error_t cmdfunc_set(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_show(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!args){
+    if(args->num_args == 0){
         show_all_cvars();
         return CMD_SUCCESS;
     }
@@ -1212,9 +966,6 @@ enum cmd_error_t cmdfunc_show(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-    
     if(debuggee->pending_messages > 0)
         reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
 
@@ -1234,21 +985,12 @@ enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
 
     debuggee->resume();
     debuggee->interrupted = 0;
-
-    if(*error)
-        return CMD_FAILURE;
-
+    
     return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!debuggee->threads)
-        return CMD_FAILURE;
-    
-    if(!debuggee->threads->front)
-        return CMD_FAILURE;
-    
     struct node_t *current = debuggee->threads->front;
 
     while(current){
@@ -1266,26 +1008,8 @@ enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!args)
-        return CMD_FAILURE;
-    
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-
-    if(!debuggee->threads)
-        return CMD_FAILURE;
-
-    if(!debuggee->threads->front)
-        return CMD_FAILURE;
-
     /* Current argument: the ID of the thread the user wants to focus on. */
     char *curarg = argnext(args);
-    
-    if(!curarg){
-        asprintf(error, "need thread ID");
-        return CMD_FAILURE;
-    }
-
     int thread_id = (int)strtol_err(curarg, error);
 
     if(*error)
@@ -1328,14 +1052,6 @@ enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_unset(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!args)
-        return CMD_FAILURE;
-
-    if(args->num_args == 0){
-        asprintf(error, "need a convenience variable");
-        return CMD_FAILURE;
-    }
-
     /* Arguments will consist of convenience variables. */
     char *cur_convvar = argnext(args);
 
@@ -1349,47 +1065,25 @@ enum cmd_error_t cmdfunc_unset(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_watch(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(!args)
-        return CMD_FAILURE;
-
-    if(debuggee->pid == -1)
-        return CMD_FAILURE;
-
     /* Current argument: watchpoint type or location. */
     char *curarg = argnext(args);
-
-    if(!curarg){
-        help_internal("watch");
-        return CMD_FAILURE;
-    }
-
     int LSC = WP_WRITE;
 
     /* Check if the user specified a watchpoint type. If they didn't,
      * this watchpoint will match on reads and writes.
      */
-    if(!strstr(curarg, "0x")){
+    if(!is_number_slow(curarg)){
         if(strcmp(curarg, "--r") == 0)
             LSC = WP_READ;
         else if(strcmp(curarg, "--w") == 0)
             LSC = WP_WRITE;
         else if(strcmp(curarg, "--rw") == 0)
             LSC = WP_READ_WRITE;
-        else{
-            help_internal("watch");
-            return CMD_FAILURE;
-        }
 
         /* If we had a type before the location, we need to get the next
          * argument. After that, current argument is the location to watch.
          */
         curarg = argnext(args);
-
-        /* We need the location after type. */
-        if(!curarg){
-            help_internal("watch");
-            return CMD_FAILURE;
-        }
     }
 
     long location = parse_expr(curarg, error);
@@ -1401,12 +1095,6 @@ enum cmd_error_t cmdfunc_watch(struct cmd_args_t *args,
 
     /* Current argument: size of data we're watching. */
     curarg = argnext(args);
-    
-    if(!curarg){
-        help_internal("watch");
-        return CMD_FAILURE;
-    }
-
     int data_len = (int)strtol_err(curarg, error);
 
     if(*error)

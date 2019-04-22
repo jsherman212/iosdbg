@@ -5,6 +5,7 @@
 #include <readline/readline.h>
 
 #include "cmd.h"
+#include "docfunc.h"
 #include "queue.h"
 #include "strext.h"
 
@@ -15,12 +16,23 @@ static void _reset_matchedcmdinfo(void){
         free(CURRENT_MATCH_INFO.rinfo.argregex);
 
     CURRENT_MATCH_INFO.rinfo.argregex = NULL;
-    CURRENT_MATCH_INFO.function = NULL;
+    CURRENT_MATCH_INFO.cmd = NULL;
+    CURRENT_MATCH_INFO.cmd_function = NULL;
+    CURRENT_MATCH_INFO.audit_function = NULL;
 }
 
 enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
-    if(!CURRENT_MATCH_INFO.function)
+    if(!CURRENT_MATCH_INFO.cmd_function){
+        /* We might have a parent command... */
+        if(CURRENT_MATCH_INFO.cmd){
+            documentation_for_cmd(CURRENT_MATCH_INFO.cmd);
+            _reset_matchedcmdinfo();
+
+            return CMD_SUCCESS;
+        }
+
         return CMD_FAILURE;
+    }
 
     struct cmd_args_t *parsed_args = parse_args(args,
             CURRENT_MATCH_INFO.rinfo.argregex,
@@ -29,18 +41,33 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
             CURRENT_MATCH_INFO.rinfo.unk_num_args,
             error);
 
-    enum cmd_error_t (*cmdfunc)(struct cmd_args_t *, int, char **) =
-        CURRENT_MATCH_INFO.function;
-
-    _reset_matchedcmdinfo();
-
     if(*error){
+        documentation_for_cmd(CURRENT_MATCH_INFO.cmd);
+
+        _reset_matchedcmdinfo();
         argfree(parsed_args);
+
         return CMD_FAILURE;
     }
 
-    enum cmd_error_t result = cmdfunc(parsed_args, 0, error);
+    /* These audit functions perform checks that don't need to be inside
+     * of their corresponding cmdfuncs.
+     */
+    (CURRENT_MATCH_INFO.audit_function)(parsed_args, error);
 
+    if(*error){
+        documentation_for_cmd(CURRENT_MATCH_INFO.cmd);
+
+        _reset_matchedcmdinfo();
+        argfree(parsed_args);
+
+        return CMD_FAILURE;
+    }
+
+    enum cmd_error_t result =
+        (CURRENT_MATCH_INFO.cmd_function)(parsed_args, 0, error);
+
+    _reset_matchedcmdinfo();
     argfree(parsed_args);
 
     return result;
@@ -171,12 +198,18 @@ static void match_at_level(const char *text, int target_level,
                                     cursubcmd->rinfo.num_groups;
                                 CURRENT_MATCH_INFO.rinfo.unk_num_args =
                                     cursubcmd->rinfo.unk_num_args;
+
                                 copy_groupnames(cursubcmd);
                                 
-                                CURRENT_MATCH_INFO.function = cursubcmd->function;
+                                CURRENT_MATCH_INFO.cmd = cursubcmd;
+
+                                CURRENT_MATCH_INFO.cmd_function =
+                                    cursubcmd->cmd_function;
+                                CURRENT_MATCH_INFO.audit_function =
+                                    cursubcmd->audit_function;
 
                                 (*matches)[(*num_matches)++] = strdup(cursubcmd->name);
-                                (*matches) = realloc((*matches), sizeof(char *) *
+                                *matches = realloc(*matches, sizeof(char *) *
                                         ((*num_matches) + 1));
                             }
                         }
@@ -198,11 +231,18 @@ static void match_at_level(const char *text, int target_level,
                         current->rinfo.num_groups;
                     CURRENT_MATCH_INFO.rinfo.unk_num_args =
                         current->rinfo.unk_num_args;
+
                     copy_groupnames(current);
-                    CURRENT_MATCH_INFO.function = current->function;
+
+                    CURRENT_MATCH_INFO.cmd = current;
+
+                    CURRENT_MATCH_INFO.cmd_function =
+                        current->cmd_function;
+                    CURRENT_MATCH_INFO.audit_function =
+                        current->audit_function;
 
                     (*matches)[(*num_matches)++] = strdup(current->name);
-                    (*matches) = realloc((*matches), sizeof(char *) *
+                    *matches = realloc(*matches, sizeof(char *) *
                             ((*num_matches) + 1));
                 }
             }
