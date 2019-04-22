@@ -6,5 +6,9 @@ void strcut(char **, int, int);
 char *substr(char *, int, int);
 char *strrstr(char *, char *);
 void strclean(char **);
+int is_number_slow(char *);
+int is_number_fast(char *);
+long strtol_err(char *, char **);
+double strtod_err(char *, char **);
 
 #endif

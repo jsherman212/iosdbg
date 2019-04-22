@@ -1,9 +1,3 @@
-/*
- * This file contains functions that could be needed anywhere.
- * The idea is to not have to manually call a "cmdfunc" when
- * we need certain functionality elsewhere.
- */
-
 #include <ctype.h>
 #include <dlfcn.h>
 #include <signal.h>
