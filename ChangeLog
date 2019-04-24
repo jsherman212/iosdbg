@@ -1,3 +1,6 @@
+4-23-19
+- no more .*sprintf undefined behavior concatenation nonsense
+
 4-21-19
 - greatly improved command system
 - other bug fixes

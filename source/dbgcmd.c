@@ -592,13 +592,12 @@ enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args,
             sprintf(regstr, "v%d = {", reg_num);
 
             for(int i=0; i<sizeof(long); i++)
-                sprintf(regstr, "%s0x%02x ", regstr, *(uint8_t *)(lo_data + i));
+                concat(&regstr, "0x%02x ", *(uint8_t *)(lo_data + i));
             
             for(int i=0; i<sizeof(long) - 1; i++)
-                sprintf(regstr, "%s0x%02x ", regstr, *(uint8_t *)(hi_data + i));
+                concat(&regstr, "0x%02x ", *(uint8_t *)(hi_data + i));
 
-            sprintf(regstr, "%s0x%02x}", regstr, 
-                    *(uint8_t *)(hi_data + (sizeof(long) - 1)));
+            concat(&regstr, "0x%02x}", *(uint8_t *)(hi_data + (sizeof(long) - 1)));
 
             free(hi);
             free(lo);
@@ -906,12 +905,12 @@ enum cmd_error_t cmdfunc_set(struct cmd_args_t *args,
                         if(i < sizeof(long)){
                             lo_str = realloc(lo_str, strlen(lo_str) +
                                     strlen(curbyte) + 3);
-                            sprintf(lo_str, "%s%02x", lo_str, byte);
+                            concat(&lo_str, "%02x", byte);
                         }
                         else{
                             hi_str = realloc(hi_str, strlen(hi_str) + 
                                     strlen(curbyte) + 3);
-                            sprintf(hi_str, "%s%02x", hi_str, byte);
+                            concat(&hi_str,  "%02x", byte);
                         }
 
                         free(curbyte);
