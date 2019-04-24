@@ -15,6 +15,7 @@
 #include "memutils.h"
 #include "printutils.h"
 #include "sigsupport.h"
+#include "strext.h"
 #include "trace.h"
 #include "watchpoint.h"
 
@@ -118,7 +119,7 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
     for(int i=0; i<sigstrlen; i++)
         sigstr[i] = toupper(sigstr[i]);
 
-    asprintf(desc, "%s%ld, SIG%s. ", *desc, subcode, sigstr);
+    concat(desc, "%ld, SIG%s. ", subcode, sigstr);
 
     free(sigstr);
 
@@ -212,8 +213,8 @@ static void handle_hit_breakpoint(long subcode, char **desc){
 
     breakpoint_hit(hit);
 
-    asprintf(desc, "%s breakpoint %d at %#lx hit %d time(s).\n",
-            *desc, hit->id, hit->location, hit->hit_count);
+    concat(desc, " breakpoint %d at %lx hit %d time(s).\n",
+            hit->id, hit->location, hit->hit_count);
 
     if(!hit->hw){
         JUST_HIT_SW_BREAKPOINT = 1;
@@ -266,7 +267,7 @@ void handle_exception(Request *request){
     unsigned long long tid = get_tid_from_thread_port(thread);
     char *tname = get_thread_name_from_thread_port(thread);
 
-    char *desc;
+    char *desc = NULL;
     asprintf(&desc, "\n * Thread %#llx", tid);
 
     /* A number of things could have happened to cause an exception:
@@ -288,15 +289,13 @@ void handle_exception(Request *request){
             free(error);
         }
         
-        asprintf(&desc, "%s, '%s' received signal ", desc, tname);
+        concat(&desc, ", '%s' received signal ", tname);
         handle_soft_signal(thread, subcode, &desc, notify, pass, stop);
         
-        if(stop){
-            asprintf(&desc, "%s%#llx in debuggee.\n", desc,
-                    debuggee->thread_state.__pc);
-        }
+        if(stop)
+            concat(&desc, "%#llx in debuggee.\n", debuggee->thread_state.__pc);
         else{
-            asprintf(&desc, "%sResuming execution.", desc);
+            concat(&desc, "Resuming execution.");
             ops_resume();
         }
         
@@ -355,8 +354,8 @@ void handle_exception(Request *request){
             if(debuggee->is_single_stepping && hit){
                 breakpoint_hit(hit);
 
-                asprintf(&desc, "%s: '%s': breakpoint %d at %#lx hit %d time(s).\n",
-                        desc, tname, hit->id, hit->location, hit->hit_count);
+                concat(&desc, ": '%s': breakpoint %d at %#lx hit %d time(s).\n",
+                        tname, hit->id, hit->location, hit->hit_count);
 
                 printf("%s", desc);
             }
@@ -373,7 +372,7 @@ void handle_exception(Request *request){
         
         JUST_HIT_BREAKPOINT = 1;
 
-        asprintf(&desc, "%s: '%s':", desc, tname);
+        concat(&desc, ": '%s':", tname);
         handle_hit_breakpoint(subcode, &desc);
 
         printf("%s", desc);

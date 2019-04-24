@@ -10,6 +10,7 @@
 #include "convvar.h"
 #include "defs.h"
 #include "memutils.h"
+#include "strext.h"
 
 /* Thanks https://opensource.apple.com/source/CF/CF-299/Base.subproj/CFByteOrder.h */
 unsigned int CFSwapInt32(unsigned int arg){
@@ -64,7 +65,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
             memset(bigendian, '\0', (data_size * 2) + 1);
 
             for(int i=0; i<data_size; i++)
-                sprintf(bigendian, "%s%02x", bigendian, (unsigned char)data[i]);
+                concat(&bigendian, "%02x", (uint8_t)data[i]);
 
             free(data);
             

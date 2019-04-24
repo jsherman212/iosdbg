@@ -697,7 +697,7 @@ static void inputloop(void){
              */
             if(!completions){
                 while(tok){
-                    asprintf(&arguments, "%s%s ", arguments, tok);
+                    concat(&arguments, " %s", tok);
                     tok = strtok_r(NULL, " ", &line);
                 }
 
@@ -710,11 +710,6 @@ static void inputloop(void){
             prev_completions = completions;
         }
 
-        size_t arglen = strlen(arguments);
-
-        if(arglen > 0)
-            arguments[arglen - 1] = '\0';
-
         /* We need to test the previous completions in case
          * this command is a parent command.
          */
@@ -724,8 +719,7 @@ static void inputloop(void){
                     linecpy);
 
             for(int i=1; prev_completions[i]; i++)
-                asprintf(&ambiguous_cmd_str, "%s%s, ",
-                        ambiguous_cmd_str, prev_completions[i]);
+                concat(&ambiguous_cmd_str, "%s, ", prev_completions[i]);
 
             /* Get rid of the trailing comma. */
             ambiguous_cmd_str[strlen(ambiguous_cmd_str) - 2] = '\0';

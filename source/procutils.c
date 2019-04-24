@@ -4,6 +4,8 @@
 #include <string.h>
 #include <sys/sysctl.h>
 
+#include "strext.h"
+
 static struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length, char **error){
     int err;
     struct kinfo_proc *result = NULL;
@@ -43,7 +45,8 @@ pid_t pid_of_program(char *progname, char **error){
 
     int num_procs = length / sizeof(struct kinfo_proc);
     int matches = 0;
-    char *matchstr = NULL;
+    char *matchstr = malloc(20);
+    memset(matchstr, '\0', 20);
     pid_t final_pid = -1;
     int maxnamelen = MAXCOMLEN + 1;
 
@@ -59,7 +62,7 @@ pid_t pid_of_program(char *progname, char **error){
 
             if(strncmp(pname, progname, charstocompare) == 0 && p_stat != SZOMB){
                 matches++;
-                asprintf(&matchstr, "%s PID %d: %s\n", matchstr, pid, pname);
+                concat(&matchstr, " PID %d: %s\n", pid, pname);
                 final_pid = pid;
             }
         }

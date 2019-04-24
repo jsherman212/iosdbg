@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,14 +101,100 @@ char *strrstr(char *s1, char *s2){
 }
 
 void strclean(char **target){
+    if(!(*target))
+        return;
+
     while(isblank((*target)[0]))
-        memmove((*target), (*target) + 1, strlen((*target)));
+        memmove(*target, (*target) + 1, strlen(*target));
 
     if(strlen(*target) == 0)
         return;
 
-    while(isblank((*target)[strlen((*target)) - 1]))
-        (*target)[strlen((*target)) - 1] = '\0';
+    while(isblank((*target)[strlen(*target) - 1]))
+        (*target)[strlen(*target) - 1] = '\0';
+}
+
+int is_number_slow(char *str){
+    if(!str)
+        return 0;
+
+    char *error = NULL;
+    parse_expr(str, &error);
+
+    if(error){
+        free(error);
+        return 0;
+    }
+
+    return 1;
+}
+
+int is_number_fast(char *str){
+    if(!str)
+        return 0;
+
+    size_t len = strlen(str);
+
+    for(int i=0; i<len; i++){
+        if(!isxdigit(str[i]))
+            return 0;
+    }
+
+    return 1;
+}
+
+long strtol_err(char *str, char **error){
+    if(!str)
+        return -1;
+
+    char *endptr = NULL;
+    long result = strtol(str, &endptr, 0);
+
+    if(endptr && *endptr != '\0'){
+        asprintf(error, "invalid number '%s'", str);
+        return -1;
+    }
+
+    return result;
+}
+
+double strtod_err(char *str, char **error){
+    if(!str)
+        return -1.0;
+
+    char *endptr = NULL;
+    double result = strtod(str, &endptr);
+
+    if(endptr && *endptr != '\0'){
+        asprintf(error, "invalid number '%s'", str);
+        return -1.0;
+    }
+
+    return result;
+}
+
+int concat(char **dst, const char *src, ...){
+    if(!dst || !(*dst) || !src)
+        return 0;
+
+    size_t srclen = strlen(src);
+    size_t dstlen = strlen(*dst);
+
+    const size_t pad = 0x400;
+
+    /* We have no way of knowing how many bytes src will
+     * take up once format specifiers are substituted.
+     */
+    *dst = realloc(*dst, srclen + dstlen + pad);
+
+    va_list args;
+    va_start(args, src);
+
+    int w = vsnprintf(&(*dst)[strlen(*dst)], srclen + dstlen + pad, src, args);
+
+    va_end(args);
+
+    return w;
 }
 
 int is_number_slow(char *str){
