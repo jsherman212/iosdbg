@@ -279,7 +279,6 @@ void void_convvar(char *name){
     target->state = CONVVAR_VOID;
 }
 
-
 /* `name` and `value` must be malloc'ed */
 void set_convvar(char *name, char *value, char **error){
     if(invalid_name(name)){
