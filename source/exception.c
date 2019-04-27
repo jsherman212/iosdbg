@@ -19,9 +19,9 @@
 #include "trace.h"
 #include "watchpoint.h"
 
-int JUST_HIT_WATCHPOINT;
-int JUST_HIT_BREAKPOINT;
-int JUST_HIT_SW_BREAKPOINT;
+static int JUST_HIT_WATCHPOINT;
+static int JUST_HIT_BREAKPOINT;
+static int JUST_HIT_SW_BREAKPOINT;
 
 static const char *exc_str(exception_type_t exception){
     switch(exception){
@@ -133,10 +133,6 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
 static void handle_hit_watchpoint(void){
     struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
 
-    /* This should never happen... but just in case? */
-    if(!hit)
-        return;
-
     unsigned int sz = hit->data_len;
 
     /* Save previous data for comparison. */
@@ -206,11 +202,6 @@ static void handle_single_step(void){
 static void handle_hit_breakpoint(long subcode, char **desc){
     struct breakpoint *hit = find_bp_with_address(subcode);
 
-    if(!hit){
-        printf("Could not find hit breakpoint (this shouldn't happen)\n");
-        return;
-    }
-
     breakpoint_hit(hit);
 
     concat(desc, " breakpoint %d at %lx hit %d time(s).\n",
@@ -230,11 +221,6 @@ void handle_exception(Request *request){
      */
     rl_clear_visible_line();
     rl_already_prompted = 0;
-
-    if(!request){
-        printf("NULL request (shouldn't happen)\n");
-        return;
-    }
 
     /* Finish printing everything while tracing so
      * we don't get caught in the middle of it.

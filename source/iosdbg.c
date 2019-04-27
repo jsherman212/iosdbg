@@ -309,7 +309,7 @@ static void setup_initial_debuggee(void){
     set_convvar("$NO_ASLR_OVERRIDE", "", &error);
 }
 
-static void threadupdate(void){
+static inline void threadupdate(void){
     if(debuggee->pid != -1)
         ops_threadupdate();
 }
@@ -386,7 +386,7 @@ static struct dbg_cmd_t *create_child_cmd(const char *name,
 static void initialize_commands(void){
     int cmdidx = 0;
 
-#define ADD_CMD(x) COMMANDS[cmdidx++] = x;
+#define ADD_CMD(x) COMMANDS[cmdidx++] = x
 
     struct dbg_cmd_t *aslr = create_parent_cmd("aslr",
             NULL, ASLR_COMMAND_DOCUMENTATION, 0,
@@ -681,7 +681,7 @@ static void inputloop(void){
              * it's an unknown command.
              */
             if(first_match && !completions){
-                printf("Unknown command \"%s\"\n", linecpy);
+                printf("Unknown command \"%s\".  Try \"help\".\n", linecpy);
                 
                 /* Keep going so we can free this string. */
                 while(tok)
@@ -700,6 +700,11 @@ static void inputloop(void){
                     concat(&arguments, " %s", tok);
                     tok = strtok_r(NULL, " ", &line);
                 }
+
+                /* Get rid of leading/training whitespace that
+                 * would mess up regex matching.
+                 */
+                strclean(&arguments);
 
                 break;
             }
@@ -799,6 +804,9 @@ int main(int argc, char **argv, const char **envp){
 
     if(err)
         printf("Could not setup for future tracing. Tracing is disabled.\n");
+
+    printf("For help, type \"help\".\n"
+            "Command name abbreviations are allowed if unambiguous.\n");
 
     inputloop();
 

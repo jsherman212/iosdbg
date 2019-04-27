@@ -403,9 +403,9 @@ static const char *UNSET_COMMAND_REGEX =
     "(?<var>\\$\\w+)";
 
 static const char *WATCH_COMMAND_REGEX =
-    "^(?<type>--[rw]{1,2})?\\s*(?<location>[\\w+\\-*\\/\\$()]+)\\s+"
-    "(?<size>(0[xX])?\\d+)";
-
+    "(?(?=--[rw])(?<type>--[rw]{1,2}))\\s*"
+    "(?<location>[\\w+\\-*\\/\\$()]+)\\s+(?<size>(0[xX])?\\d+)";
+  
 /*
  * Names for groups within command regex.
  */

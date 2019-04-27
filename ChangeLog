@@ -1,3 +1,9 @@
+4-26-19
+- rewrote cmdfunc_kill so iosdbg handles this SIGKILL like any other
+- improved watchpoint regex
+- fixed a horrible, horrible bug with the way I handle command arguments
+- fix 'regs gen' when no arguments are given
+
 4-23-19
 - no more .*sprintf undefined behavior concatenation nonsense
 

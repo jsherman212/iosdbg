@@ -63,6 +63,7 @@ struct cmd_args_t *parse_args(char *_args,
         asprintf(error, "regex compilation failed at offset %zu: %s",
                 erroroffset, buf);
 
+        argfree(arguments);
         free(args);
 
         return NULL;
@@ -80,14 +81,12 @@ struct cmd_args_t *parse_args(char *_args,
             NULL);
 
     if(rc < 0){
-        PCRE2_UCHAR buf[2048];
-        pcre2_get_error_message(rc, buf, sizeof(buf));
-
         asprintf(error, "malformed arguments");
 
         pcre2_match_data_free(match_data);
         pcre2_code_free(re);
 
+        argfree(arguments);
         free(args);
 
         return NULL;
@@ -111,8 +110,8 @@ struct cmd_args_t *parse_args(char *_args,
         int substr_idx = pcre2_substring_number_from_name(re,
                 current_group);
 
-        PCRE2_UCHAR *substr_buf;
-        PCRE2_SIZE substr_buf_len;
+        PCRE2_UCHAR *substr_buf = NULL;
+        PCRE2_SIZE substr_buf_len = 0;
 
         if(substr_idx == PCRE2_ERROR_NOUNIQUESUBSTRING){
             int copybyname_rc = pcre2_substring_get_byname(match_data,

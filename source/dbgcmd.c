@@ -1,4 +1,4 @@
-#include <dlfcn.h>
+#include <signal.h>
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +20,7 @@
 #include "memutils.h"
 #include "procutils.h"
 #include "servers.h"
+#include "sigsupport.h"
 #include "strext.h"
 #include "trace.h"
 #include "watchpoint.h"
@@ -454,10 +455,7 @@ enum cmd_error_t cmdfunc_help(struct cmd_args_t *args,
     char *cmd = argnext(args);
     documentation_for_cmdname(cmd, error);
 
-    if(*error)
-        return CMD_FAILURE;
-
-    return CMD_SUCCESS;
+    return (*error) ? CMD_FAILURE : CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
@@ -468,25 +466,31 @@ enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
     if(ans == 'n')
         return CMD_SUCCESS;
 
-    char *saved_name = strdup(debuggee->debuggee_name);
+    /* Don't notify the user that the debuggee has received SIGKILL
+     * if they wanted to kill it.
+     */
+    int notify_backup, pass_backup, stop_backup;
+    sigsettings(SIGKILL, &notify_backup, &pass_backup, &stop_backup, 0, error);
 
-    cmdfunc_detach(NULL, 0, error);
-    
-    pid_t p;
-    char *argv[] = {"killall", "-9", saved_name, NULL};
-    int status = posix_spawnp(&p, "killall", NULL, NULL, 
-            (char * const *)argv, NULL);
-    
-    free(saved_name);
-
-    if(status == 0)
-        waitpid(p, &status, 0);
-    else{
-        asprintf(error, "could not kill debuggee");
+    if(*error)
         return CMD_FAILURE;
-    }
-    
-    return CMD_SUCCESS;
+
+    int notify = 0, pass = 1, stop = 0;
+    sigsettings(SIGKILL, &notify, &pass, &stop, 1, error);
+
+    if(*error)
+        return CMD_FAILURE;
+
+    kill(debuggee->pid, SIGKILL);
+
+    /* We're gonna eventually detach, so wait until that happens before
+     * we revert the settings back for SIGKILL.
+     */
+    while(debuggee->pid != -1);
+
+    sigsettings(SIGKILL, &notify_backup, &pass_backup, &stop_backup, 1, error);
+
+    return (*error) ? CMD_FAILURE : CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
@@ -634,7 +638,7 @@ enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args,
     const int sz = 8;
 
     /* If there were no arguments, print every register. */
-    if(!args){
+    if(args->num_args == 0){
         for(int i=0; i<29; i++){        
             char *regstr = malloc(sz);
             memset(regstr, '\0', sz);
