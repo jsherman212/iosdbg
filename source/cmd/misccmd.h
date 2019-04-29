@@ -9,7 +9,6 @@ extern int keep_checking_for_process;
 enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_attach(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_break(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_delete(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_detach(struct cmd_args_t *, int, char **);
@@ -18,16 +17,11 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_help(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_kill(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_quit(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_set(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_show(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_trace(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_unset(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_watch(struct cmd_args_t *, int, char **);
 
 static const char *ASLR_COMMAND_DOCUMENTATION = 
     "Show debuggee's ASLR slide.\n"
@@ -58,20 +52,6 @@ static const char *BACKTRACE_COMMAND_DOCUMENTATION =
     "\tbacktrace\n"
     "\n"
     "\nThis command has an alias: 'bt'\n"
-    "\n";
-
-static const char *BREAKPOINT_COMMAND_DOCUMENTATION =
-    "Set a breakpoint. Include '--no-aslr' to keep ASLR from being added.\n"
-    "This command has one mandatory argument and no optional arguments.\n"
-    "\nMandatory arguments:\n"
-    "\tlocation\n"
-    "\t\tThis expression will be evaluated and used as the location for the breakpoint.\n"
-    "\t\tThis command accepts an arbitrary amount of this argument,"
-    " allowing you to set multiple breakpoints.\n"
-    "\nSyntax:\n"
-    "\tbreak location\n"
-    "\n"
-    "\nThis command has an alias: 'b'\n"
     "\n";
 
 static const char *CONTINUE_COMMAND_DOCUMENTATION =
@@ -166,34 +146,6 @@ static const char *QUIT_COMMAND_DOCUMENTATION =
     "\nThis command has an alias: 'q'\n"
     "\n";
 
-static const char *REGS_COMMAND_DOCUMENTATION =
-    "'regs' describes the group of commands which deal with register viewing.\n";
-
-static const char *REGS_FLOAT_COMMAND_DOCUMENTATION =
-    "Show floating point registers.\n"
-    "This command has one mandatory argument and no optional arguments.\n"
-    "\nMandatory arguments:\n"
-    "\treg\n"
-    "\t\tThe floating point register.\n"
-    "\t\tThis command accepts an arbitrary amount of this argument,"
-    " allowing you to view many floating point registers at once.\n"
-    "\nSyntax:\n"
-    "\tregs float reg\n"
-    "\n";
-
-static const char *REGS_GEN_COMMAND_DOCUMENTATION =
-    "Show general purpose registers.\n"
-    "This command has no mandatory arguments and one optional argument.\n"
-    "\nOptional arguments:\n"
-    "\treg\n"
-    "\t\tThe general purpose register.\n"
-    "\t\tThis command accepts an arbitrary amount of this argument,"
-    " allowing you to view many general purpose registers at once.\n"
-    "\t\tOmit this argument to see every general purpose register.\n"
-    "\nSyntax:\n"
-    "\tregs gen reg\n"
-    "\n";
-
 static const char *SET_COMMAND_DOCUMENTATION =
     "Modify debuggee memory, registers, or iosdbg convenience variables.\n"
     "Include '--no-aslr' to keep ASLR from being added.\n"
@@ -242,27 +194,6 @@ static const char *STEPI_COMMAND_DOCUMENTATION =
     "\tstepi\n"
     "\n";
 
-static const char *THREAD_COMMAND_DOCUMENTATION =
-    "'thread' describes the group of commmands which deal with "
-    "managing debuggee threads.\n";
-
-static const char *THREAD_LIST_COMMAND_DOCUMENTATION =
-    "Inquire about existing threads of the debuggee.\n"
-    "This command has no arguments.\n"
-    "\nSyntax:\n"
-    "\tthread list\n"
-    "\n";
-
-static const char *THREAD_SELECT_COMMAND_DOCUMENTATION =
-    "Select the thread to focus on while debugging.\n"
-    "This command has one mandatory argument and no optional arguments.\n"
-    "\nMandatory arguments:\n"
-    "\ttid\n"
-    "\t\tThe thread ID to focus on.\n"
-    "\nSyntax:\n"
-    "\tthread select tid\n"
-    "\n";
-
 static const char *TRACE_COMMAND_DOCUMENTATION =
     "This command provides similar functionality to strace through"
     " the kdebug interface.\n"
@@ -283,36 +214,11 @@ static const char *UNSET_COMMAND_DOCUMENTATION =
     "\tunset var\n"
     "\n";
 
-static const char *WATCH_COMMAND_DOCUMENTATION =
-    "Set a watchpoint. ASLR is never accounted for.\n"
-    "This command has two mandatory arguments and one optional argument.\n"
-    "\nMandatory arguments:\n"
-    "\tlocation\n"
-    "\t\tThis expression will be evaluated and interpreted as\n"
-    "\t\t the watchpoint's location.\n"
-    "\tsize\n"
-    "\t\tThe size of the data to watch.\n"
-    "\nOptional arguments:\n"
-    "\ttype\n"
-    "\t\tThe type of the watchpoint. Acceptable values are:\n"
-    "\t\t\t'--r'  (read)\n"
-    "\t\t\t'--w'  (write)\n"
-    "\t\t\t'--rw' (read/write)\n"
-    "\t\tIf this argument is omitted, iosdbg assumes --w.\n"
-    "\nSyntax:\n"
-    "\twatch type? location size\n"
-    "\n"
-    "\nThis command has an alias: 'w'\n"
-    "\n";
-
 /*
  * Regexes
  */
 static const char *ATTACH_COMMAND_REGEX =
     "(?J)((?<waitfor>--waitfor)\\s+(\"(?<target>.*)\"|(?!.*\")(?<target>\\w+)))|^\\s*((\"(?<target>.*)\")|(?!.*\")(?<target>\\w+))";
-
-static const char *BREAKPOINT_COMMAND_REGEX =
-    "(?<args>[\\w+\\-*\\/\\$()]+)";
 
 static const char *DELETE_COMMAND_REGEX =
     "(?<type>b|w)(\\s+)?(?<ids>[-\\d\\s]+)?";
@@ -326,12 +232,6 @@ static const char *EXAMINE_COMMAND_REGEX =
 static const char *HELP_COMMAND_REGEX =
     "(?J)^\"(?<cmd>[\\w\\s]+)\"|^(?<cmd>(?![\\w\\s]+\")\\w+)";
 
-static const char *REGS_FLOAT_COMMAND_REGEX =
-    "\\b(?<reg>[qvdsQVDS]{1}\\d{1,2}|(fpsr|FPSR|fpcr|FPCR)+)\\b";
-
-static const char *REGS_GEN_COMMAND_REGEX =
-    "(?<reg>(\\b([xwXW]{1}\\d{1,2}|(fp|FP|lr|LR|sp|SP|pc|PC|cpsr|CPSR)+)\\b))|(?=$)";
-
 static const char *SET_COMMAND_REGEX =
     "(?<type>[*$]{1})(?<target>[\\w\\d+\\-*\\/$()]+)\\s*"
     "="
@@ -340,25 +240,14 @@ static const char *SET_COMMAND_REGEX =
 static const char *SHOW_COMMAND_REGEX =
     "(?<var>\\$[\\w\\d+\\-*\\/$()]+)?";
 
-static const char *THREAD_SELECT_COMMAND_REGEX =
-    "^\\s*(?<tid>\\d+)";
-
 static const char *UNSET_COMMAND_REGEX =
     "(?<var>\\$\\w+)";
-
-static const char *WATCH_COMMAND_REGEX =
-    "(?(?=--[rw])(?<type>--[rw]{1,2}))\\s*"
-    "(?<location>[\\w+\\-*\\/\\$()]+)\\s+(?<size>(0[xX])?\\d+)";
 
 /*
  * Regex groups
  */
-
 static const char *ATTACH_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "waitfor", "target" };
-
-static const char *BREAKPOINT_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "args" };
 
 static const char *DELETE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "type", "ids" };
@@ -372,25 +261,13 @@ static const char *EXAMINE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
 static const char *HELP_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "cmd" };
 
-static const char *REGS_FLOAT_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "reg" };
-
-static const char *REGS_GEN_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "reg" };
-
 static const char *SET_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "type", "target", "value" };
 
 static const char *SHOW_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "var" };
 
-static const char *THREAD_SELECT_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "tid" };
-
 static const char *UNSET_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "var" };
-
-static const char *WATCH_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "type", "location", "size" };
 
 #endif

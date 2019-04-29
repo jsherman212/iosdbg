@@ -20,11 +20,15 @@
 #include "trace.h"
 
 #include "cmd/audit.h"
+#include "cmd/bpcmd.h"
 #include "cmd/completer.h"
 #include "cmd/cmd.h"
 #include "cmd/misccmd.h"
 #include "cmd/memcmd.h"
+#include "cmd/regcmd.h"
 #include "cmd/sigcmd.h"
+#include "cmd/tcmd.h"
+#include "cmd/wpcmd.h"
 
 struct debuggee *debuggee;
 

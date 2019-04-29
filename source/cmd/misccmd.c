@@ -7,11 +7,10 @@
 
 #include <readline/readline.h>
 
-#include "argparse.h"
 #include "documentation.h"
 #include "misccmd.h"
 
-#include "../breakpoint.h"
+#include "../breakpoint.h" // XXX remove this once I'm completely done
 #include "../convvar.h"
 #include "../dbgops.h"
 #include "../debuggee.h"
@@ -27,7 +26,7 @@
 #include "../tarrays.h"
 #include "../thread.h"
 #include "../trace.h"
-#include "../watchpoint.h"
+#include "../watchpoint.h" // XXX remove this once I'm completely done
 
 int keep_checking_for_process;
 
@@ -257,22 +256,6 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     free(current_frame);
 
     return CMD_SUCCESS;
-}
-
-enum cmd_error_t cmdfunc_break(struct cmd_args_t *args, 
-        int arg1, char **error){
-    char *location_str = argnext(args);
-    long location = parse_expr(location_str, error);
-
-    if(*error){
-        asprintf(error, "expression evaluation failed: %s", *error);
-        return CMD_FAILURE;
-    }
-
-    if(args->add_aslr)
-        location += debuggee->aslr_slide;
-
-    return breakpoint_at_address(location, BP_NO_TEMP, error);    
 }
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
@@ -534,200 +517,6 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
     free(debuggee);
     
     exit(0);
-}
-
-enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args, 
-        int arg1, char **error){
-    /* If the user wants a quadword register,
-     * the max string length would be 87.
-     */
-    const int sz = 90;
-
-    char *regstr = malloc(sz);
-
-    /* Iterate through and show all the registers the user asked for. */
-    char *curreg = argnext(args);
-
-    while(curreg){
-        debuggee->get_neon_state();
-
-        if(strcmp(curreg, "fpsr") == 0){
-            curreg = argnext(args);
-            printf("%10s = 0x%8.8x\n", "fpsr", debuggee->neon_state.__fpsr);
-            continue;
-        }
-        else if(strcmp(curreg, "fpcr") == 0){
-            curreg = argnext(args);
-            printf("%10s = 0x%8.8x\n", "fpcr", debuggee->neon_state.__fpcr);
-            continue;
-        }
-        
-        memset(regstr, '\0', sz);
-
-        char reg_type = tolower(curreg[0]);
-        
-        /* Move up a byte for the register number. */
-        memmove(curreg, curreg + 1, strlen(curreg));
-
-        int reg_num = (int)strtol_err(curreg, error);
-
-        if(*error){
-            free(regstr);
-            return CMD_FAILURE;
-        }
-
-        int good_reg_num = (reg_num >= 0 && reg_num <= 31);
-        int good_reg_type = ((reg_type == 'q' || reg_type == 'v') 
-                || reg_type == 'd' || reg_type == 's');
-
-        if(!good_reg_num || !good_reg_type){
-            printf("%8sInvalid register\n", "");
-
-            curreg = argnext(args);
-            continue;
-        }
-        /* Quadword */
-        else if(reg_type == 'q' || reg_type == 'v'){
-            long *hi = malloc(sizeof(long));
-            long *lo = malloc(sizeof(long));
-            
-            *hi = debuggee->neon_state.__v[reg_num] >> 64;
-            *lo = debuggee->neon_state.__v[reg_num];
-            
-            void *hi_data = (uint8_t *)hi;
-            void *lo_data = (uint8_t *)lo;
-
-            sprintf(regstr, "v%d = {", reg_num);
-
-            for(int i=0; i<sizeof(long); i++)
-                concat(&regstr, "0x%02x ", *(uint8_t *)(lo_data + i));
-            
-            for(int i=0; i<sizeof(long) - 1; i++)
-                concat(&regstr, "0x%02x ", *(uint8_t *)(hi_data + i));
-
-            concat(&regstr, "0x%02x}", *(uint8_t *)(hi_data + (sizeof(long) - 1)));
-
-            free(hi);
-            free(lo);
-        }
-        /* Doubleword */
-        else if(reg_type == 'd')
-            sprintf(regstr, "d%d = %.15g", reg_num, 
-                    *(double *)&debuggee->neon_state.__v[reg_num]);
-        /* Word */
-        else if(reg_type == 's')
-            sprintf(regstr, "s%d = %g", reg_num, 
-                    *(float *)&debuggee->neon_state.__v[reg_num]);
-
-        /* Figure out how many bytes the register takes up in the string. */
-        char *space = strchr(regstr, ' ');
-        int bytes = space - regstr;
-
-        int add = 8 - bytes;
-        
-        printf("%*s\n", (int)(strlen(regstr) + add), regstr);
-        
-        curreg = argnext(args);
-    }
-
-    free(regstr);
-
-    return CMD_SUCCESS;
-}
-
-enum cmd_error_t cmdfunc_regsgen(struct cmd_args_t *args, 
-        int arg1, char **error){
-    debuggee->get_thread_state();
-
-    const int sz = 8;
-
-    /* If there were no arguments, print every register. */
-    if(args->num_args == 0){
-        for(int i=0; i<29; i++){        
-            char *regstr = malloc(sz);
-            memset(regstr, '\0', sz);
-
-            sprintf(regstr, "x%d", i);
-
-            printf("%10s = 0x%16.16llx\n", regstr, 
-                    debuggee->thread_state.__x[i]);
-
-            free(regstr);
-        }
-        
-        printf("%10s = 0x%16.16llx\n", "fp", debuggee->thread_state.__fp);
-        printf("%10s = 0x%16.16llx\n", "lr", debuggee->thread_state.__lr);
-        printf("%10s = 0x%16.16llx\n", "sp", debuggee->thread_state.__sp);
-        printf("%10s = 0x%16.16llx\n", "pc", debuggee->thread_state.__pc);
-        printf("%10s = 0x%8.8x\n", "cpsr", debuggee->thread_state.__cpsr);
-
-        return CMD_SUCCESS;
-    }
-
-    /* Otherwise, print every register they asked for. */
-    char *curreg = argnext(args);
-
-    while(curreg){
-        char reg_type = tolower(curreg[0]);
-
-        if(reg_type != 'x' && reg_type != 'w'){
-            char *curreg_cpy = strdup(curreg);
-            size_t curreg_cpy_len = strlen(curreg_cpy);
-
-            /* We need to be able to free it. */
-            for(int i=0; i<curreg_cpy_len; i++)
-                curreg_cpy[i] = tolower(curreg_cpy[i]);
-
-            if(strcmp(curreg_cpy, "fp") == 0)
-                printf("%8s = 0x%16.16llx\n", "fp", debuggee->thread_state.__fp);
-            else if(strcmp(curreg_cpy, "lr") == 0)
-                printf("%8s = 0x%16.16llx\n", "lr", debuggee->thread_state.__lr);
-            else if(strcmp(curreg_cpy, "sp") == 0)
-                printf("%8s = 0x%16.16llx\n", "sp", debuggee->thread_state.__sp);
-            else if(strcmp(curreg_cpy, "pc") == 0)
-                printf("%8s = 0x%16.16llx\n", "pc", debuggee->thread_state.__pc);
-            else if(strcmp(curreg_cpy, "cpsr") == 0)
-                printf("%8s = 0x%8.8x\n", "cpsr", debuggee->thread_state.__cpsr);
-            else
-                printf("Invalid register\n");
-
-            free(curreg_cpy);
-
-            curreg = argnext(args);
-            continue;
-        }
-
-        /* Move up one byte to get to the "register number". */
-        memmove(curreg, curreg + 1, strlen(curreg));
-
-        int reg_num = (int)strtol_err(curreg, error);
-
-        if(*error)
-            return CMD_FAILURE;
-        
-        if(reg_num < 0 || reg_num > 29){
-            curreg = argnext(args);
-            continue;
-        }
-
-        char *regstr = malloc(sz);
-        memset(regstr, '\0', sz);
-
-        sprintf(regstr, "%c%d", reg_type, reg_num);
-
-        if(reg_type == 'x')
-            printf("%8s = 0x%16.16llx\n", regstr, 
-                    (long long)debuggee->thread_state.__x[reg_num]);
-        else
-            printf("%8s = 0x%8.8x\n", regstr, 
-                    (int)debuggee->thread_state.__x[reg_num]);
-
-        free(regstr);
-
-        curreg = argnext(args);
-    }
-    
-    return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_set(struct cmd_args_t *args, 
@@ -996,50 +785,6 @@ enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args, 
-        int arg1, char **error){
-    struct node_t *current = debuggee->threads->front;
-
-    while(current){
-        struct machthread *t = current->data;
-
-        printf("\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", 
-                t->focused ? "* " : "", t->ID, t->tid, t->tname, 
-                t->thread_state.__pc);
-        
-        current = current->next;
-    }
-
-    return CMD_SUCCESS;
-}
-
-enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args, 
-        int arg1, char **error){
-    /* Current argument: the ID of the thread the user wants to focus on. */
-    char *curarg = argnext(args);
-    int thread_id = (int)strtol_err(curarg, error);
-
-    if(*error)
-        return CMD_FAILURE;
-
-    if(thread_id < 1 || thread_id > debuggee->thread_count){
-        asprintf(error, "out of bounds, must be in [1, %d]", 
-                debuggee->thread_count);
-        return CMD_FAILURE;
-    }
-
-    int result = machthread_setfocusgivenindex(thread_id);
-    
-    if(result){
-        asprintf(error, "could not set focused thread to thread %d", thread_id);
-        return CMD_FAILURE;
-    }
-
-    printf("Selected thread #%d\n", thread_id);
-    
-    return CMD_SUCCESS;
-}
-
 enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->tracing_disabled){
@@ -1068,44 +813,4 @@ enum cmd_error_t cmdfunc_unset(struct cmd_args_t *args,
     }
 
     return CMD_SUCCESS;
-}
-
-enum cmd_error_t cmdfunc_watch(struct cmd_args_t *args, 
-        int arg1, char **error){
-    /* Current argument: watchpoint type or location. */
-    char *curarg = argnext(args);
-    int LSC = WP_WRITE;
-
-    /* Check if the user specified a watchpoint type. If they didn't,
-     * this watchpoint will match on reads and writes.
-     */
-    if(!is_number_slow(curarg)){
-        if(strcmp(curarg, "--r") == 0)
-            LSC = WP_READ;
-        else if(strcmp(curarg, "--w") == 0)
-            LSC = WP_WRITE;
-        else if(strcmp(curarg, "--rw") == 0)
-            LSC = WP_READ_WRITE;
-
-        /* If we had a type before the location, we need to get the next
-         * argument. After that, current argument is the location to watch.
-         */
-        curarg = argnext(args);
-    }
-
-    long location = parse_expr(curarg, error);
-
-    if(*error){
-        asprintf(error, "expression evaluation failed: %s\n", *error);
-        return CMD_FAILURE;
-    }
-
-    /* Current argument: size of data we're watching. */
-    curarg = argnext(args);
-    int data_len = (int)strtol_err(curarg, error);
-
-    if(*error)
-        return CMD_FAILURE;
-
-    return watchpoint_at_address(location, data_len, LSC, error);
 }

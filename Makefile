@@ -8,17 +8,18 @@ CMDSRC=$(SRC)/cmd
 
 ROOT_OBJECT_FILES = $(patsubst $(SRC)/%.c,$(SRC)/%.o,$(wildcard $(SRC)/*.c))
 CMD_OBJECT_FILES = $(patsubst $(CMDSRC)/%.c,$(CMDSRC)/%.o,$(wildcard $(CMDSRC)/*.c))
+CRITICAL_HEADER_FILES = $(SRC)/debuggee.h $(CMDSRC)/cmd.h
 
 iosdbg : $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES)
 	$(CC) -isysroot $(SDK) $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES) $(LDFLAGS) -o iosdbg
 	dsymutil ./iosdbg
 
-$(SRC)/%.o : $(SRC)/%.c $(SRC)/%.h
+$(SRC)/%.o : $(SRC)/%.c $(SRC)/%.h $(CRITICAL_HEADER_FILES)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 CMD_SOURCES = $(wildcard $(SRC)/cmd/*.c)
 
-cmds : $(CMD_SOURCES)
+cmds : $(CMD_SOURCES) $(CRITICAL_HEADER_FILES)
 	cd $(SRC)/cmd
 	$(MAKE)
 
