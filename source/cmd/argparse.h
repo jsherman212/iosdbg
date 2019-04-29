@@ -1,7 +1,7 @@
 #ifndef _ARGPARSE_H_
 #define _ARGPARSE_H_
 
-#include "queue.h"
+#include "../queue.h"
 
 struct cmd_args_t {
     struct queue_t *argqueue;
@@ -9,12 +9,7 @@ struct cmd_args_t {
     int add_aslr;
 };
 
-struct cmd_args_t *parse_args(char *_args,
-        const char *pattern,
-        const char **groupnames,
-        int num_groups,
-        int unk_amount_of_args,
-        char **error);
+struct cmd_args_t *parse_args(char *, const char *, const char **, int, int, char **);
 char *argnext(struct cmd_args_t *);
 void argfree(struct cmd_args_t *);
 

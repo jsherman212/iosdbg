@@ -5,9 +5,10 @@
 #include <unistd.h>
 
 #include "audit.h"
-#include "linkedlist.h"
-#include "queue.h"
-#include "strext.h"
+
+#include "../linkedlist.h"
+#include "../queue.h"
+#include "../strext.h"
 
 static void repair_cmd_args(struct cmd_args_t *_args, int argcount, ...){
     va_list args;

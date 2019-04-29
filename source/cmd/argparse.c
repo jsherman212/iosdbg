@@ -8,7 +8,8 @@
 #include <pcre2.h>
 
 #include "argparse.h"
-#include "convvar.h"
+
+#include "../convvar.h"
 
 static int wants_add_aslr(char *str){
     /* This convenience variable allows the user to tell iosdbg

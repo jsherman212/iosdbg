@@ -8,7 +8,6 @@
 #include <readline/readline.h>
 
 #include "breakpoint.h"
-#include "dbgcmd.h"
 #include "dbgops.h"
 #include "exception.h"      /* Includes defs.h */
 #include "machthread.h"
@@ -18,6 +17,8 @@
 #include "strext.h"
 #include "trace.h"
 #include "watchpoint.h"
+
+#include "cmd/misccmd.h"
 
 static int JUST_HIT_WATCHPOINT;
 static int JUST_HIT_BREAKPOINT;

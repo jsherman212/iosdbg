@@ -3,9 +3,10 @@
 #include <stdlib.h>
 
 #include "argparse.h"
-#include "dbgops.h"
-#include "defs.h"
-#include "sigsupport.h"
+
+#include "../dbgops.h"
+#include "../defs.h"
+#include "../sigsupport.h"
 
 static const int UNKNOWN_SIGNAL = -1;
 

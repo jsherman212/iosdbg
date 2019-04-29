@@ -7,22 +7,23 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#include "audit.h"
-#include "completer.h"
 #include "convvar.h"
-#include "cmd.h"        /* Includes defs.h */
-#include "dbgcmd.h"
 #include "dbgops.h"
 #include "handlers.h"
 #include "linkedlist.h"
 #include "machthread.h"
-#include "memcmd.h"
 #include "memutils.h"
 #include "printutils.h"
-#include "sigcmd.h"
 #include "sigsupport.h"
 #include "strext.h"
 #include "trace.h"
+
+#include "cmd/audit.h"
+#include "cmd/completer.h"
+#include "cmd/cmd.h"        /* Includes defs.h */
+#include "cmd/misccmd.h"
+#include "cmd/memcmd.h"
+#include "cmd/sigcmd.h"
 
 struct debuggee *debuggee;
 

@@ -5,9 +5,10 @@
 #include <readline/readline.h>
 
 #include "cmd.h"
-#include "docfunc.h"
-#include "queue.h"
-#include "strext.h"
+#include "documentation.h"
+
+#include "../queue.h"
+#include "../strext.h"
 
 static struct matchedcmdinfo_t CURRENT_MATCH_INFO = {0};
 

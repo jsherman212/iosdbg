@@ -9,11 +9,12 @@
 #include <readline/readline.h>
 
 #include "convvar.h"
-#include "dbgcmd.h"
 #include "dbgops.h"
 #include "exception.h"      /* Includes defs.h */
 #include "printutils.h"
 #include "trace.h"
+
+#include "cmd/misccmd.h"
 
 static void *exception_server(void *arg){
     struct msg {

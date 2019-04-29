@@ -8,22 +8,23 @@
 #include <readline/readline.h>
 
 #include "argparse.h"
-#include "breakpoint.h"
-#include "convvar.h"
-#include "dbgcmd.h"
-#include "dbgops.h"
-#include "docfunc.h"
-#include "exception.h"      /* Includes defs.h */
-#include "expr.h"
-#include "linkedlist.h"
-#include "machthread.h"
-#include "memutils.h"
-#include "procutils.h"
-#include "servers.h"
-#include "sigsupport.h"
-#include "strext.h"
-#include "trace.h"
-#include "watchpoint.h"
+#include "documentation.h"
+#include "misccmd.h"
+
+#include "../breakpoint.h"
+#include "../convvar.h"
+#include "../dbgops.h"
+#include "../exception.h"      /* Includes defs.h */
+#include "../expr.h"
+#include "../linkedlist.h"
+#include "../machthread.h"
+#include "../memutils.h"
+#include "../procutils.h"
+#include "../servers.h"
+#include "../sigsupport.h"
+#include "../strext.h"
+#include "../trace.h"
+#include "../watchpoint.h"
 
 int keep_checking_for_process;
 

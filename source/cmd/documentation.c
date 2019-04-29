@@ -2,8 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "docfunc.h"
-#include "queue.h"
+#include "documentation.h"
+
+#include "../queue.h"
 
 void documentation_for_cmd(struct dbg_cmd_t *cmd){
     /* Traverse level order to print out the sub-commands

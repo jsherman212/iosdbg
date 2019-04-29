@@ -5,7 +5,8 @@
 #define NUM_TOP_LEVEL_COMMANDS 22
 
 #include "argparse.h"
-#include "defs.h"
+
+#include "../defs.h"
 
 struct regexinfo {
     char *argregex;
