@@ -14,6 +14,7 @@ void audit_disassemble(struct cmd_args_t *, char **);
 void audit_examine(struct cmd_args_t *, char **);
 void audit_help(struct cmd_args_t *, char **);
 void audit_kill(struct cmd_args_t *, char **);
+void audit_memory_find(struct cmd_args_t *, char **);
 void audit_quit(struct cmd_args_t *, char **);
 void audit_regs_float(struct cmd_args_t *, char **);
 void audit_regs_gen(struct cmd_args_t *, char **);

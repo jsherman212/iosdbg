@@ -74,9 +74,9 @@ static char answer(const char *question, ...){
     return ret;
 }
 
-static pid_t parse_pid(char *pidstr, char **err){
-    return is_number_fast(pidstr) ? (pid_t)strtol_err(pidstr, err) 
-        : pid_of_program(pidstr, err);
+static pid_t parse_pid(char *pidstr, char **error){
+    return is_number_fast(pidstr) ? (pid_t)strtol_err(pidstr, error)
+        : pid_of_program(pidstr, error);
 }
 
 enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 

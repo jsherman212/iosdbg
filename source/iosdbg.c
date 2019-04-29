@@ -16,6 +16,7 @@
 #include "handlers.h"
 #include "linkedlist.h"
 #include "machthread.h"
+#include "memcmd.h"
 #include "memutils.h"
 #include "printutils.h"
 #include "sigcmd.h"
@@ -475,6 +476,21 @@ static void initialize_commands(void){
             audit_kill);
 
     ADD_CMD(kill);
+
+    struct dbg_cmd_t *memory = create_parent_cmd("memory",
+            NULL, MEMORY_COMMAND_DOCUMENTATION, 0,
+            NO_ARGUMENT_REGEX, 0, 0,
+            NO_GROUPS, 1, NULL, NULL);
+    
+    struct dbg_cmd_t *memory_find = create_child_cmd("find",
+            NULL, MEMORY_FIND_COMMAND_DOCUMENTATION, 1,
+            "", 0, 0,
+            NO_GROUPS, cmdfunc_memoryfind,
+            audit_memory_find);
+
+    memory->subcmds[0] = memory_find;
+    
+    ADD_CMD(memory);
 
     struct dbg_cmd_t *quit = create_parent_cmd("quit",
             "q", QUIT_COMMAND_DOCUMENTATION, 0,

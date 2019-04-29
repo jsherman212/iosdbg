@@ -201,6 +201,12 @@ void audit_kill(struct cmd_args_t *args, char **error){
         asprintf(error, "no debuggee");
 }
 
+void audit_memory_find(struct cmd_args_t *args, char **error){
+    if(debuggee->pid == -1)
+        asprintf(error, "no debuggee");
+
+}
+
 void audit_quit(struct cmd_args_t *args, char **error){
     /* Nothing needs to be done. */
 }

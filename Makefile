@@ -19,6 +19,7 @@ OBJECT_FILES = $(SRC)/argparse.o \
 			   $(SRC)/handlers.o \
 			   $(SRC)/linkedlist.o \
 			   $(SRC)/machthread.o \
+			   $(SRC)/memcmd.o \
 			   $(SRC)/memutils.o \
 			   $(SRC)/printutils.o \
 			   $(SRC)/procutils.o \

@@ -2,7 +2,7 @@
 #define _CMD_H_
 
 #define MAX_GROUPS 4
-#define NUM_TOP_LEVEL_COMMANDS 21
+#define NUM_TOP_LEVEL_COMMANDS 22
 
 #include "argparse.h"
 #include "defs.h"
@@ -184,6 +184,12 @@ static const char *KILL_COMMAND_DOCUMENTATION =
     "\nSyntax:\n"
     "\tkill\n"
     "\n";
+
+static const char *MEMORY_COMMAND_DOCUMENTATION =
+    "Memory command class.\n";
+
+static const char *MEMORY_FIND_COMMAND_DOCUMENTATION =
+    "Memory find documentation\n";
 
 static const char *QUIT_COMMAND_DOCUMENTATION =
     "Quit iosdbg.\n"
