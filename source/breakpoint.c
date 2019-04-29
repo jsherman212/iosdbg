@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 #include "breakpoint.h"
-#include "defs.h"
+#include "debuggee.h"
 #include "linkedlist.h"
 #include "memutils.h"
 

@@ -1,60 +1,8 @@
-#ifndef _DEFS_H_
-#define _DEFS_H_
+#ifndef _DEBUGGEE_H_
+#define _DEBUGGEE_H_
 
 #include <mach/mach.h>
 #include <sys/types.h>
-
-extern int ptrace(int arg0, pid_t arg1, caddr_t arg2, int arg3);
-
-#define PT_DETACH   11
-#define PT_SIGEXC   12
-#define PT_ATTACHEXC    14
-#define PT_THUPDATE 13
-
-static const char *prompt = "\e[2m(iosdbg) \e[0m";
-
-extern char **bsd_syscalls;
-extern char **mach_traps;
-extern char **mach_messages;
-
-extern int bsd_syscalls_arr_len;
-extern int mach_traps_arr_len;
-extern int mach_messages_arr_len;
-
-enum cmd_error_t {
-    CMD_SUCCESS,
-    CMD_FAILURE
-};
-
-#define MAX_EXCEPTION_PORTS 16
-
-struct original_exception_ports_t {
-    mach_msg_type_number_t count;
-    exception_mask_t masks[MAX_EXCEPTION_PORTS];
-    exception_handler_t ports[MAX_EXCEPTION_PORTS];
-    exception_behavior_t behaviors[MAX_EXCEPTION_PORTS];
-    thread_state_flavor_t flavors[MAX_EXCEPTION_PORTS];
-};
-
-typedef struct {
-    mach_msg_header_t Head;
-    /* start of the kernel processed data */
-    mach_msg_body_t msgh_body;
-    mach_msg_port_descriptor_t thread;
-    mach_msg_port_descriptor_t task;
-    /* end of the kernel processed data */
-    NDR_record_t NDR;
-    exception_type_t exception;
-    mach_msg_type_number_t codeCnt;
-    int code[2];
-    mach_msg_trailer_t trailer;
-} Request;
-
-typedef struct {
-    mach_msg_header_t Head;
-    NDR_record_t NDR;
-    kern_return_t RetCode;
-} Reply;
 
 struct debuggee {
     /* Task port for the debuggee. */
@@ -66,8 +14,8 @@ struct debuggee {
     /* Number of pending messages received at the debuggee's exception port. */
     int pending_messages;
 
-    /* Exception request from exception_server. TODO should be a linked list */
-    Request *exc_request;
+    /* Exception request from exception_server. */
+    void *exc_request;
 
     /* If this variable is non-zero, tracing is not supported. */
     int tracing_disabled;
@@ -123,8 +71,14 @@ struct debuggee {
     /* Port to get exceptions from the debuggee. */
     mach_port_t exception_port;
 
-    /* Saved exception ports from the debuggee. */
-    struct original_exception_ports_t original_exception_ports;
+    struct {
+        mach_msg_type_number_t count;
+#define MAX_EXCEPTION_PORTS 16
+        exception_mask_t masks[MAX_EXCEPTION_PORTS];
+        exception_handler_t ports[MAX_EXCEPTION_PORTS];
+        exception_behavior_t behaviors[MAX_EXCEPTION_PORTS];
+        thread_state_flavor_t flavors[MAX_EXCEPTION_PORTS];
+    } original_exception_ports;
 
     /* List of breakpoints on the debuggee. */
     struct linkedlist *breakpoints;

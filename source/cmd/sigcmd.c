@@ -1,11 +1,11 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "argparse.h"
 
 #include "../dbgops.h"
-#include "../defs.h"
 #include "../sigsupport.h"
 
 static const int UNKNOWN_SIGNAL = -1;

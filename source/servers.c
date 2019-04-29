@@ -10,7 +10,8 @@
 
 #include "convvar.h"
 #include "dbgops.h"
-#include "exception.h"      /* Includes defs.h */
+#include "debuggee.h"
+#include "exception.h"
 #include "printutils.h"
 #include "trace.h"
 

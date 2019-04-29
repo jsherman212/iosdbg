@@ -6,8 +6,9 @@
 
 #include <readline/readline.h>
 
-#include "defs.h"
+#include "debuggee.h"
 #include "printutils.h"
+#include "tarrays.h"
 #include "trace.h"
 
 static int stop = 0;

@@ -6,6 +6,7 @@
 
 #include "audit.h"
 
+#include "../debuggee.h"
 #include "../linkedlist.h"
 #include "../queue.h"
 #include "../strext.h"

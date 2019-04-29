@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "convvar.h"
-#include "defs.h"
+#include "debuggee.h"
 #include "stack.h"
 #include "strext.h"
 

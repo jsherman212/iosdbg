@@ -9,12 +9,14 @@
 
 #include "breakpoint.h"
 #include "dbgops.h"
-#include "exception.h"      /* Includes defs.h */
-#include "machthread.h"
+#include "debuggee.h"
+#include "exception.h"
 #include "memutils.h"
 #include "printutils.h"
+#include "ptrace.h"
 #include "sigsupport.h"
 #include "strext.h"
+#include "thread.h"
 #include "trace.h"
 #include "watchpoint.h"
 

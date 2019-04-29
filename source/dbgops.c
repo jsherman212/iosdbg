@@ -7,12 +7,13 @@
 
 #include "breakpoint.h"
 #include "convvar.h"
-#include "defs.h"
 #include "dbgops.h"
+#include "debuggee.h"
 #include "exception.h"
 #include "linkedlist.h"
-#include "machthread.h"
+#include "ptrace.h"
 #include "sigsupport.h"
+#include "thread.h"
 #include "watchpoint.h"
 
 void ops_printsiginfo(void){

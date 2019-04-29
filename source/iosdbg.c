@@ -9,18 +9,19 @@
 
 #include "convvar.h"
 #include "dbgops.h"
+#include "debuggee.h"
 #include "handlers.h"
 #include "linkedlist.h"
-#include "machthread.h"
 #include "memutils.h"
 #include "printutils.h"
 #include "sigsupport.h"
 #include "strext.h"
+#include "thread.h"
 #include "trace.h"
 
 #include "cmd/audit.h"
 #include "cmd/completer.h"
-#include "cmd/cmd.h"        /* Includes defs.h */
+#include "cmd/cmd.h"
 #include "cmd/misccmd.h"
 #include "cmd/memcmd.h"
 #include "cmd/sigcmd.h"
@@ -651,6 +652,8 @@ static void expand_aliases(char **line){
 static void inputloop(void){
     char *line = NULL;
     char *prevline = NULL;
+
+    static const char *prompt = "\e[2m(iosdbg) \e[0m";
 
     while((line = readline(prompt)) != NULL){
         /* If the user hits enter, repeat the last command,

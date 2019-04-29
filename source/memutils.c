@@ -7,8 +7,8 @@
 #include <string.h>
 
 #include "breakpoint.h"
+#include "debuggee.h"
 #include "convvar.h"
-#include "defs.h"
 #include "memutils.h"
 #include "strext.h"
 

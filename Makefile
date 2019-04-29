@@ -32,4 +32,4 @@ deploy:
 
 .PHONY: clean
 clean:
-	rm iosdbg $(OBJECT_FILES) $(CMD_OBJECT_FILES)
+	rm iosdbg $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES)

@@ -1,8 +1,8 @@
 #include <stdio.h>
 
-#include "defs.h"
+#include "debuggee.h"
 #include "handlers.h"
-#include "machthread.h"
+#include "thread.h"
 
 unsigned long long find_slide(void){
     vm_region_basic_info_data_64_t info;

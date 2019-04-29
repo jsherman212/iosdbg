@@ -3,6 +3,13 @@
 
 #include "../queue.h"
 
+#define MAX_GROUPS 4
+
+enum cmd_error_t {
+    CMD_SUCCESS,
+    CMD_FAILURE
+};
+
 struct cmd_args_t {
     struct queue_t *argqueue;
     int num_args;
