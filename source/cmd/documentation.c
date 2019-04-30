@@ -121,7 +121,7 @@ void documentation_for_cmdname(char *_name, char **error){
 
     queue_free(cmdqueue);
 
-    asprintf(error, "Unknown command \"%s\"", _name);
+    asprintf(error, "unknown command \"%s\"", _name);
 
 out:
     for(int i=0; i<num_tokens; i++)

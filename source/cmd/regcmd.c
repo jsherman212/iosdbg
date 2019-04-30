@@ -65,18 +65,15 @@ enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args,
             *hi = debuggee->neon_state.__v[reg_num] >> 64;
             *lo = debuggee->neon_state.__v[reg_num];
             
-            void *hi_data = (uint8_t *)hi;
-            void *lo_data = (uint8_t *)lo;
-
             sprintf(regstr, "v%d = {", reg_num);
 
             for(int i=0; i<sizeof(long); i++)
-                concat(&regstr, "0x%02x ", *(uint8_t *)(lo_data + i));
+                concat(&regstr, "0x%02x ", *(uint8_t *)(lo + i));
             
             for(int i=0; i<sizeof(long) - 1; i++)
-                concat(&regstr, "0x%02x ", *(uint8_t *)(hi_data + i));
+                concat(&regstr, "0x%02x ", *(uint8_t *)(hi + i));
 
-            concat(&regstr, "0x%02x}", *(uint8_t *)(hi_data + (sizeof(long) - 1)));
+            concat(&regstr, "0x%02x}", *(uint8_t *)(hi + (sizeof(long) - 1)));
 
             free(hi);
             free(lo);
