@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "argparse.h"
@@ -7,7 +8,36 @@
 #include "../strext.h"
 #include "../watchpoint.h"
 
-enum cmd_error_t cmdfunc_watch(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
+        int arg1, char **error){
+    char *cur_id = argnext(args);
+
+    while(cur_id){
+        int id = (int)strtol_err(cur_id, error);
+
+        if(*error){
+            printf("%s\n", *error);
+            free(*error);
+            *error = NULL;
+            cur_id = argnext(args);
+            continue;
+        }
+
+        watchpoint_delete(id, error);
+
+        if(*error){
+            printf("%s\n", *error);
+            free(*error);
+            *error = NULL;
+        }
+
+        cur_id = argnext(args);
+    }
+    
+    return CMD_SUCCESS;
+}
+
+enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args, 
         int arg1, char **error){
     /* Current argument: watchpoint type or location. */
     char *curarg = argnext(args);
@@ -44,7 +74,9 @@ enum cmd_error_t cmdfunc_watch(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
 
-    return watchpoint_at_address(location, data_len, LSC, error);
+    watchpoint_at_address(location, data_len, LSC, error);
+
+    return *error ? CMD_FAILURE : CMD_SUCCESS;
 }
 
 // XXX TODO 'watchpoint list'

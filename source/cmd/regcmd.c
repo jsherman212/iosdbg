@@ -53,30 +53,23 @@ enum cmd_error_t cmdfunc_regsfloat(struct cmd_args_t *args,
 
         if(!good_reg_num || !good_reg_type){
             printf("%8sInvalid register\n", "");
-
             curreg = argnext(args);
             continue;
         }
         /* Quadword */
         else if(reg_type == 'q' || reg_type == 'v'){
-            long *hi = malloc(sizeof(long));
-            long *lo = malloc(sizeof(long));
-            
-            *hi = debuggee->neon_state.__v[reg_num] >> 64;
-            *lo = debuggee->neon_state.__v[reg_num];
+            long hi = (long)(debuggee->neon_state.__v[reg_num] >> 64);
+            long lo = (long)debuggee->neon_state.__v[reg_num];
             
             sprintf(regstr, "v%d = {", reg_num);
 
             for(int i=0; i<sizeof(long); i++)
-                concat(&regstr, "0x%02x ", *(uint8_t *)(lo + i));
+                concat(&regstr, "0x%02x ", *(uint8_t *)(&lo + i));
             
             for(int i=0; i<sizeof(long) - 1; i++)
-                concat(&regstr, "0x%02x ", *(uint8_t *)(hi + i));
+                concat(&regstr, "0x%02x ", *(uint8_t *)(&hi + i));
 
-            concat(&regstr, "0x%02x}", *(uint8_t *)(hi + (sizeof(long) - 1)));
-
-            free(hi);
-            free(lo);
+            concat(&regstr, "0x%02x}", *(uint8_t *)(&hi + (sizeof(long) - 1)));
         }
         /* Doubleword */
         else if(reg_type == 'd')

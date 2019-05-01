@@ -12,8 +12,6 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_delete(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_detach(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_examine(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_help(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_kill(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_quit(struct cmd_args_t *, int, char **);
@@ -88,36 +86,6 @@ static const char *DETACH_COMMAND_DOCUMENTATION =
     "This command has no arguments.\n"
     "\nSyntax:\n"
     "\tdetach\n"
-    "\n";
-
-static const char *DISASSEMBLE_COMMAND_DOCUMENTATION =
-    "Disassemble debuggee memory. Include '--no-aslr' to keep ASLR from being added.\n"
-    "This command has two mandatory arguments and no optional arguments.\n"
-    "\nMandatory arguments:\n"
-    "\tlocation\n"
-    "\t\tThis expression will be evaluated and used as where iosdbg"
-    " will start disassembling.\n"
-    "\tcount\n"
-    "\t\tHow many bytes iosdbg will disassemble.\n"
-    "\nSyntax:\n"
-    "\tdisassemble location count\n"
-    "\n"
-    "\nThis command has an alias: 'dis'\n"
-    "\n";
-
-static const char *EXAMINE_COMMAND_DOCUMENTATION =
-    "View debuggee memory. Include '--no-aslr' to keep ASLR from being added.\n"
-    "This command has two mandatory arguments and no optional arguments.\n"
-    "\nMandatory arguments:\n"
-    "\tlocation\n"
-    "\t\tThis expression will be evaluted and used as where iosdbg"
-    " will start dumping memory.\n"
-    "\tcount\n"
-    "\t\tHow many bytes iosdbg will dump.\n"
-    "\nSyntax:\n"
-    "\texamine location count\n"
-    "\n"
-    "\nThis command has an alias: 'x'\n"
     "\n";
 
 static const char *HELP_COMMAND_DOCUMENTATION =
@@ -223,12 +191,6 @@ static const char *ATTACH_COMMAND_REGEX =
 static const char *DELETE_COMMAND_REGEX =
     "(?<type>b|w)(\\s+)?(?<ids>[-\\d\\s]+)?";
 
-static const char *DISASSEMBLE_COMMAND_REGEX =
-    "(?<location>[\\w+\\-*\\/\\$()]+)\\s+(?<count>[\\w+\\-*\\/\\$()]+)";
-
-static const char *EXAMINE_COMMAND_REGEX =
-    "(?<location>[\\w+\\-*\\/\\$()]+)\\s+(?<count>[\\w+\\-*\\/\\$()]+)";
-
 static const char *HELP_COMMAND_REGEX =
     "(?J)^\"(?<cmd>[\\w\\s]+)\"|^(?<cmd>(?![\\w\\s]+\")\\w+)";
 
@@ -251,12 +213,6 @@ static const char *ATTACH_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
 
 static const char *DELETE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "type", "ids" };
-
-static const char *DISASSEMBLE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "location", "count" };
-
-static const char *EXAMINE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "location", "count" };
 
 static const char *HELP_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "cmd" };

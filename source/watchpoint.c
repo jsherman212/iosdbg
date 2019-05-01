@@ -44,7 +44,7 @@ static int find_ready_wp_reg(void){
     return -1;
 }
 
-struct watchpoint *watchpoint_new(unsigned long location,
+static struct watchpoint *watchpoint_new(unsigned long location,
         unsigned int data_len, int LSC, char **error){
     if(data_len == 0 || data_len > sizeof(unsigned long)){
         asprintf(error, "data length (%d) is invalid", data_len);
@@ -124,36 +124,6 @@ struct watchpoint *watchpoint_new(unsigned long location,
     return wp;
 }
 
-wp_error_t watchpoint_at_address(unsigned long location, unsigned int data_len,
-        int LSC, char **error){
-    struct watchpoint *wp = watchpoint_new(location, data_len, LSC, error);
-
-    if(!wp)
-        return WP_FAILURE;
-    
-    linkedlist_add(debuggee->watchpoints, wp);
-
-    const char *type = "r";
-
-    if(LSC == WP_WRITE)
-        type = "w";
-    else if(LSC == WP_READ_WRITE)
-        type = "rw";
-
-    printf("Watchpoint %d: addr = %#lx size = %d type = %s\n",
-            wp->id, wp->location, wp->data_len, type);
-    
-    debuggee->num_watchpoints++;
-
-    return WP_SUCCESS;
-}
-
-void watchpoint_hit(struct watchpoint *wp){
-    if(!wp)
-        return;
-
-    wp->hit_count++;
-}
 
 static void enable_wp(struct watchpoint *wp){
     debuggee->get_debug_state();
@@ -192,13 +162,36 @@ static void wp_delete_internal(struct watchpoint *wp){
     debuggee->num_watchpoints--;
 }
 
-wp_error_t watchpoint_delete(int wp_id){
-    if(!debuggee->watchpoints->front)
-        return WP_FAILURE;
+void watchpoint_at_address(unsigned long location, unsigned int data_len,
+        int LSC, char **error){
+    struct watchpoint *wp = watchpoint_new(location, data_len, LSC, error);
 
-    if(wp_id == 0)
-        return WP_FAILURE;
+    if(!wp)
+        return;
+    
+    linkedlist_add(debuggee->watchpoints, wp);
 
+    const char *type = "r";
+
+    if(LSC == WP_WRITE)
+        type = "w";
+    else if(LSC == WP_READ_WRITE)
+        type = "rw";
+
+    printf("Watchpoint %d: addr = %#lx size = %d type = %s\n",
+            wp->id, wp->location, wp->data_len, type);
+    
+    debuggee->num_watchpoints++;
+}
+
+void watchpoint_hit(struct watchpoint *wp){
+    if(!wp)
+        return;
+
+    wp->hit_count++;
+}
+
+void watchpoint_delete(int wp_id, char **error){
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){
@@ -206,19 +199,18 @@ wp_error_t watchpoint_delete(int wp_id){
 
         if(current_watchpoint->id == wp_id){        
             wp_delete_internal(current_watchpoint);
-            return WP_SUCCESS;
+            return;
         }
 
         current = current->next;
     }
 
-    return WP_FAILURE;
+    asprintf(error, "watchpoint %d not found", wp_id);
+
+    return;
 }
 
 void watchpoint_enable_all(void){
-    if(!debuggee->watchpoints->front)
-        return;
-    
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){
@@ -231,9 +223,6 @@ void watchpoint_enable_all(void){
 }
 
 void watchpoint_disable_all(void){
-    if(!debuggee->watchpoints->front)
-        return;
-    
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){
@@ -246,9 +235,6 @@ void watchpoint_disable_all(void){
 }
 
 void watchpoint_delete_all(void){
-    if(!debuggee->watchpoints->front)
-        return;
-
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){
@@ -261,9 +247,6 @@ void watchpoint_delete_all(void){
 }
 
 struct watchpoint *find_wp_with_address(unsigned long addr){
-    if(!debuggee->watchpoints->front)
-        return NULL;
-
     struct node_t *current = debuggee->watchpoints->front;
 
     while(current){

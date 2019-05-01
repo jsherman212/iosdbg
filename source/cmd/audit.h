@@ -26,6 +26,7 @@ void audit_thread_list(struct cmd_args_t *, char **);
 void audit_thread_select(struct cmd_args_t *, char **);
 void audit_trace(struct cmd_args_t *, char **);
 void audit_unset(struct cmd_args_t *, char **);
-void audit_watch(struct cmd_args_t *, char **);
+void audit_watchpoint_delete(struct cmd_args_t *, char **);
+void audit_watchpoint_set(struct cmd_args_t *, char **);
 
 #endif

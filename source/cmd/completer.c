@@ -74,7 +74,7 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
     return result;
 }
 
-static void copy_groupnames(struct dbg_cmd_t *from){
+static inline void copy_groupnames(struct dbg_cmd_t *from){
     for(int idx=0; idx<MAX_GROUPS; idx++)
         CURRENT_MATCH_INFO.rinfo.groupnames[idx] = 
             from->rinfo.groupnames[idx];
@@ -90,71 +90,59 @@ static char *everything_before(const char *text){
     return substr(rl_line_buffer, 0, len);
 }
 
+static char **rl_line_buffer_word_array(int *len){
+    char *rl_line_buffer_cpy = strdup(rl_line_buffer);
+
+    *len = 0;
+    char **words = malloc(*len);
+
+    char *word = strtok_r(rl_line_buffer_cpy, " ", &rl_line_buffer_cpy);
+
+    while(word){
+        words = realloc(words, sizeof(char *) * (++(*len)));
+        words[*len - 1] = word;
+
+        word = strtok_r(NULL, " ", &rl_line_buffer_cpy);
+    }
+
+    free(rl_line_buffer_cpy);
+
+    return words;
+}
+
 /*
  * Count the spaces before `text` inside of rl_line_buffer.
  */
 static int count_spaces_before(const char *text){
-    if(!text)
-        return 0;
+    int len = 0;
+    char **words = rl_line_buffer_word_array(&len);
 
-    size_t len = strlen(text);
-    char *before_text = NULL;
-
-    if(len == 0)
-        before_text = substr(rl_line_buffer, 0, strlen(rl_line_buffer));
-    else
-        before_text = everything_before(text);
-
-    if(!before_text)
-        return 0;
-
-    int idx = 0, spaces = 0;
-    len = strlen(before_text);
+    int idx = 0;
 
     while(idx < len){
-        if(isspace(before_text[idx++]))
-            spaces++;
+        if(strcmp(words[idx], text) == 0)
+            return idx;
+
+        idx++;
     }
 
-    free(before_text);
-
-    return spaces;
+    return idx;
 }
 
 static char *word_before(char *text){
-    if(!text)
-        return NULL;
+    int len = 0;
+    char **words = rl_line_buffer_word_array(&len);
 
-    char *substr_end = strrstr(rl_line_buffer, text);
+    int idx = len;
 
-    int start_idx = substr_end - rl_line_buffer;
+    while(idx--){
+        char *cur = words[idx];
 
-    if(substr_end == rl_line_buffer)
-        start_idx = strlen(rl_line_buffer) - 1;
-
-    int idx = start_idx;
-    int space_count = 0;
-
-    while(idx >= 0 && space_count < 2){
-        if(isspace(rl_line_buffer[idx]))
-            space_count++;
-
-        idx--;
+        if(strcmp(cur, text) == 0 && idx > 0)
+            return words[idx - 1];
     }
 
-    idx++;
-
-    int start = idx, copylen = 0;
-
-    do{
-        idx++;
-        copylen++;
-    }while(idx < strlen(rl_line_buffer) && !isspace(rl_line_buffer[idx]));
-
-    char *ret = substr(rl_line_buffer, start, copylen);
-    strclean(&ret);
-
-    return ret;
+    return words[0];
 }
 
 /*

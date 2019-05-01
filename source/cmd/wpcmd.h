@@ -3,9 +3,17 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_watch(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *, int, char **);
 
-static const char *WATCH_COMMAND_DOCUMENTATION =
+static const char *WATCHPOINT_COMMAND_DOCUMENTATION =
+    "'watchpoint' describes the group of commands which deal with watchpoints.\n"
+    "\nThis command has an alias: 'w'\n";
+
+static const char *WATCHPOINT_DELETE_COMMAND_DOCUMENTATION =
+    "Delete a watchpoint. TODO fill in\n";
+
+static const char *WATCHPOINT_SET_COMMAND_DOCUMENTATION =
     "Set a watchpoint. ASLR is never accounted for.\n"
     "This command has two mandatory arguments and one optional argument.\n"
     "\nMandatory arguments:\n"
@@ -30,14 +38,20 @@ static const char *WATCH_COMMAND_DOCUMENTATION =
 /*
  * Regexes
  */
-static const char *WATCH_COMMAND_REGEX =
+static const char *WATCHPOINT_DELETE_COMMAND_REGEX =
+    "(?<ids>\\d+)";
+
+static const char *WATCHPOINT_SET_COMMAND_REGEX =
     "(?(?=--[rw])(?<type>--[rw]{1,2}))\\s*"
     "(?<location>[\\w+\\-*\\/\\$()]+)\\s+(?<size>(0[xX])?\\d+)";
 
 /*
  * Regex groups
  */
-static const char *WATCH_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
+static const char *WATCHPOINT_DELETE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
+    { "ids" };
+
+static const char *WATCHPOINT_SET_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "type", "location", "size" };
 
 #endif

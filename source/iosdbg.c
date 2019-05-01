@@ -419,7 +419,7 @@ static void initialize_commands(void){
 
     ADD_CMD(backtrace);
 
-    struct dbg_cmd_t *breakpoint = create_parent_cmd("break",
+    struct dbg_cmd_t *breakpoint = create_parent_cmd("breakpoint",
             "b", BREAKPOINT_COMMAND_DOCUMENTATION, 0,
             BREAKPOINT_COMMAND_REGEX, 1, 1,
             BREAKPOINT_COMMAND_REGEX_GROUPS, 0, cmdfunc_break,
@@ -435,6 +435,7 @@ static void initialize_commands(void){
 
     ADD_CMD(continue_);
 
+    /*
     struct dbg_cmd_t *delete = create_parent_cmd("delete",
             "d", DELETE_COMMAND_DOCUMENTATION, 0,
             DELETE_COMMAND_REGEX, 2, 1,
@@ -442,7 +443,7 @@ static void initialize_commands(void){
             audit_delete);
 
     ADD_CMD(delete);
-
+    */
     struct dbg_cmd_t *detach = create_parent_cmd("detach",
             NULL, DETACH_COMMAND_DOCUMENTATION, 0,
             NO_ARGUMENT_REGEX, 0, 0,
@@ -603,13 +604,26 @@ static void initialize_commands(void){
 
     ADD_CMD(unset);
 
-    struct dbg_cmd_t *watch = create_parent_cmd("watch",
-            "w", WATCH_COMMAND_DOCUMENTATION, 0,
-            WATCH_COMMAND_REGEX, 3, 0,
-            WATCH_COMMAND_REGEX_GROUPS, 0, cmdfunc_watch,
-            audit_watch);
+    struct dbg_cmd_t *watchpoint = create_parent_cmd("watchpoint",
+            "w", WATCHPOINT_COMMAND_DOCUMENTATION, 0,
+            NO_ARGUMENT_REGEX, 0, 0,
+            NO_GROUPS, 2, NULL, NULL);
 
-    ADD_CMD(watch);
+    struct dbg_cmd_t *watchpoint_delete = create_child_cmd("delete",
+            NULL, WATCHPOINT_DELETE_COMMAND_DOCUMENTATION, 1,
+            WATCHPOINT_DELETE_COMMAND_REGEX, 1, 1,
+            WATCHPOINT_DELETE_COMMAND_REGEX_GROUPS, cmdfunc_watchpoint_delete,
+            audit_watchpoint_delete);
+    struct dbg_cmd_t *watchpoint_set = create_child_cmd("set",
+            NULL, WATCHPOINT_SET_COMMAND_DOCUMENTATION, 1,
+            WATCHPOINT_SET_COMMAND_REGEX, 3, 0,
+            WATCHPOINT_SET_COMMAND_REGEX_GROUPS, cmdfunc_watchpoint_set,
+            audit_watchpoint_set);
+
+    watchpoint->subcmds[0] = watchpoint_delete;
+    watchpoint->subcmds[1] = watchpoint_set;
+
+    ADD_CMD(watchpoint);
 }
 
 static void _rl_line_buffer_replace(char *with){

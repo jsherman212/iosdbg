@@ -206,7 +206,6 @@ void audit_kill(struct cmd_args_t *args, char **error){
 void audit_memory_find(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
         asprintf(error, "no debuggee");
-
 }
 
 void audit_quit(struct cmd_args_t *args, char **error){
@@ -315,7 +314,11 @@ void audit_unset(struct cmd_args_t *args, char **error){
         asprintf(error, "need a convenience variable");
 }
 
-void audit_watch(struct cmd_args_t *args, char **error){
+void audit_watchpoint_delete(struct cmd_args_t *args, char **error){
+    /* Nothing to do. */
+}
+
+void audit_watchpoint_set(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "no debuggee");
         return;
