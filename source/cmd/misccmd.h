@@ -48,8 +48,6 @@ static const char *BACKTRACE_COMMAND_DOCUMENTATION =
     "This command has no arguments.\n"
     "\nSyntax:\n"
     "\tbacktrace\n"
-    "\n"
-    "\nThis command has an alias: 'bt'\n"
     "\n";
 
 static const char *CONTINUE_COMMAND_DOCUMENTATION =
@@ -57,8 +55,6 @@ static const char *CONTINUE_COMMAND_DOCUMENTATION =
     "This command has no arguments.\n"
     "\nSyntax:\n"
     "\tcontinue\n"
-    "\n"
-    "\nThis command has an alias: 'c'\n"
     "\n";
 
 static const char *DELETE_COMMAND_DOCUMENTATION =
@@ -77,8 +73,6 @@ static const char *DELETE_COMMAND_DOCUMENTATION =
     " or watchpoints.\n"
     "\nSyntax:\n"
     "\tdelete type id?\n"
-    "\n"
-    "\nThis command has an alias: 'd'\n"
     "\n";
 
 static const char *DETACH_COMMAND_DOCUMENTATION =
@@ -110,8 +104,6 @@ static const char *QUIT_COMMAND_DOCUMENTATION =
     "This command has no arguments.\n"
     "\nSyntax:\n"
     "\tquit\n"
-    "\n"
-    "\nThis command has an alias: 'q'\n"
     "\n";
 
 static const char *SET_COMMAND_DOCUMENTATION =

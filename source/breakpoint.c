@@ -126,37 +126,6 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     return bp;
 }
 
-bp_error_t breakpoint_at_address(unsigned long address, int temporary,
-        char **error){
-    struct breakpoint *bp = breakpoint_new(address, temporary, error);
-
-    if(!bp)
-        return BP_FAILURE;
-
-    /* If we ran out of hardware breakpoints, set a software breakpoint
-     * by writing BRK #0 to bp->location.
-     */
-    if(!bp->hw)
-        write_memory_to_location(bp->location, CFSwapInt32(BRK));
-
-    linkedlist_add(debuggee->breakpoints, bp);
-
-    if(!temporary)
-        printf("Breakpoint %d at %#lx\n", bp->id, bp->location);
-
-    return BP_SUCCESS;
-}
-
-void breakpoint_hit(struct breakpoint *bp){
-    if(!bp)
-        return;
-
-    if(bp->temporary)
-        breakpoint_delete(bp->id);
-    else
-        bp->hit_count++;
-}
-
 static void enable_hw_bp(struct breakpoint *bp){
     debuggee->get_debug_state();
 
@@ -204,13 +173,36 @@ static void bp_delete_internal(struct breakpoint *bp){
     debuggee->num_breakpoints--;
 }
 
-bp_error_t breakpoint_delete(int breakpoint_id){
-    if(!debuggee->breakpoints->front)
-        return BP_FAILURE;
+void breakpoint_at_address(unsigned long address, int temporary,
+        char **error){
+    struct breakpoint *bp = breakpoint_new(address, temporary, error);
 
-    if(breakpoint_id == 0)
-        return BP_FAILURE;
+    if(!bp)
+        return;
 
+    /* If we ran out of hardware breakpoints, set a software breakpoint
+     * by writing BRK #0 to bp->location.
+     */
+    if(!bp->hw)
+        write_memory_to_location(bp->location, CFSwapInt32(BRK));
+
+    linkedlist_add(debuggee->breakpoints, bp);
+
+    if(!temporary)
+        printf("Breakpoint %d at %#lx\n", bp->id, bp->location);
+}
+
+void breakpoint_hit(struct breakpoint *bp){
+    if(!bp)
+        return;
+
+    if(bp->temporary)
+        breakpoint_delete(bp->id, NULL);
+    else
+        bp->hit_count++;
+}
+
+void breakpoint_delete(int breakpoint_id, char **error){
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){
@@ -218,22 +210,17 @@ bp_error_t breakpoint_delete(int breakpoint_id){
 
         if(current_breakpoint->id == breakpoint_id){
             bp_delete_internal(current_breakpoint);
-            return BP_SUCCESS;
+            return;
         }
 
         current = current->next;
     }
 
-    return BP_FAILURE;
+    if(error)
+        asprintf(error, "breakpoint %d not found", breakpoint_id);
 }
 
-bp_error_t breakpoint_disable(int breakpoint_id){
-    if(!debuggee->breakpoints->front)
-        return BP_FAILURE;
-
-    if(breakpoint_id == 0)
-        return BP_FAILURE;
-
+void breakpoint_disable(int breakpoint_id, char **error){
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){
@@ -241,22 +228,17 @@ bp_error_t breakpoint_disable(int breakpoint_id){
 
         if(current_breakpoint->id == breakpoint_id){
             bp_set_state_internal(current_breakpoint, BP_DISABLED);
-            return BP_SUCCESS;
+            return;
         }
 
         current = current->next;
     }
 
-    return BP_FAILURE;  
+    if(error)
+        asprintf(error, "breakpoint %d not found", breakpoint_id);
 }
 
-bp_error_t breakpoint_enable(int breakpoint_id){
-    if(!debuggee->breakpoints->front)
-        return BP_FAILURE;
-
-    if(breakpoint_id == 0)
-        return BP_FAILURE;
-
+void breakpoint_enable(int breakpoint_id, char **error){
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){
@@ -264,19 +246,17 @@ bp_error_t breakpoint_enable(int breakpoint_id){
 
         if(current_breakpoint->id == breakpoint_id){
             bp_set_state_internal(current_breakpoint, BP_ENABLED);
-            return BP_SUCCESS;
+            return;
         }
 
         current = current->next;
     }
 
-    return BP_FAILURE;  
+    if(error)
+        asprintf(error, "breakpoint %d not found", breakpoint_id);
 }
 
 void breakpoint_disable_all(void){
-    if(!debuggee->breakpoints->front)
-        return;
-
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){
@@ -288,9 +268,6 @@ void breakpoint_disable_all(void){
 }
 
 void breakpoint_enable_all(void){
-    if(!debuggee->breakpoints->front)
-        return;
-
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){
@@ -302,12 +279,6 @@ void breakpoint_enable_all(void){
 }
 
 int breakpoint_disabled(int breakpoint_id){
-    if(!debuggee->breakpoints->front)
-        return BP_FAILURE;
-
-    if(breakpoint_id == 0)
-        return BP_FAILURE;
-
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){
@@ -323,12 +294,6 @@ int breakpoint_disabled(int breakpoint_id){
 }
 
 void breakpoint_delete_all(void){
-    if(!debuggee->breakpoints)
-        return;
-
-    if(!debuggee->breakpoints->front)
-        return;
-
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){
@@ -341,9 +306,6 @@ void breakpoint_delete_all(void){
 }
 
 struct breakpoint *find_bp_with_address(unsigned long addr){
-    if(!debuggee->breakpoints->front)
-        return NULL;
-
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){

@@ -136,6 +136,8 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
 static void handle_hit_watchpoint(void){
     struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
 
+    watchpoint_hit(hit);
+
     unsigned int sz = hit->data_len;
 
     /* Save previous data for comparison. */
@@ -174,7 +176,7 @@ static void handle_single_step(void){
 
     if(JUST_HIT_BREAKPOINT){
         if(JUST_HIT_SW_BREAKPOINT){
-            breakpoint_enable(debuggee->last_hit_bkpt_ID);
+            breakpoint_enable(debuggee->last_hit_bkpt_ID, NULL);
             JUST_HIT_SW_BREAKPOINT = 0;
         }
 
@@ -212,7 +214,7 @@ static void handle_hit_breakpoint(long subcode, char **desc){
 
     if(!hit->hw){
         JUST_HIT_SW_BREAKPOINT = 1;
-        breakpoint_disable(hit->id);
+        breakpoint_disable(hit->id, NULL);
     }
 
     debuggee->last_hit_bkpt_ID = hit->id;

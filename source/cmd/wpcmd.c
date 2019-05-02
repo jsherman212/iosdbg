@@ -4,12 +4,19 @@
 
 #include "argparse.h"
 
+#include "../debuggee.h"
 #include "../expr.h"
+#include "../linkedlist.h"
 #include "../strext.h"
 #include "../watchpoint.h"
 
 enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
         int arg1, char **error){
+    if(debuggee->num_watchpoints == 0){
+        asprintf(error, "no watchpoints");
+        return CMD_FAILURE;
+    }
+
     char *cur_id = argnext(args);
 
     while(cur_id){
@@ -30,8 +37,42 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
             free(*error);
             *error = NULL;
         }
+        else
+            printf("Watchpoint %d deleted\n", id);
 
         cur_id = argnext(args);
+    }
+    
+    return CMD_SUCCESS;
+}
+
+enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
+        int arg1, char **error){
+    if(debuggee->num_watchpoints == 0){
+        asprintf(error, "no watchpoints");
+        return CMD_FAILURE;
+    }
+
+    printf("Current watchpoints:\n");
+
+    int count = 1;
+
+    for(struct node_t *current = debuggee->watchpoints->front;
+            current;
+            current = current->next){
+        struct watchpoint *w = current->data;
+
+        printf("%4s%d<id: %d>: address = %-16.16lx, hit count = %d, size = %d",
+                "", count++, w->id, w->location, w->hit_count, w->data_len);
+
+        const char *type = "r";
+
+        if(w->LSC == WP_WRITE)
+            type = "w";
+        else if(w->LSC == WP_READ_WRITE)
+            type = "rw";
+
+        printf(", type = %s\n", type);
     }
     
     return CMD_SUCCESS;
@@ -78,5 +119,3 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
 
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }
-
-// XXX TODO 'watchpoint list'

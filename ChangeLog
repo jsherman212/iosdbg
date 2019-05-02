@@ -1,3 +1,6 @@
+5-2-19
+- continuing to refactor commands
+
 4-30-19
 - refactoring commands...
 - rename break and watch to breakpoint and watchpoint

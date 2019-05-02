@@ -4,14 +4,17 @@
 #include "argparse.h"
 
 enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *, int, char **);
 
 static const char *WATCHPOINT_COMMAND_DOCUMENTATION =
-    "'watchpoint' describes the group of commands which deal with watchpoints.\n"
-    "\nThis command has an alias: 'w'\n";
+    "'watchpoint' describes the group of commands which deal with watchpoints.\n";
 
 static const char *WATCHPOINT_DELETE_COMMAND_DOCUMENTATION =
     "Delete a watchpoint. TODO fill in\n";
+
+static const char *WATCHPOINT_LIST_COMMAND_DOCUMENTATION =
+    "Watchpoint list\n";
 
 static const char *WATCHPOINT_SET_COMMAND_DOCUMENTATION =
     "Set a watchpoint. ASLR is never accounted for.\n"
@@ -31,8 +34,6 @@ static const char *WATCHPOINT_SET_COMMAND_DOCUMENTATION =
     "\t\tIf this argument is omitted, iosdbg assumes --w.\n"
     "\nSyntax:\n"
     "\twatch type? location size\n"
-    "\n"
-    "\nThis command has an alias: 'w'\n"
     "\n";
 
 /*

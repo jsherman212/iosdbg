@@ -89,6 +89,8 @@ static struct watchpoint *watchpoint_new(unsigned long location,
 
     debuggee->get_debug_state();
 
+    wp->LSC = LSC;
+
     /* Setup the DBGWCR<n>_EL1 register.
      * We need the following criteria to correctly set up this watchpoint:
      *  - WT must be 0, we hare doing an unlinked data match.
@@ -100,8 +102,6 @@ static struct watchpoint *watchpoint_new(unsigned long location,
      */
     int BAS_ = (((1 << wp->data_len) - 1) << 5);
     LSC <<= 3;
-
-    wp->LSC = LSC;
 
     debuggee->debug_state.__wcr[available_wp_reg] = 
         WT |
@@ -206,8 +206,6 @@ void watchpoint_delete(int wp_id, char **error){
     }
 
     asprintf(error, "watchpoint %d not found", wp_id);
-
-    return;
 }
 
 void watchpoint_enable_all(void){

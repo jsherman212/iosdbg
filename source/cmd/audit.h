@@ -6,7 +6,9 @@
 void audit_aslr(struct cmd_args_t *, char **);
 void audit_attach(struct cmd_args_t *, char **);
 void audit_backtrace(struct cmd_args_t *, char **);
-void audit_break(struct cmd_args_t *, char **);
+void audit_breakpoint_delete(struct cmd_args_t *, char **);
+void audit_breakpoint_list(struct cmd_args_t *, char **);
+void audit_breakpoint_set(struct cmd_args_t *, char **);
 void audit_continue(struct cmd_args_t *, char **);
 void audit_delete(struct cmd_args_t *, char **);
 void audit_detach(struct cmd_args_t *, char **);
@@ -27,6 +29,7 @@ void audit_thread_select(struct cmd_args_t *, char **);
 void audit_trace(struct cmd_args_t *, char **);
 void audit_unset(struct cmd_args_t *, char **);
 void audit_watchpoint_delete(struct cmd_args_t *, char **);
+void audit_watchpoint_list(struct cmd_args_t *, char **);
 void audit_watchpoint_set(struct cmd_args_t *, char **);
 
 #endif

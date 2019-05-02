@@ -41,11 +41,17 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
         }
 
         queue_free(cmdqueue);
+
+        if(cmd->alias)
+            printf("\nThis command has an alias: '%s'\n\n", cmd->alias);
         
         return;
     }
 
     printf("%s", cmd->documentation);
+
+    if(cmd->alias)
+        printf("This command has an alias: '%s'\n\n", cmd->alias);
 }
 
 void documentation_for_cmdname(char *_name, char **error){
@@ -83,7 +89,7 @@ void documentation_for_cmdname(char *_name, char **error){
             }
         }
 
-        asprintf(error, "Unknown command \"%s\"", _name);
+        asprintf(error, "unknown command \"%s\"", _name);
         goto out;
     }
 

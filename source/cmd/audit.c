@@ -82,20 +82,19 @@ void audit_backtrace(struct cmd_args_t *args, char **error){
         asprintf(error, "no debuggee");
 }
 
-void audit_break(struct cmd_args_t *args, char **error){
-    if(debuggee->pid == -1){
+void audit_breakpoint_delete(struct cmd_args_t *args, char **error){
+    /* Nothing to do. */
+}
+
+void audit_breakpoint_list(struct cmd_args_t *args, char **error){
+    /* Nothing to do. */
+}
+
+void audit_breakpoint_set(struct cmd_args_t *args, char **error){
+    // XXX if I allow setting breakpoints before attaching and resolving them
+    // later, this will cause problems
+    if(debuggee->pid == -1)
         asprintf(error, "no debuggee");
-        return;
-    }
-
-    char *arg1 = argnext(args);
-
-    if(!arg1){
-        asprintf(error, "need location");
-        return;
-    }
-
-    repair_cmd_args(args, 1, arg1);
 }
 
 void audit_continue(struct cmd_args_t *args, char **error){
@@ -315,6 +314,10 @@ void audit_unset(struct cmd_args_t *args, char **error){
 }
 
 void audit_watchpoint_delete(struct cmd_args_t *args, char **error){
+    /* Nothing to do. */
+}
+
+void audit_watchpoint_list(struct cmd_args_t *args, char **error){
     /* Nothing to do. */
 }
 

@@ -10,7 +10,7 @@
 #include "documentation.h"
 #include "misccmd.h"
 
-#include "../breakpoint.h" // XXX remove this once I'm completely done
+#include "../breakpoint.h"
 #include "../convvar.h"
 #include "../dbgops.h"
 #include "../debuggee.h"
@@ -26,7 +26,6 @@
 #include "../tarrays.h"
 #include "../thread.h"
 #include "../trace.h"
-#include "../watchpoint.h" // XXX remove this once I'm completely done
 
 int keep_checking_for_process;
 
@@ -277,81 +276,6 @@ enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_delete(struct cmd_args_t *args, 
-        int arg1, char **error){
-    char *type = argnext(args);
-
-    if(strcmp(type, "b") == 0 && debuggee->num_breakpoints == 0){
-        asprintf(error, "no breakpoints to delete");
-        return CMD_FAILURE;
-    }
-
-    if(strcmp(type, "w") == 0 && debuggee->num_watchpoints == 0){
-        asprintf(error, "no watchpoints to delete");
-        return CMD_FAILURE;
-    }
-    
-    char *delete_id_str = argnext(args);
-
-    /* If there's nothing after type, give the user
-     * an option to delete all.
-     */
-    if(!delete_id_str){
-        const char *target = strcmp(type, "b") == 0 ? 
-            "breakpoints" : "watchpoints";
-        
-        char ans = answer("Delete all %s? (y/n) ", target);
-
-        if(ans == 'n'){
-            printf("Nothing deleted.\n");
-            return CMD_SUCCESS;
-        }
-
-        void (*delete_func)(void) = 
-            strcmp(target, "breakpoints") == 0 ? 
-            &breakpoint_delete_all :
-            &watchpoint_delete_all;
-
-        int num_deleted = strcmp(target, "breakpoints") == 0 ?
-            debuggee->num_breakpoints :
-            debuggee->num_watchpoints;
-
-        delete_func();
-
-        printf("All %s removed. (%d %s)\n", target, num_deleted, target);
-
-        return CMD_SUCCESS;
-    }
-
-    int delete_id = (int)strtol_err(delete_id_str, error);
-
-    if(*error)
-        return CMD_FAILURE;
-
-    if(strcmp(type, "b") == 0){
-        bp_error_t err = breakpoint_delete(delete_id);
-
-        if(err == BP_FAILURE){
-            asprintf(error, "couldn't delete breakpoint %d", delete_id);
-            return CMD_FAILURE;
-        }
-
-        printf("Breakpoint %d deleted\n", delete_id);
-    }
-    else if(strcmp(type, "w") == 0){
-        wp_error_t err = watchpoint_delete(delete_id);
-
-        if(err == WP_FAILURE){
-            asprintf(error, "couldn't delete watchpoint %d", delete_id);
-            return CMD_FAILURE;
-        }
-
-        printf("Watchpoint %d deleted\n", delete_id);
-    }
-
-    return CMD_SUCCESS;
-}
-
 enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args, 
         int from_death, char **error){
     if(!debuggee->tracing_disabled)
@@ -366,73 +290,6 @@ enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
         printf("Detached from %s (%d)\n", n, p);
 
     free(n);
-
-    return CMD_SUCCESS;
-}
-
-enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
-        int arg1, char **error){
-    char *location_str = argnext(args);
-    long location = parse_expr(location_str, error);
-
-    if(*error)
-        return CMD_FAILURE;
-
-    char *amount_str = argnext(args);
-    int amount = (int)strtol_err(amount_str, error);
-
-    if(*error)
-        return CMD_FAILURE;
-
-    if(amount <= 0){
-        asprintf(error, "bad amount %d", amount);
-        return CMD_FAILURE;
-    }
-
-    if(args->add_aslr)
-        location += debuggee->aslr_slide;
-
-    kern_return_t err = disassemble_at_location(location, amount);
-
-    if(err){
-        asprintf(error, "could not disassemble from %#lx to %#lx: %s", 
-                location, location + amount, mach_error_string(err));
-        return CMD_FAILURE;
-    }
-    
-    return CMD_SUCCESS;
-}
-
-enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
-        int arg1, char **error){
-    char *location_str = argnext(args);
-    long location = parse_expr(location_str, error);
-
-    if(*error)
-        return CMD_FAILURE;
-
-    /* Next, however many bytes are wanted. */
-    char *size = argnext(args);
-    int amount = (int)strtol_err(size, error);
-
-    if(*error)
-        return CMD_FAILURE;
-    
-    if(amount < 0){
-        asprintf(error, "negative amount");
-        return CMD_FAILURE;
-    }
-
-    if(args->add_aslr)
-        location += debuggee->aslr_slide;
-
-    kern_return_t err = dump_memory(location, amount);
-
-    if(err){
-        asprintf(error, "could not dump memory from %#lx to %#lx: %s", 
-                location, location + amount, mach_error_string(err));
-        return CMD_FAILURE;
-    }
 
     return CMD_SUCCESS;
 }

@@ -419,11 +419,39 @@ static void initialize_commands(void){
 
     ADD_CMD(backtrace);
 
+    /*
     struct dbg_cmd_t *breakpoint = create_parent_cmd("breakpoint",
             "b", BREAKPOINT_COMMAND_DOCUMENTATION, 0,
             BREAKPOINT_COMMAND_REGEX, 1, 1,
             BREAKPOINT_COMMAND_REGEX_GROUPS, 0, cmdfunc_break,
             audit_break);
+            */
+
+    //ADD_CMD(breakpoint);
+    struct dbg_cmd_t *breakpoint = create_parent_cmd("breakpoint",
+            "b", BREAKPOINT_COMMAND_DOCUMENTATION, 0,
+            NO_ARGUMENT_REGEX, 0, 0,
+            NO_GROUPS, 3, NULL, NULL);
+
+    struct dbg_cmd_t *breakpoint_delete = create_child_cmd("delete",
+            NULL, BREAKPOINT_DELETE_COMMAND_DOCUMENTATION, 1,
+            BREAKPOINT_DELETE_COMMAND_REGEX, 1, 0,
+            BREAKPOINT_DELETE_COMMAND_REGEX_GROUPS, cmdfunc_breakpoint_delete,
+            audit_breakpoint_delete);
+    struct dbg_cmd_t *breakpoint_list = create_child_cmd("list",
+            NULL, BREAKPOINT_LIST_COMMAND_DOCUMENTATION, 1,
+            NO_ARGUMENT_REGEX, 0, 0,
+            NO_GROUPS, cmdfunc_breakpoint_list,
+            audit_breakpoint_list);
+    struct dbg_cmd_t *breakpoint_set = create_child_cmd("set",
+            NULL, BREAKPOINT_SET_COMMAND_DOCUMENTATION, 1,
+            BREAKPOINT_SET_COMMAND_REGEX, 1, 1,
+            BREAKPOINT_SET_COMMAND_REGEX_GROUPS, cmdfunc_breakpoint_set,
+            audit_breakpoint_set);
+    
+    breakpoint->subcmds[0] = breakpoint_delete;
+    breakpoint->subcmds[1] = breakpoint_list;
+    breakpoint->subcmds[2] = breakpoint_set;
 
     ADD_CMD(breakpoint);
 
@@ -607,13 +635,18 @@ static void initialize_commands(void){
     struct dbg_cmd_t *watchpoint = create_parent_cmd("watchpoint",
             "w", WATCHPOINT_COMMAND_DOCUMENTATION, 0,
             NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 2, NULL, NULL);
+            NO_GROUPS, 3, NULL, NULL);
 
     struct dbg_cmd_t *watchpoint_delete = create_child_cmd("delete",
             NULL, WATCHPOINT_DELETE_COMMAND_DOCUMENTATION, 1,
             WATCHPOINT_DELETE_COMMAND_REGEX, 1, 1,
             WATCHPOINT_DELETE_COMMAND_REGEX_GROUPS, cmdfunc_watchpoint_delete,
             audit_watchpoint_delete);
+    struct dbg_cmd_t *watchpoint_list = create_child_cmd("list",
+            NULL, WATCHPOINT_LIST_COMMAND_DOCUMENTATION, 1,
+            NO_ARGUMENT_REGEX, 0, 0,
+            NO_GROUPS, cmdfunc_watchpoint_list,
+            audit_watchpoint_list);
     struct dbg_cmd_t *watchpoint_set = create_child_cmd("set",
             NULL, WATCHPOINT_SET_COMMAND_DOCUMENTATION, 1,
             WATCHPOINT_SET_COMMAND_REGEX, 3, 0,
@@ -621,7 +654,8 @@ static void initialize_commands(void){
             audit_watchpoint_set);
 
     watchpoint->subcmds[0] = watchpoint_delete;
-    watchpoint->subcmds[1] = watchpoint_set;
+    watchpoint->subcmds[1] = watchpoint_list;
+    watchpoint->subcmds[2] = watchpoint_set;
 
     ADD_CMD(watchpoint);
 }

@@ -18,8 +18,6 @@ static const char *DISASSEMBLE_COMMAND_DOCUMENTATION =
     "\t\tHow many bytes iosdbg will disassemble.\n"
     "\nSyntax:\n"
     "\tdisassemble location count\n"
-    "\n"
-    "\nThis command has an alias: 'dis'\n"
     "\n";
 
 static const char *EXAMINE_COMMAND_DOCUMENTATION =
@@ -33,8 +31,6 @@ static const char *EXAMINE_COMMAND_DOCUMENTATION =
     "\t\tHow many bytes iosdbg will dump.\n"
     "\nSyntax:\n"
     "\texamine location count\n"
-    "\n"
-    "\nThis command has an alias: 'x'\n"
     "\n";
 
 static const char *MEMORY_COMMAND_DOCUMENTATION =
