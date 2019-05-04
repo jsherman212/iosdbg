@@ -476,12 +476,12 @@ enum cmd_error_t cmdfunc_set(struct cmd_args_t *args,
          */
         *error = NULL;
 
-        float valuef = (float)strtod_err(value_str, error);
+        float valuef = (float)strtold_err(value_str, error);
 
         if(fpr && !quadword && *error)
             return CMD_FAILURE;
 
-        double valuedf = strtod_err(value_str, error);
+        double valuedf = strtold_err(value_str, error);
 
         if(fpr && !quadword && *error)
             return CMD_FAILURE;

@@ -209,7 +209,7 @@ static void handle_hit_breakpoint(long subcode, char **desc){
 
     breakpoint_hit(hit);
 
-    concat(desc, " breakpoint %d at %lx hit %d time(s).\n",
+    concat(desc, " breakpoint %d at %#lx hit %d time(s).\n",
             hit->id, hit->location, hit->hit_count);
 
     if(!hit->hw){

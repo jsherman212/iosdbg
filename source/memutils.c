@@ -234,7 +234,7 @@ kern_return_t write_memory_to_location(vm_address_t location, vm_offset_t data){
     return ret;
 }
 
-kern_return_t valid_location(unsigned long location){
+kern_return_t valid_location(long location){
     vm_region_basic_info_data_64_t info;
     vm_address_t loc = location;
     vm_size_t region_size;

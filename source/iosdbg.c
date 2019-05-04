@@ -519,8 +519,8 @@ static void initialize_commands(void){
     
     struct dbg_cmd_t *memory_find = create_child_cmd("find",
             NULL, MEMORY_FIND_COMMAND_DOCUMENTATION, 1,
-            "", 0, 0,
-            NO_GROUPS, cmdfunc_memoryfind,
+            MEMORY_FIND_COMMAND_REGEX, 4, 0,
+            MEMORY_FIND_COMMAND_REGEX_GROUPS, cmdfunc_memoryfind,
             audit_memory_find);
 
     memory->subcmds[0] = memory_find;

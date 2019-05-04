@@ -202,9 +202,58 @@ void audit_kill(struct cmd_args_t *args, char **error){
         asprintf(error, "no debuggee");
 }
 
+static void _audit_memory_find_final_args(char *arg1, char *arg2,
+        char **error){
+    if(strcmp(arg1, "--s") == 0){
+        if(!arg2){
+            asprintf(error, "attempt to search for empty string");
+            return;
+        }
+    }
+
+    /* Check if this is a valid floating point number. */
+    if(strcmp(arg1, "--f") == 0 ||
+            strcmp(arg1, "--fd") == 0 ||
+            strcmp(arg1, "--fld") == 0)
+        strtold_err(arg2, error);
+}
+
 void audit_memory_find(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
         asprintf(error, "no debuggee");
+
+    /* First argument is the start, nothing to do. */
+    char *arg1 = argnext(args);
+
+    /* Second argument could be count or the type. */
+    char *arg2 = argnext(args);
+
+    /* If arg2 is the count, then the next argument will be the type. */
+    if(is_number_fast(arg2)){
+        /* In this case, the third argument is the type. */
+        char *arg3 = argnext(args);
+
+        /* The fourth argument is the target. */
+        char *arg4 = argnext(args);
+
+        _audit_memory_find_final_args(arg3, arg4, error);
+
+        if(*error)
+            return;
+
+        repair_cmd_args(args, 4, arg1, arg2, arg3, arg4);
+        return;
+    }
+
+    /* Otherwise, arg2 is the type and arg3 is the target. */
+    char *arg3 = argnext(args);
+
+    _audit_memory_find_final_args(arg2, arg3, error);
+
+    if(*error)
+        return;
+
+    repair_cmd_args(args, 3, arg1, arg2, arg3);
 }
 
 void audit_quit(struct cmd_args_t *args, char **error){

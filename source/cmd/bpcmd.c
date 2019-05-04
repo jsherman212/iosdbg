@@ -11,7 +11,7 @@
 
 enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
         int arg1, char **error){
-    if(debuggee->num_breakpoints){
+    if(debuggee->num_breakpoints == 0){
         asprintf(error, "no breakpoints");
         return CMD_FAILURE;
     }

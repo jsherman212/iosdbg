@@ -114,6 +114,40 @@ void strclean(char **target){
         (*target)[strlen(*target) - 1] = '\0';
 }
 
+long strtol_err(char *str, char **error){
+    if(!str){
+        asprintf(error, "NULL argument `str`");
+        return -1;
+    }
+
+    char *endptr = NULL;
+    long result = strtol(str, &endptr, 0);
+
+    if(endptr && *endptr != '\0'){
+        asprintf(error, "invalid number '%s'", str);
+        return -1;
+    }
+
+    return result;
+}
+
+long double strtold_err(char *str, char **error){
+    if(!str){
+        asprintf(error, "NULL argument `str`");
+        return -1.0;
+    }
+
+    char *endptr = NULL;
+    long double result = strtold(str, &endptr);
+
+    if(endptr && *endptr != '\0'){
+        asprintf(error, "invalid number '%s'", str);
+        return -1.0;
+    }
+
+    return result;
+}
+
 int is_number_slow(char *str){
     if(!str)
         return 0;
@@ -133,48 +167,10 @@ int is_number_fast(char *str){
     if(!str)
         return 0;
 
-    size_t len = strlen(str);
+    char *error = NULL;
+    strtol_err(str, &error);
 
-    for(int i=0; i<len; i++){
-        if(!isxdigit(str[i]))
-            return 0;
-    }
-
-    return 1;
-}
-
-long strtol_err(char *str, char **error){
-    if(!str){
-        asprintf(error, "NULL argument `str`");
-        return -1;
-    }
-
-    char *endptr = NULL;
-    long result = strtol(str, &endptr, 0);
-
-    if(endptr && *endptr != '\0'){
-        asprintf(error, "invalid number '%s'", str);
-        return -1;
-    }
-
-    return result;
-}
-
-double strtod_err(char *str, char **error){
-    if(!str){
-        asprintf(error, "NULL argument `str`");
-        return -1.0;
-    }
-
-    char *endptr = NULL;
-    double result = strtod(str, &endptr);
-
-    if(endptr && *endptr != '\0'){
-        asprintf(error, "invalid number '%s'", str);
-        return -1.0;
-    }
-
-    return result;
+    return error == NULL;
 }
 
 int concat(char **dst, const char *src, ...){

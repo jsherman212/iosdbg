@@ -150,14 +150,6 @@ static int find_end_of_operand(char *str, int start){
     return end;
 }
 
-/* Turn a number into a string.
- * Caller must free the string returned. */
-static char *num_to_str(long num){
-    char *buf;
-    asprintf(&buf, "%ld", num);
-    return buf;
-}
-
 static char *lookup_register(char *reg, char **error){
     if(!reg)
         return NULL;
