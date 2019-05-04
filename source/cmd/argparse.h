@@ -13,7 +13,6 @@ enum cmd_error_t {
 struct cmd_args_t {
     struct queue_t *argqueue;
     int num_args;
-    int add_aslr;
 };
 
 struct cmd_args_t *parse_args(char *, const char *, const char **, int, int, char **);

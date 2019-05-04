@@ -6,6 +6,7 @@
 
 #include "../debuggee.h"
 #include "../expr.h"
+#include "../interaction.h"
 #include "../linkedlist.h"
 #include "../strext.h"
 #include "../watchpoint.h"
@@ -18,6 +19,23 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
     }
 
     char *cur_id = argnext(args);
+
+    if(!cur_id){
+        char ans = answer("Delete all watchpoints? (y/n) ");
+
+        if(ans == 'n'){
+            printf("Nothing deleted.\n");
+            return CMD_SUCCESS;
+        }
+
+        int num_deleted = debuggee->num_watchpoints;
+
+        watchpoint_delete_all();
+
+        printf("All watchpoint(s) removed. (%d watchpoint(s))\n", num_deleted);
+
+        return CMD_SUCCESS;
+    }
 
     while(cur_id){
         int id = (int)strtol_err(cur_id, error);

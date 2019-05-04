@@ -7,7 +7,7 @@
 #include "../strext.h"
 #include "../thread.h"
 
-enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args, 
         int arg1, char **error){
     struct node_t *current = debuggee->threads->front;
 
@@ -24,7 +24,7 @@ enum cmd_error_t cmdfunc_threadlist(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_threadselect(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args, 
         int arg1, char **error){
     /* Current argument: the ID of the thread the user wants to focus on. */
     char *curarg = argnext(args);

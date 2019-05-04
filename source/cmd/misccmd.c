@@ -16,6 +16,7 @@
 #include "../debuggee.h"
 #include "../exception.h"
 #include "../expr.h"
+#include "../interaction.h"
 #include "../linkedlist.h"
 #include "../memutils.h"
 #include "../procutils.h"
@@ -28,53 +29,6 @@
 #include "../trace.h"
 
 int keep_checking_for_process;
-
-/* Allow the user to answer whatever
- * question is given.
- */
-static char answer(const char *question, ...){
-    va_list args;
-    va_start(args, question);
-
-    vprintf(question, args);
-
-    va_end(args);
-    
-    char *answer = NULL;
-    size_t len;
-    
-    getline(&answer, &len, stdin);
-    answer[strlen(answer) - 1] = '\0';
-    
-    /* Allow the user to hit enter as another way
-     * of saying yes.
-     */
-    if(strlen(answer) == 0)
-        return 'y';
-
-    char ret = tolower(answer[0]);
-
-    while(ret != 'y' && ret != 'n'){
-        va_list args;
-        va_start(args, question);
-
-        vprintf(question, args);
-
-        va_end(args);
-
-        free(answer);
-        answer = NULL;
-
-        getline(&answer, &len, stdin);
-        answer[strlen(answer) - 1] = '\0';
-        
-        ret = tolower(answer[0]);
-    }
-    
-    free(answer);
-
-    return ret;
-}
 
 static pid_t parse_pid(char *pidstr, char **error){
     return is_number_fast(pidstr) ? (pid_t)strtol_err(pidstr, error)
@@ -213,6 +167,19 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     void_convvar("$_exitcode");
     void_convvar("$_exitsignal");
 
+    char *aslr = NULL;
+    asprintf(&aslr, "%#llx", debuggee->aslr_slide);
+
+    set_convvar("$ASLR", aslr, error);
+
+    if(*error){
+        printf("warning: %s\n", *error);
+        free(*error);
+        *error = NULL;
+    }
+
+    free(aslr);
+
     return CMD_SUCCESS;
 }
 
@@ -342,9 +309,6 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
     if(debuggee->pid != -1)
         cmdfunc_detach(NULL, 0, error);
 
-    if(*error)
-        return CMD_FAILURE;
-
     /* Free the arrays made from the trace.codes file. */
     if(!debuggee->tracing_disabled){
         stop_trace();
@@ -374,247 +338,6 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
     free(debuggee);
     
     exit(0);
-}
-
-enum cmd_error_t cmdfunc_set(struct cmd_args_t *args, 
-        int arg1, char **error){
-    char *specifier_str = argnext(args);
-    char *target_str = argnext(args);
-    char *value_str = argnext(args);
-
-    char specifier = *specifier_str;
-
-    /* If we are writing to an offset, we've done everything needed. */
-    if(specifier == '*'){
-        long value = parse_expr(value_str, error);
-
-        if(*error){
-            asprintf(error, "expression evaluation failed: %s", *error);
-            return CMD_FAILURE;
-        }
-
-        long location = parse_expr(target_str, error);
-
-        if(*error){
-            asprintf(error, "expression evaluation failed: %s", *error);
-            return CMD_FAILURE;
-        }
-
-        if(args->add_aslr)
-            location += debuggee->aslr_slide;
-        
-        kern_return_t err = write_memory_to_location(
-                (vm_address_t)location, (vm_offset_t)value);
-
-        if(err){
-            asprintf(error, "could not write to %#lx: %s", location, 
-                    mach_error_string(err));
-            return CMD_FAILURE;
-        }
-
-        return CMD_SUCCESS;
-    }
-    /* Convenience variable or register. */
-    else if(specifier == '$'){
-        /* To tell whether or not the user wants to set a 
-         * convenience variable, we can pass a string to the
-         * error parameter. convvar_set will bail and initialize `e`
-         * if the name is a system register. However, there's no
-         * need to notify the user if this occurs. Otherwise,
-         * the user meant to set a convenience variable and we can
-         * return after it is updated.
-         */
-        char *e = NULL;
-
-        /* target_str doesn't include the '$'. */
-        char *var;
-        asprintf(&var, "$%s", target_str);
-        set_convvar(var, value_str, &e);
-        
-        free(var);
-
-        if(!e)
-            return CMD_SUCCESS;
-
-        /* Put this check here so the user can set convenience variables
-         * without being attached to anything.
-         */
-        if(debuggee->pid == -1)
-            return CMD_FAILURE;
-
-        for(int i=0; i<strlen(target_str); i++)
-            target_str[i] = tolower(target_str[i]);
-
-        char reg_type = target_str[0];
-        int reg_num = strtol(target_str + 1, NULL, 10);
-
-        int gpr = reg_type == 'x' || reg_type == 'w';
-        int fpr = (reg_type == 'q' || reg_type == 'v') || 
-                reg_type == 'd' || reg_type == 's';
-        int quadword = fpr && (reg_type == 'q' || reg_type == 'v');
-
-        int good_reg_num = (reg_num >= 0 && reg_num <= 31);
-        int good_reg_type = gpr || fpr;
-
-        debuggee->get_thread_state();
-        debuggee->get_neon_state();
-
-        /* Various representations of our value string. */
-        int valued = (int)strtol_err(value_str, error);
-
-        if(gpr && *error)
-            return CMD_FAILURE;
-
-        long valuellx = strtol_err(value_str, error);
-
-        if(gpr && *error)
-            return CMD_FAILURE;
-
-        /* The functions above will have set error
-         * if we have a floating point value, so
-         * clear it.
-         */
-        *error = NULL;
-
-        float valuef = (float)strtold_err(value_str, error);
-
-        if(fpr && !quadword && *error)
-            return CMD_FAILURE;
-
-        double valuedf = strtold_err(value_str, error);
-
-        if(fpr && !quadword && *error)
-            return CMD_FAILURE;
-
-        /* Take care of any special registers. */
-        if(strcmp(target_str, "fp") == 0)
-            debuggee->thread_state.__fp = valuellx;
-        else if(strcmp(target_str, "lr") == 0)
-            debuggee->thread_state.__lr = valuellx;
-        else if(strcmp(target_str, "sp") == 0)
-            debuggee->thread_state.__sp = valuellx;
-        else if(strcmp(target_str, "pc") == 0)
-            debuggee->thread_state.__pc = valuellx;
-        else if(strcmp(target_str, "cpsr") == 0)
-            debuggee->thread_state.__cpsr = valued;
-        else if(strcmp(target_str, "fpsr") == 0)
-            debuggee->neon_state.__fpsr = valued;
-        else if(strcmp(target_str, "fpcr") == 0)
-            debuggee->neon_state.__fpcr = valued;
-        else{
-            if(!good_reg_num || !good_reg_type){
-                asprintf(error, "bad register '%s'", target_str);
-                return CMD_FAILURE;
-            }
-
-            if(gpr){
-                if(reg_type == 'x')
-                    debuggee->thread_state.__x[reg_num] = valuellx;
-                else{
-                    debuggee->thread_state.__x[reg_num] &= ~0xFFFFFFFFULL;
-                    debuggee->thread_state.__x[reg_num] |= valued;
-                }
-            }
-            else{
-                if(reg_type == 'q' || reg_type == 'v'){
-                    if(value_str[0] != '{' || 
-                            value_str[strlen(value_str) - 1] != '}'){
-                        asprintf(error, "bad value '%s'", value_str);
-                        return CMD_FAILURE;
-                    }
-
-                    if(strlen(value_str) == 2){
-                        asprintf(error, "bad value '%s'", value_str);
-                        return CMD_FAILURE;
-                    }
-                    
-                    /* Remove the brackets. */
-                    value_str[strlen(value_str) - 1] = '\0';
-                    memmove(value_str, value_str + 1, strlen(value_str));
-
-                    size_t value_str_len = strlen(value_str);
-
-                    char *hi_str = malloc(value_str_len + 1);
-                    char *lo_str = malloc(value_str_len + 1);
-
-                    memset(hi_str, '\0', value_str_len);
-                    memset(lo_str, '\0', value_str_len);
-
-                    for(int i=0; i<sizeof(long)*2; i++){
-                        char *space = strrchr(value_str, ' ');
-                        char *curbyte = NULL;
-
-                        if(space){
-                            curbyte = strdup(space + 1);
-                            
-                            /* Truncate what we've already processed. */
-                            space[0] = '\0';
-                        }
-                        else
-                            curbyte = strdup(value_str);
-                                                
-                        unsigned int byte = 
-                            (unsigned int)strtol(curbyte, NULL, 0);
-
-                        if(i < sizeof(long)){
-                            lo_str = realloc(lo_str, strlen(lo_str) +
-                                    strlen(curbyte) + 3);
-                            concat(&lo_str, "%02x", byte);
-                        }
-                        else{
-                            hi_str = realloc(hi_str, strlen(hi_str) + 
-                                    strlen(curbyte) + 3);
-                            concat(&hi_str,  "%02x", byte);
-                        }
-
-                        free(curbyte);
-                    }
-
-                    long hi = strtoul(hi_str, NULL, 16);
-                    long lo = strtoul(lo_str, NULL, 16);
-
-                    /* Since this is a 128 bit "number", we have to split it
-                     * up into two 64 bit pointers to correctly modify it.
-                     */
-                    long *H = (long *)(&debuggee->neon_state.__v[reg_num]);
-                    long *L = (long *)(&debuggee->neon_state.__v[reg_num]) + 1;
-
-                    *H = hi;
-                    *L = lo;
-
-                    free(hi_str);
-                    free(lo_str);
-                }
-                else if(reg_type == 'd')
-                    debuggee->neon_state.__v[reg_num] = *(long *)&valuedf;
-                else
-                    debuggee->neon_state.__v[reg_num] = *(int *)&valuef;
-            }
-        }
-
-        debuggee->set_thread_state();
-        debuggee->set_neon_state();
-    }
-
-    return CMD_SUCCESS;
-}
-
-enum cmd_error_t cmdfunc_show(struct cmd_args_t *args, 
-        int arg1, char **error){
-    if(args->num_args == 0){
-        show_all_cvars();
-        return CMD_SUCCESS;
-    }
-
-    /* All arguments will be convenience variables. */
-    char *cur_convvar = argnext(args);
-
-    while(cur_convvar){
-        p_convvar(cur_convvar);
-        cur_convvar = argnext(args);
-    }
-
-    return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
@@ -656,18 +379,5 @@ enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args,
 
     start_trace();
     
-    return CMD_SUCCESS;
-}
-
-enum cmd_error_t cmdfunc_unset(struct cmd_args_t *args, 
-        int arg1, char **error){
-    /* Arguments will consist of convenience variables. */
-    char *cur_convvar = argnext(args);
-
-    while(cur_convvar){
-        void_convvar(cur_convvar);
-        cur_convvar = argnext(args);
-    }
-
     return CMD_SUCCESS;
 }

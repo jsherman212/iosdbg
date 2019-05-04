@@ -108,7 +108,6 @@ static const char *QUIT_COMMAND_DOCUMENTATION =
 
 static const char *SET_COMMAND_DOCUMENTATION =
     "Modify debuggee memory, registers, or iosdbg convenience variables.\n"
-    "Include '--no-aslr' to keep ASLR from being added.\n"
     "This command has two mandatory arguments and no optional arguments.\n"
     "\nMandatory arguments:\n"
     "\ttarget\n"

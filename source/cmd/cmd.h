@@ -1,7 +1,7 @@
 #ifndef _CMD_H_
 #define _CMD_H_
 
-#define NUM_TOP_LEVEL_COMMANDS 21
+#define NUM_TOP_LEVEL_COMMANDS 19
 
 #include "argparse.h"       /* Defines MAX_GROUPS */
 

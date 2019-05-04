@@ -11,28 +11,40 @@ static const char *BREAKPOINT_COMMAND_DOCUMENTATION =
     "'breakpoint' describes the group of commands which deal with breakpoints.\n";
 
 static const char *BREAKPOINT_DELETE_COMMAND_DOCUMENTATION =
-    "Delete a breakpoint. TODO fill in\n";
+    "Delete breakpoints.\n"
+    "This command has no mandatory arguments and one optional argument.\n"
+    "\nOptional arguments:\n"
+    "\tid\n"
+    "\t\tThe ID of the breakpoint you want to delete.\n"
+    "\t\tThis command accepts an arbitrary amount of this argument.\n"
+    "\t\tOmit this argument to delete all breakpoints.\n"
+    "\nSyntax:\n"
+    "\tbreakpoint delete id?\n"
+    "\n";
 
 static const char *BREAKPOINT_LIST_COMMAND_DOCUMENTATION =
-    "Breakpoint list\n";
+    "List breakpoints.\n"
+    "This command has no arguments.\n"
+    "\nSyntax:\n"
+    "\tbreakpoint list\n"
+    "\n";
 
 static const char *BREAKPOINT_SET_COMMAND_DOCUMENTATION =
-    "Set a breakpoint. Include '--no-aslr' to keep ASLR from being added.\n"
+    "Set a breakpoint.\n"
     "This command has one mandatory argument and no optional arguments.\n"
     "\nMandatory arguments:\n"
     "\tlocation\n"
-    "\t\tThis expression will be evaluated and used as the location for the breakpoint.\n"
-    "\t\tThis command accepts an arbitrary amount of this argument,"
-    " allowing you to set multiple breakpoints.\n"
+    "\t\tThis expression will used as the location for the breakpoint.\n"
+    "\t\tThis command accepts an arbitrary amount of this argument."
     "\nSyntax:\n"
-    "\tbreak location\n"
+    "\tbreakpoint set location\n"
     "\n";
 
 /*
  * Regexes
  */
 static const char *BREAKPOINT_DELETE_COMMAND_REGEX =
-    "(?<ids>\\d+)";
+    "(?<ids>\\d+)?";
 
 static const char *BREAKPOINT_SET_COMMAND_REGEX =
     "(?<args>[\\w+\\-*\\/\\$()]+)";

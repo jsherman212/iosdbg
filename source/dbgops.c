@@ -103,6 +103,8 @@ void ops_detach(int from_death){
     free(debuggee->debuggee_name);
     debuggee->debuggee_name = NULL;
 
+    void_convvar("$ASLR");
+
     debuggee->want_detach = 0;
 }
 

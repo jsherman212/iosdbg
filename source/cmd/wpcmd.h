@@ -11,18 +11,30 @@ static const char *WATCHPOINT_COMMAND_DOCUMENTATION =
     "'watchpoint' describes the group of commands which deal with watchpoints.\n";
 
 static const char *WATCHPOINT_DELETE_COMMAND_DOCUMENTATION =
-    "Delete a watchpoint. TODO fill in\n";
+    "Delete watchpoints.\n"
+    "This command has no mandatory arguments and one optional argument.\n"
+    "\nOptional arguments:\n"
+    "\tid\n"
+    "\t\tThe ID of the watchpoint you want to delete.\n"
+    "\t\tThis command accepts an arbitrary amount of this argument.\n"
+    "\t\tOmit this argument to delete all watchpoints.\n"
+    "\nSyntax:\n"
+    "\twatchpoint delete id?\n"
+    "\n";
 
 static const char *WATCHPOINT_LIST_COMMAND_DOCUMENTATION =
-    "Watchpoint list\n";
+    "List watchpoints.\n"
+    "This command has no arguments.\n"
+    "\nSyntax:\n"
+    "\twatchpoint list\n"
+    "\n";
 
 static const char *WATCHPOINT_SET_COMMAND_DOCUMENTATION =
     "Set a watchpoint. ASLR is never accounted for.\n"
     "This command has two mandatory arguments and one optional argument.\n"
     "\nMandatory arguments:\n"
     "\tlocation\n"
-    "\t\tThis expression will be evaluated and interpreted as\n"
-    "\t\t the watchpoint's location.\n"
+    "\t\tThis expression will be used as the watchpoint's location.\n"
     "\tsize\n"
     "\t\tThe size of the data to watch.\n"
     "\nOptional arguments:\n"
@@ -33,14 +45,14 @@ static const char *WATCHPOINT_SET_COMMAND_DOCUMENTATION =
     "\t\t\t'--rw' (read/write)\n"
     "\t\tIf this argument is omitted, iosdbg assumes --w.\n"
     "\nSyntax:\n"
-    "\twatch type? location size\n"
+    "\twatchpoint set type? location size\n"
     "\n";
 
 /*
  * Regexes
  */
 static const char *WATCHPOINT_DELETE_COMMAND_REGEX =
-    "(?<ids>\\d+)";
+    "(?<ids>\\d+)?";
 
 static const char *WATCHPOINT_SET_COMMAND_REGEX =
     "(?(?=--[rw])(?<type>--[rw]{1,2}))\\s*"
