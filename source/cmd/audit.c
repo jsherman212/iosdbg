@@ -256,11 +256,16 @@ void audit_memory_find(struct cmd_args_t *args, char **error){
     repair_cmd_args(args, 3, arg1, arg2, arg3);
 }
 
+void audit_memory_write(struct cmd_args_t *args, char **error){
+    if(debuggee->pid == -1)
+        asprintf(error, "no debuggee");
+}
+
 void audit_quit(struct cmd_args_t *args, char **error){
     /* Nothing needs to be done. */
 }
 
-void audit_regs_float(struct cmd_args_t *args, char **error){
+void audit_register_float(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "no debuggee");
         return;
@@ -270,48 +275,14 @@ void audit_regs_float(struct cmd_args_t *args, char **error){
         asprintf(error, "need a register");
 }
 
-void audit_regs_gen(struct cmd_args_t *args, char **error){
+void audit_register_gen(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
         asprintf(error, "no debuggee");
 }
 
-void audit_set(struct cmd_args_t *args, char **error){
-    /* First argument is the specifier. */
-    char *arg1 = argnext(args);
-
-    if(!arg1){
-        asprintf(error, "missing specifier");
-        return;
-    }
-
-    char specifier = *arg1;
-
-    if(specifier != '*' && specifier != '$'){
-        asprintf(error, "invalid specifier '%c'", specifier);
-        return;
-    }
-
-    /* Second argument is the target. */
-    char *arg2 = argnext(args);
-
-    if(!arg2){
-        asprintf(error, "need target");
-        return;
-    }
-
-    /* Third argument is the value. */
-    char *arg3 = argnext(args);
-
-    if(!arg3){
-        asprintf(error, "need value");
-        return;
-    }
-
-    repair_cmd_args(args, 3, arg1, arg2, arg3);
-}
-
-void audit_show(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
+void audit_register_write(struct cmd_args_t *args, char **error){
+    if(debuggee->pid == -1)
+        asprintf(error, "no debuggee");
 }
 
 void audit_signal_handle(struct cmd_args_t *args, char **error){
@@ -357,9 +328,16 @@ void audit_trace(struct cmd_args_t *args, char **error){
     /* Nothing to do. */
 }
 
-void audit_unset(struct cmd_args_t *args, char **error){
-    if(args->num_args == 0)
-        asprintf(error, "need a convenience variable");
+void audit_variable_print(struct cmd_args_t *args, char **error){
+    /* Nothing to do. */
+}
+
+void audit_variable_set(struct cmd_args_t *args, char **error){
+    /* Nothing to do. */
+}
+
+void audit_variable_unset(struct cmd_args_t *args, char **error){
+    /* Nothing to do. */
 }
 
 void audit_watchpoint_delete(struct cmd_args_t *args, char **error){

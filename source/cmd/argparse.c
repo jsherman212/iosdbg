@@ -11,22 +11,6 @@
 
 #include "../convvar.h"
 
-static int wants_add_aslr(char *str){
-    /* This convenience variable allows the user to tell iosdbg
-     * to ignore ASLR no matter what.
-     */
-    char *error;
-    char *no_aslr_override = convvar_strval("$NO_ASLR_OVERRIDE", &error);
-
-    if(no_aslr_override && strcmp(no_aslr_override, "void") != 0)
-        return 0;
-
-    if(!str)
-        return 1;
-
-    return strnstr(str, "--no-aslr", strlen(str)) == NULL;
-}
-
 struct cmd_args_t *parse_args(char *_args, 
         const char *pattern,
         const char **groupnames,
@@ -38,14 +22,10 @@ struct cmd_args_t *parse_args(char *_args,
     arguments->argqueue = queue_new();
     arguments->num_args = 0;
 
-    if(!_args){
-        arguments->add_aslr = 1;
+    if(!_args)
         return arguments;
-    }
 
     char *args = strdup(_args);
-
-    arguments->add_aslr = wants_add_aslr(args);
 
     PCRE2_SIZE erroroffset;
     int errornumber;
@@ -136,7 +116,7 @@ struct cmd_args_t *parse_args(char *_args,
 
         char *arg = strdup((char *)substr_buf);
 
-        if(strlen(arg) > 0 && strcmp(arg, "--no-aslr") != 0){
+        if(strlen(arg) > 0){
             arguments->num_args++;
             enqueue(arguments->argqueue, arg);
         }
@@ -187,7 +167,7 @@ struct cmd_args_t *parse_args(char *_args,
 
         char *arg = strdup((char *)substr_buf);
 
-        if(strlen(arg) > 0 && strcmp(arg, "--no-aslr") != 0){
+        if(strlen(arg) > 0){
             arguments->num_args++;
             enqueue(arguments->argqueue, arg);
         }

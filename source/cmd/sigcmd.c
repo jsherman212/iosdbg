@@ -54,7 +54,7 @@ static int preference(char *str){
     return 0;
 }
 
-enum cmd_error_t cmdfunc_signalhandle(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args, 
         int arg1, char **error){
     char *signals = argnext(args);
     char *notify_str = argnext(args);

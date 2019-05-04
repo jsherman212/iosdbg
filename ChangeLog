@@ -1,3 +1,15 @@
+5-4-19
+- re-add ability to delete all breakpoints/watchpoints
+- iosdbg no longer auto-adds ASLR, instead the ASLR slide is stored in $ASLR
+- finished command refactor
+- use rl_display_match_list for sub-commands in documentation_for_cmd
+- renamed commands:
+	- regs --> register
+	- var --> variable
+
+5-3-19
+- new command: memory find
+
 5-2-19
 - continuing to refactor commands
 

@@ -175,7 +175,8 @@ kern_return_t read_memory_at_location(void *location, void *buffer,
             &length);
 }
 
-kern_return_t write_memory_to_location(vm_address_t location, vm_offset_t data){
+kern_return_t write_memory_to_location(vm_address_t location,
+        vm_offset_t data, vm_size_t size){
     kern_return_t ret;
 
     /* Get old protections and figure out whether the
@@ -197,19 +198,6 @@ kern_return_t write_memory_to_location(vm_address_t location, vm_offset_t data){
     
     if(ret)
         return ret;
-    
-    int size = 0;
-    vm_offset_t data_copy = data;
-
-    do{
-        data_copy >>= 8;
-        size++;
-    }while(data_copy != 0);
-
-    if(size > sizeof(unsigned long long)){
-        printf("Number too large\n");
-        return KERN_INVALID_ARGUMENT;
-    }
     
     /* Get raw bytes from this number. */
     void *data_ptr = (uint8_t *)&data;

@@ -3,7 +3,7 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_signalhandle(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *, int, char **);
 
 static const char *SIGNAL_COMMAND_DOCUMENTATION =
     "'signal' describes the group of commands which deal with signals.\n";

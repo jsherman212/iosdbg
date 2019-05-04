@@ -28,9 +28,6 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    if(args->add_aslr)
-        location += debuggee->aslr_slide;
-
     kern_return_t err = disassemble_at_location(location, amount);
 
     if(err){
@@ -62,9 +59,6 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    if(args->add_aslr)
-        location += debuggee->aslr_slide;
-
     kern_return_t err = dump_memory(location, amount);
 
     if(err){
@@ -76,7 +70,7 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_memoryfind(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
         int arg1, char **error){
     char *start_str = argnext(args);
     long start = parse_expr(start_str, error);
@@ -132,9 +126,6 @@ enum cmd_error_t cmdfunc_memoryfind(struct cmd_args_t *args,
             target = &ld;
             target_len = sizeof(long double);
         }
-
-        if(*error)
-            return CMD_FAILURE;
     }
     else if(strstr(type_str, "--e")){
         if(strcmp(type_str, "--ec") == 0){
@@ -177,10 +168,10 @@ enum cmd_error_t cmdfunc_memoryfind(struct cmd_args_t *args,
             target = &l;
             target_len = sizeof(unsigned long);
         }
-
-        if(*error)
-            return CMD_FAILURE;
     }
+
+    if(*error)
+        return CMD_FAILURE;
 
     /* If count wasn't given, search until read_memory_at_location
      * returns an error.
@@ -227,6 +218,36 @@ enum cmd_error_t cmdfunc_memoryfind(struct cmd_args_t *args,
     }
 
     printf("\n%d result(s)\n", results_cnt);
+
+    return CMD_SUCCESS;
+}
+
+enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *args, 
+        int arg1, char **error){
+    char *location_str = argnext(args);
+    long location = parse_expr(location_str, error);
+
+    if(*error)
+        return CMD_FAILURE;
+
+    char *data_str = argnext(args);
+    long data = parse_expr(data_str, error);
+
+    if(*error)
+        return CMD_FAILURE;
+
+    char *size_str = argnext(args);
+    int size = (int)strtol_err(size_str, error);
+
+    if(*error)
+        return CMD_FAILURE;
+
+    kern_return_t ret = write_memory_to_location(location, data, size);
+
+    if(ret){
+        asprintf(error, "couldn't write memory: %s", mach_error_string(ret));
+        return CMD_FAILURE;
+    }
 
     return CMD_SUCCESS;
 }

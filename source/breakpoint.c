@@ -158,9 +158,9 @@ static void bp_set_state_internal(struct breakpoint *bp, int disabled){
     }
     else{
         if(disabled)
-            write_memory_to_location(bp->location, bp->old_instruction);   
+            write_memory_to_location(bp->location, bp->old_instruction, 4);   
         else
-            write_memory_to_location(bp->location, CFSwapInt32(BRK));
+            write_memory_to_location(bp->location, CFSwapInt32(BRK), 4);
     }
 
     bp->disabled = disabled;
@@ -184,7 +184,7 @@ void breakpoint_at_address(unsigned long address, int temporary,
      * by writing BRK #0 to bp->location.
      */
     if(!bp->hw)
-        write_memory_to_location(bp->location, CFSwapInt32(BRK));
+        write_memory_to_location(bp->location, CFSwapInt32(BRK), 4);
 
     linkedlist_add(debuggee->breakpoints, bp);
 

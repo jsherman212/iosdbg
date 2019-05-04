@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <readline/readline.h>
+
 #include "documentation.h"
 
 #include "../queue.h"
@@ -13,14 +15,19 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
      */
     if(!cmd->cmd_function){
         printf("%s", cmd->documentation);
-        printf("This command has the following subcommands:\n\n");
+        printf("This command has the following subcommands:\n");
 
         int subcmdnum = 1;
+        char **subcmds = malloc(sizeof(char *) * subcmdnum);
+
+        /* First string has to be empty for rl_display_match_list. */
+        subcmds[0] = strdup("");
 
         struct queue_t *cmdqueue = queue_new();
         enqueue(cmdqueue, cmd);
 
         int subcmdidx = 0;
+        int largest_subcmd_len = strlen(subcmds[0]);
 
         while(cmdqueue->capacity != -1){
             struct dbg_cmd_t *curparent = queue_peek(cmdqueue);
@@ -32,13 +39,29 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
                 continue;
             }
 
-            /* Only print direct descendants of `cmd`. */
-            if(cursubcmd->level == (cmd->level + 1))
-                printf("%d: %s\n", subcmdnum++, cursubcmd->name);
+            /* Only grab direct descendants of `cmd`. */
+            if(cursubcmd->level == (cmd->level + 1)){
+                subcmds = realloc(subcmds, sizeof(char *) * (++subcmdnum + 1));
+                subcmds[subcmdnum - 1] = strdup(cursubcmd->name);
+
+                size_t sclen = strlen(subcmds[subcmdnum - 1]);
+                
+                largest_subcmd_len = 
+                    sclen > largest_subcmd_len ? sclen : largest_subcmd_len;
+                    
+                subcmds[subcmdnum] = NULL;
+            }
 
             if(cursubcmd->parentcmd)
                 enqueue(cmdqueue, cursubcmd);
         }
+        
+        rl_display_match_list(subcmds, subcmdnum, largest_subcmd_len);
+
+        for(int i=0; i<(subcmdnum); i++)
+            free(subcmds[i]);
+
+        free(subcmds);
 
         queue_free(cmdqueue);
 
