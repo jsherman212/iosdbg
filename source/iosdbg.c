@@ -95,11 +95,50 @@ static void install_handlers(void){
     debuggee->set_neon_state = &set_neon_state;
 }
 
+static int _rl_getc(FILE *stream){
+    int gotc = rl_getc(stream);
+
+    int len = 0;
+    char **tokens = rl_line_buffer_word_array(&len);
+
+    //printf("IS_HELP_COMMAND %d\n", IS_HELP_COMMAND);
+
+    if(len >= 1){
+        char **completions = completer(tokens[0], 0, strlen(tokens[0]));
+
+        if(completions){
+            // XXX this could change if I add another command that starts
+            // with 'h'
+            
+            if(strcmp(completions[0], "help") == 0){
+                IS_HELP_COMMAND = 1;
+            }
+            else{
+                IS_HELP_COMMAND = 0;
+            }
+            
+            /*
+            for(int i=0; completions[i]; i++){
+                printf("'%s'\n", completions[i]);
+            }
+            */
+        }
+    }
+
+    return gotc;
+}
+
 static void initialize_readline(void){
     rl_catch_signals = 0;
     rl_erase_empty_line = 1;
 
     rl_attempted_completion_function = completer;
+
+    /* "Enable" command completion for the help command
+     * by checking for it in rl_line_buffer every time
+     * the user types something.
+     */
+    rl_getc_function = _rl_getc;
 }
 
 static void get_code_and_event_from_line(char *line,
@@ -395,47 +434,47 @@ static void initialize_commands(void){
 #define ADD_CMD(x) COMMANDS[cmdidx++] = x
 
     struct dbg_cmd_t *aslr = create_parent_cmd("aslr",
-            NULL, ASLR_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 0, cmdfunc_aslr,
+            NULL, ASLR_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_aslr,
             audit_aslr);
 
     ADD_CMD(aslr);
 
     struct dbg_cmd_t *attach = create_parent_cmd("attach",
-            NULL, ATTACH_COMMAND_DOCUMENTATION, 0,
-            ATTACH_COMMAND_REGEX, 2, 0,
-            ATTACH_COMMAND_REGEX_GROUPS, 0, cmdfunc_attach,
+            NULL, ATTACH_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            ATTACH_COMMAND_REGEX, _NUM_GROUPS(2), _UNK_ARGS(0),
+            ATTACH_COMMAND_REGEX_GROUPS, _NUM_SUBCMDS(0), cmdfunc_attach,
             audit_attach);
 
     ADD_CMD(attach);
 
     struct dbg_cmd_t *backtrace = create_parent_cmd("backtrace",
-            "bt", BACKTRACE_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 0, cmdfunc_backtrace,
+            "bt", BACKTRACE_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_backtrace,
             audit_backtrace);
 
     ADD_CMD(backtrace);
 
     struct dbg_cmd_t *breakpoint = create_parent_cmd("breakpoint",
-            "b", BREAKPOINT_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 3, NULL, NULL);
+            "b", BREAKPOINT_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(3), NULL, NULL);
 
     struct dbg_cmd_t *breakpoint_delete = create_child_cmd("delete",
-            NULL, BREAKPOINT_DELETE_COMMAND_DOCUMENTATION, 1,
-            BREAKPOINT_DELETE_COMMAND_REGEX, 1, 0,
+            NULL, BREAKPOINT_DELETE_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            BREAKPOINT_DELETE_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(0),
             BREAKPOINT_DELETE_COMMAND_REGEX_GROUPS, cmdfunc_breakpoint_delete,
             audit_breakpoint_delete);
     struct dbg_cmd_t *breakpoint_list = create_child_cmd("list",
-            NULL, BREAKPOINT_LIST_COMMAND_DOCUMENTATION, 1,
-            NO_ARGUMENT_REGEX, 0, 0,
+            NULL, BREAKPOINT_LIST_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
             NO_GROUPS, cmdfunc_breakpoint_list,
             audit_breakpoint_list);
     struct dbg_cmd_t *breakpoint_set = create_child_cmd("set",
-            NULL, BREAKPOINT_SET_COMMAND_DOCUMENTATION, 1,
-            BREAKPOINT_SET_COMMAND_REGEX, 1, 1,
+            NULL, BREAKPOINT_SET_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            BREAKPOINT_SET_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
             BREAKPOINT_SET_COMMAND_REGEX_GROUPS, cmdfunc_breakpoint_set,
             audit_breakpoint_set);
     
@@ -446,66 +485,66 @@ static void initialize_commands(void){
     ADD_CMD(breakpoint);
 
     struct dbg_cmd_t *_continue = create_parent_cmd("continue",
-            "c", CONTINUE_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 0, cmdfunc_continue,
+            "c", CONTINUE_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_continue,
             audit_continue);
 
     ADD_CMD(_continue);
 
     struct dbg_cmd_t *detach = create_parent_cmd("detach",
-            NULL, DETACH_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 0, cmdfunc_detach,
+            NULL, DETACH_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_detach,
             audit_detach);
 
     ADD_CMD(detach);
 
     struct dbg_cmd_t *disassemble = create_parent_cmd("disassemble",
-            "dis", DISASSEMBLE_COMMAND_DOCUMENTATION, 0,
-            DISASSEMBLE_COMMAND_REGEX, 2, 0,
-            DISASSEMBLE_COMMAND_REGEX_GROUPS, 0, cmdfunc_disassemble,
+            "dis", DISASSEMBLE_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            DISASSEMBLE_COMMAND_REGEX, _NUM_GROUPS(2), _UNK_ARGS(0),
+            DISASSEMBLE_COMMAND_REGEX_GROUPS, _NUM_SUBCMDS(0), cmdfunc_disassemble,
             audit_disassemble);
 
     ADD_CMD(disassemble);
 
     struct dbg_cmd_t *examine = create_parent_cmd("examine",
-            "x", EXAMINE_COMMAND_DOCUMENTATION, 0,
-            EXAMINE_COMMAND_REGEX, 2, 0,
-            EXAMINE_COMMAND_REGEX_GROUPS, 0, cmdfunc_examine,
+            "x", EXAMINE_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            EXAMINE_COMMAND_REGEX, _NUM_GROUPS(2), _UNK_ARGS(0),
+            EXAMINE_COMMAND_REGEX_GROUPS, _NUM_SUBCMDS(0), cmdfunc_examine,
             audit_examine);
 
     ADD_CMD(examine);
 
     struct dbg_cmd_t *help = create_parent_cmd("help",
-            NULL, HELP_COMMAND_DOCUMENTATION, 0,
-            HELP_COMMAND_REGEX, 1, 0,
-            HELP_COMMAND_REGEX_GROUPS, 0, cmdfunc_help,
+            NULL, HELP_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            HELP_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(0),
+            HELP_COMMAND_REGEX_GROUPS, _NUM_SUBCMDS(0), cmdfunc_help,
             audit_help);
 
     ADD_CMD(help);
 
     struct dbg_cmd_t *kill = create_parent_cmd("kill",
-            NULL, KILL_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 0, cmdfunc_kill,
+            NULL, KILL_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_kill,
             audit_kill);
 
     ADD_CMD(kill);
 
     struct dbg_cmd_t *memory = create_parent_cmd("memory",
-            NULL, MEMORY_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 2, NULL, NULL);
+            NULL, MEMORY_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(2), NULL, NULL);
     
     struct dbg_cmd_t *memory_find = create_child_cmd("find",
-            NULL, MEMORY_FIND_COMMAND_DOCUMENTATION, 1,
-            MEMORY_FIND_COMMAND_REGEX, 4, 0,
+            NULL, MEMORY_FIND_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            MEMORY_FIND_COMMAND_REGEX, _NUM_GROUPS(4), _UNK_ARGS(0),
             MEMORY_FIND_COMMAND_REGEX_GROUPS, cmdfunc_memory_find,
             audit_memory_find);
     struct dbg_cmd_t *memory_write = create_child_cmd("write",
-            NULL, MEMORY_WRITE_COMMAND_DOCUMENTATION, 1,
-            MEMORY_WRITE_COMMAND_REGEX, 3, 0,
+            NULL, MEMORY_WRITE_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            MEMORY_WRITE_COMMAND_REGEX, _NUM_GROUPS(3), _UNK_ARGS(0),
             MEMORY_WRITE_COMMAND_REGEX_GROUPS, cmdfunc_memory_write,
             audit_memory_write);
 
@@ -515,31 +554,31 @@ static void initialize_commands(void){
     ADD_CMD(memory);
 
     struct dbg_cmd_t *quit = create_parent_cmd("quit",
-            "q", QUIT_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 0, cmdfunc_quit,
+            "q", QUIT_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_quit,
             audit_quit);
 
     ADD_CMD(quit);
 
     struct dbg_cmd_t *_register = create_parent_cmd("register",
-            NULL, REGISTER_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 3, NULL, NULL);
+            NULL, REGISTER_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(3), NULL, NULL);
 
     struct dbg_cmd_t *_register_float = create_child_cmd("float",
-            NULL, REGISTER_FLOAT_COMMAND_DOCUMENTATION, 1,
-            REGISTER_FLOAT_COMMAND_REGEX, 1, 1,
+            NULL, REGISTER_FLOAT_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            REGISTER_FLOAT_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
             REGISTER_FLOAT_COMMAND_REGEX_GROUPS, cmdfunc_register_float,
             audit_register_float);
     struct dbg_cmd_t *_register_gen = create_child_cmd("gen",
-            NULL, REGISTER_GEN_COMMAND_DOCUMENTATION, 1,
-            REGISTER_GEN_COMMAND_REGEX, 1, 1,
+            NULL, REGISTER_GEN_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            REGISTER_GEN_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
             REGISTER_GEN_COMMAND_REGEX_GROUPS, cmdfunc_register_gen,
             audit_register_gen);
     struct dbg_cmd_t *_register_write = create_child_cmd("write",
-            NULL, REGISTER_WRITE_COMMAND_DOCUMENTATION, 1,
-            REGISTER_WRITE_COMMAND_REGEX, 2, 0,
+            NULL, REGISTER_WRITE_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            REGISTER_WRITE_COMMAND_REGEX, _NUM_GROUPS(2), _UNK_ARGS(0),
             REGISTER_WRITE_COMMAND_REGEX_GROUPS, cmdfunc_register_write,
             audit_register_write);
 
@@ -550,13 +589,13 @@ static void initialize_commands(void){
     ADD_CMD(_register);
 
     struct dbg_cmd_t *signal = create_parent_cmd("signal",
-            NULL, SIGNAL_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 1, NULL, NULL);
+            NULL, SIGNAL_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(1), NULL, NULL);
 
     struct dbg_cmd_t *signal_handle = create_child_cmd("handle",
-            NULL, SIGNAL_HANDLE_COMMAND_DOCUMENTATION, 1,
-            SIGNAL_HANDLE_COMMAND_REGEX, 4, 0,
+            NULL, SIGNAL_HANDLE_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            SIGNAL_HANDLE_COMMAND_REGEX, _NUM_GROUPS(4), _UNK_ARGS(0),
             SIGNAL_HANDLE_COMMAND_REGEX_GROUPS, cmdfunc_signal_handle,
             audit_signal_handle);
 
@@ -565,26 +604,26 @@ static void initialize_commands(void){
     ADD_CMD(signal);
 
     struct dbg_cmd_t *stepi = create_parent_cmd("stepi",
-            NULL, STEPI_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 0, cmdfunc_stepi,
+            NULL, STEPI_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_stepi,
             audit_stepi);
 
     ADD_CMD(stepi);
 
     struct dbg_cmd_t *thread = create_parent_cmd("thread",
-            NULL, THREAD_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 2, NULL, NULL);
+            NULL, THREAD_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(2), NULL, NULL);
 
     struct dbg_cmd_t *list = create_child_cmd("list",
-            NULL, THREAD_LIST_COMMAND_DOCUMENTATION, 1,
-            NO_ARGUMENT_REGEX, 0, 0,
+            NULL, THREAD_LIST_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
             NO_GROUPS, cmdfunc_thread_list,
             audit_thread_list);
     struct dbg_cmd_t *select = create_child_cmd("select",
-            NULL, THREAD_SELECT_COMMAND_DOCUMENTATION, 1,
-            THREAD_SELECT_COMMAND_REGEX, 1, 0,
+            NULL, THREAD_SELECT_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            THREAD_SELECT_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(0),
             THREAD_SELECT_COMMAND_REGEX_GROUPS, cmdfunc_thread_select,
             audit_thread_select);
 
@@ -594,31 +633,31 @@ static void initialize_commands(void){
     ADD_CMD(thread);
 
     struct dbg_cmd_t *trace = create_parent_cmd("trace",
-            NULL, TRACE_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 0, cmdfunc_trace,
+            NULL, TRACE_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_trace,
             audit_trace);
 
     ADD_CMD(trace);
 
     struct dbg_cmd_t *variable = create_parent_cmd("variable",
-            NULL, VARIABLE_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 3, NULL, NULL);
+            NULL, VARIABLE_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(3), NULL, NULL);
     
     struct dbg_cmd_t *variable_print = create_child_cmd("print",
-            NULL, VARIABLE_PRINT_COMMAND_DOCUMENTATION, 1,
-            VARIABLE_PRINT_COMMAND_REGEX, 1, 1,
+            NULL, VARIABLE_PRINT_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            VARIABLE_PRINT_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
             VARIABLE_PRINT_COMMAND_REGEX_GROUPS, cmdfunc_variable_print,
             audit_variable_print);
     struct dbg_cmd_t *variable_set = create_child_cmd("set",
-            NULL, VARIABLE_SET_COMMAND_DOCUMENTATION, 1,
-            VARIABLE_SET_COMMAND_REGEX, 2, 0,
+            NULL, VARIABLE_SET_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            VARIABLE_SET_COMMAND_REGEX, _NUM_GROUPS(2), _UNK_ARGS(0),
             VARIABLE_SET_COMMAND_REGEX_GROUPS, cmdfunc_variable_set,
             audit_variable_set);
     struct dbg_cmd_t *variable_unset = create_child_cmd("unset",
-            NULL, VARIABLE_UNSET_COMMAND_DOCUMENTATION, 1,
-            VARIABLE_UNSET_COMMAND_REGEX, 1, 1,
+            NULL, VARIABLE_UNSET_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            VARIABLE_UNSET_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
             VARIABLE_UNSET_COMMAND_REGEX_GROUPS, cmdfunc_variable_unset,
             audit_variable_unset);
 
@@ -629,23 +668,23 @@ static void initialize_commands(void){
     ADD_CMD(variable);
 
     struct dbg_cmd_t *watchpoint = create_parent_cmd("watchpoint",
-            "w", WATCHPOINT_COMMAND_DOCUMENTATION, 0,
-            NO_ARGUMENT_REGEX, 0, 0,
-            NO_GROUPS, 3, NULL, NULL);
+            "w", WATCHPOINT_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(3), NULL, NULL);
 
     struct dbg_cmd_t *watchpoint_delete = create_child_cmd("delete",
-            NULL, WATCHPOINT_DELETE_COMMAND_DOCUMENTATION, 1,
-            WATCHPOINT_DELETE_COMMAND_REGEX, 1, 1,
+            NULL, WATCHPOINT_DELETE_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            WATCHPOINT_DELETE_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
             WATCHPOINT_DELETE_COMMAND_REGEX_GROUPS, cmdfunc_watchpoint_delete,
             audit_watchpoint_delete);
     struct dbg_cmd_t *watchpoint_list = create_child_cmd("list",
-            NULL, WATCHPOINT_LIST_COMMAND_DOCUMENTATION, 1,
-            NO_ARGUMENT_REGEX, 0, 0,
+            NULL, WATCHPOINT_LIST_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
             NO_GROUPS, cmdfunc_watchpoint_list,
             audit_watchpoint_list);
     struct dbg_cmd_t *watchpoint_set = create_child_cmd("set",
-            NULL, WATCHPOINT_SET_COMMAND_DOCUMENTATION, 1,
-            WATCHPOINT_SET_COMMAND_REGEX, 3, 0,
+            NULL, WATCHPOINT_SET_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+            WATCHPOINT_SET_COMMAND_REGEX, _NUM_GROUPS(3), _UNK_ARGS(0),
             WATCHPOINT_SET_COMMAND_REGEX_GROUPS, cmdfunc_watchpoint_set,
             audit_watchpoint_set);
 
@@ -751,6 +790,13 @@ static void inputloop(void){
 
                 break;
             }
+
+            printf("is help cmd? %d\n", IS_HELP_COMMAND);
+
+            /*
+            if(strcmp(completions[0], "help") == 0){
+                printf("got '%s'\n", completions[0]);
+            }*/
 
             first_match = 0;
 

@@ -153,7 +153,7 @@ int is_number_slow(char *str){
         return 0;
 
     char *error = NULL;
-    parse_expr(str, &error);
+    eval_expr(str, &error);
 
     if(error){
         free(error);

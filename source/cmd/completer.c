@@ -8,6 +8,7 @@
 #include "documentation.h"
 
 #include "../queue.h"
+#include "../rlext.h"
 #include "../strext.h"
 
 static struct matchedcmdinfo_t CURRENT_MATCH_INFO = {0};
@@ -88,26 +89,6 @@ static char *everything_before(const char *text){
     int len = substr_end - rl_line_buffer;
 
     return substr(rl_line_buffer, 0, len);
-}
-
-static char **rl_line_buffer_word_array(int *len){
-    char *rl_line_buffer_cpy = strdup(rl_line_buffer);
-
-    *len = 0;
-    char **words = malloc(*len);
-
-    char *word = strtok_r(rl_line_buffer_cpy, " ", &rl_line_buffer_cpy);
-
-    while(word){
-        words = realloc(words, sizeof(char *) * (++(*len)));
-        words[*len - 1] = word;
-
-        word = strtok_r(NULL, " ", &rl_line_buffer_cpy);
-    }
-
-    free(rl_line_buffer_cpy);
-
-    return words;
 }
 
 /*
@@ -270,12 +251,15 @@ static int no_ambiguity_before(const char *text){
     return 1;
 }
 
+int IS_HELP_COMMAND = 0;
+
 char *completion_generator(const char *text, int state){
     static char **matches;
     static int counter;
-    
+
     if(state == 0){
         counter = 0;
+        //printf("%s: text '%s'\n", __func__, text);
 
         int level_to_match = count_spaces_before(text);
         int no_ambiguity_before_text = no_ambiguity_before(text);
@@ -288,7 +272,29 @@ char *completion_generator(const char *text, int state){
         matches = malloc(sizeof(char *));
         int num_matches = 0;
 
-        match_at_level(text, level_to_match, &num_matches, &matches);
+        if(IS_HELP_COMMAND){
+            printf("rl_line_buffer '%s'\n", rl_line_buffer);
+            printf("level to match %d text '%s'\n", level_to_match, text);
+            match_at_level(text, level_to_match - 1, &num_matches, &matches);
+
+            if(matches){
+                for(int i=0; matches[i]; i++){
+                    printf("'%s'\n", matches[i]);
+                }
+            }
+            
+        }
+        else{
+            match_at_level(text, level_to_match, &num_matches, &matches);
+            /*if(matches[0] && strcmp(matches[0], "help") == 0){
+                //printf("got help cmd\n");
+                IS_HELP_COMMAND = 1;
+            }
+            else{
+                IS_HELP_COMMAND = 0;
+            }*/
+        }
+
 
         if(num_matches > 1)
             _reset_matchedcmdinfo();

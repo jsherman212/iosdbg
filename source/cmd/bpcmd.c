@@ -91,7 +91,7 @@ enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
 enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args, 
         int arg1, char **error){
     char *location_str = argnext(args);
-    long location = parse_expr(location_str, error);
+    long location = eval_expr(location_str, error);
 
     if(*error){
         asprintf(error, "expression evaluation failed: %s", *error);

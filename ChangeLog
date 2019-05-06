@@ -1,3 +1,7 @@
+5-5-19
+- add macros that wrap arguments to create_(parent|child)_cmd for clarity
+- parse_expr renamed to eval_expr
+
 5-4-19
 - re-add ability to delete all breakpoints/watchpoints
 - iosdbg no longer auto-adds ASLR, instead the ASLR slide is stored in $ASLR
