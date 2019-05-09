@@ -11,5 +11,8 @@ long double strtold_err(char *, char **);
 int is_number_slow(char *);
 int is_number_fast(char *);
 int concat(char **dst, const char *src, ...);
+char **token_array(char *, const char *, int *);
+void token_array_free(char **, int);
+char *strnran(size_t);
 
 #endif

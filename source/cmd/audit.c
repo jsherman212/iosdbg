@@ -82,14 +82,6 @@ void audit_backtrace(struct cmd_args_t *args, char **error){
         asprintf(error, "no debuggee");
 }
 
-void audit_breakpoint_delete(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
-}
-
-void audit_breakpoint_list(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
-}
-
 void audit_breakpoint_set(struct cmd_args_t *args, char **error){
     // XXX if I allow setting breakpoints before attaching and resolving them
     // later, this will cause problems
@@ -186,17 +178,6 @@ void audit_examine(struct cmd_args_t *args, char **error){
     repair_cmd_args(args, 2, arg1, arg2);
 }
 
-void audit_help(struct cmd_args_t *args, char **error){
-    char *arg1 = argnext(args);
-
-    if(!arg1){
-        asprintf(error, "need command");
-        return;
-    }
-
-    repair_cmd_args(args, 1, arg1);
-}
-
 void audit_kill(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
         asprintf(error, "no debuggee");
@@ -261,10 +242,6 @@ void audit_memory_write(struct cmd_args_t *args, char **error){
         asprintf(error, "no debuggee");
 }
 
-void audit_quit(struct cmd_args_t *args, char **error){
-    /* Nothing needs to be done. */
-}
-
 void audit_register_float(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
         asprintf(error, "no debuggee");
@@ -283,10 +260,6 @@ void audit_register_gen(struct cmd_args_t *args, char **error){
 void audit_register_write(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
         asprintf(error, "no debuggee");
-}
-
-void audit_signal_handle(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
 }
 
 void audit_stepi(struct cmd_args_t *args, char **error){
@@ -322,30 +295,6 @@ void audit_thread_select(struct cmd_args_t *args, char **error){
         asprintf(error, "need thread ID");
 
     repair_cmd_args(args, 1, arg1);
-}
-
-void audit_trace(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
-}
-
-void audit_variable_print(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
-}
-
-void audit_variable_set(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
-}
-
-void audit_variable_unset(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
-}
-
-void audit_watchpoint_delete(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
-}
-
-void audit_watchpoint_list(struct cmd_args_t *args, char **error){
-    /* Nothing to do. */
 }
 
 void audit_watchpoint_set(struct cmd_args_t *args, char **error){

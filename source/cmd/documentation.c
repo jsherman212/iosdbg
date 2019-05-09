@@ -7,6 +7,39 @@
 #include "documentation.h"
 
 #include "../queue.h"
+#include "../strext.h"
+
+void show_all_top_level_cmds(void){
+    printf("List of top level commands:\n");
+
+    int len = 1;
+    char **cmds = malloc(sizeof(char *) * len);
+
+    /* First string has to be empty for rl_display_match_list. */
+    cmds[0] = strdup("");
+
+    int idx = 0;
+    int largest_cmd_len = 0;
+
+    while(idx < NUM_TOP_LEVEL_COMMANDS){
+        struct dbg_cmd_t *cmd = COMMANDS[idx++];
+
+        if(cmd->level == 0){
+            cmds = realloc(cmds, sizeof(char *) * (++len + 1));
+            cmds[len - 1] = strdup(cmd->name);
+            cmds[len] = NULL;
+
+            int cmdlen = strlen(cmd->name);
+
+            largest_cmd_len =
+                cmdlen > largest_cmd_len ? cmdlen : largest_cmd_len;
+        }
+    }
+
+    rl_display_match_list(cmds, len, largest_cmd_len);
+
+    token_array_free(cmds, len);
+}
 
 void documentation_for_cmd(struct dbg_cmd_t *cmd){
     /* Traverse level order to print out the sub-commands
@@ -79,23 +112,14 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
 
 void documentation_for_cmdname(char *_name, char **error){
     int num_tokens = 0;
-
-    char *name = strdup(_name);
-
-    char *token = strtok_r(name, " ", &name);
-    char **tokens = malloc(sizeof(char *) * (num_tokens + 1));
-
-    tokens[num_tokens] = NULL;
-
-    while(token){
-        tokens = realloc(tokens, sizeof(char *) * (++num_tokens + 1));
-        tokens[num_tokens - 1] = strdup(token);
-        tokens[num_tokens] = NULL;
-
-        token = strtok_r(NULL, " ", &name);
-    }
+    char **tokens = token_array(_name, " ", &num_tokens);
 
     int idx = 0;
+    
+    for(int i=0; i<num_tokens; i++){
+        
+        //printf("'%s'\n", tokens[i]);
+    }
 
     /* If we only have one token, this is a top level command
      * without any sub-commands. There's no need to waste time doing
@@ -106,6 +130,7 @@ void documentation_for_cmdname(char *_name, char **error){
         while(idx < NUM_TOP_LEVEL_COMMANDS){
             struct dbg_cmd_t *current = COMMANDS[idx++];
 
+          //  printf("tokens[0] '%s'\n", tokens[0]);
             if(strcmp(current->name, tokens[0]) == 0){
                 documentation_for_cmd(current);
                 goto out;
@@ -153,11 +178,7 @@ void documentation_for_cmdname(char *_name, char **error){
     asprintf(error, "unknown command \"%s\"", _name);
 
 out:
-    for(int i=0; i<num_tokens; i++)
-        free(tokens[i]);
-    
-    free(tokens);
-    free(name);
+    token_array_free(tokens, num_tokens);
 
     return;
 }

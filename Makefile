@@ -25,9 +25,9 @@ cmds : $(CMD_SOURCES) $(CRITICAL_HEADER_FILES)
 
 deploy:
 	$(MAKE)
-	scp -P 2222 iosdbg root@localhost:/var/mobile/ios-projects/iosdbg/v2
-	scp -r -P 2222 iosdbg.dSYM root@localhost:/var/mobile/ios-projects/iosdbg/v2
-	ssh -t -p2222 root@localhost 'cd /var/mobile/ios-projects/iosdbg/v2' \
+	scp -P 2222 iosdbg blue:/var/mobile/ios-projects/iosdbg/v2
+	scp -r -P 2222 iosdbg.dSYM blue:/var/mobile/ios-projects/iosdbg/v2
+	ssh -t -p2222 blue 'cd /var/mobile/ios-projects/iosdbg/v2' \
 		'&& ldid -Sent.xml ./iosdbg' \
 		'&& chmod +x ./iosdbg'
 

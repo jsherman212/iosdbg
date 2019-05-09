@@ -456,7 +456,7 @@ fail:
 /* Parse an expression.
  * `error` is set on error.
  */
-long parse_expr(char *_expr, char **error){
+long eval_expr(char *_expr, char **error){
     if(!_expr || (_expr && strlen(_expr) == 0)){
         asprintf(error, "empty expression string");
         return LONG_MIN;

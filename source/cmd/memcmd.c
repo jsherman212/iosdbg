@@ -12,7 +12,7 @@
 enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
         int arg1, char **error){
     char *location_str = argnext(args);
-    long location = parse_expr(location_str, error);
+    long location = eval_expr(location_str, error);
 
     if(*error)
         return CMD_FAILURE;
@@ -42,7 +42,7 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
 enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
         int arg1, char **error){
     char *location_str = argnext(args);
-    long location = parse_expr(location_str, error);
+    long location = eval_expr(location_str, error);
 
     if(*error)
         return CMD_FAILURE;
@@ -73,7 +73,7 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
 enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
         int arg1, char **error){
     char *start_str = argnext(args);
-    long start = parse_expr(start_str, error);
+    long start = eval_expr(start_str, error);
 
     if(*error)
         return CMD_FAILURE;
@@ -129,42 +129,42 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
     }
     else if(strstr(type_str, "--e")){
         if(strcmp(type_str, "--ec") == 0){
-            signed char c = (signed char)parse_expr(target_str, error);
+            signed char c = (signed char)eval_expr(target_str, error);
             target = &c;
             target_len = sizeof(signed char);
         }
         else if(strcmp(type_str, "--ecu") == 0){
-            unsigned char c = (unsigned char)parse_expr(target_str, error);
+            unsigned char c = (unsigned char)eval_expr(target_str, error);
             target = &c;
             target_len = sizeof(unsigned char);
         }
         else if(strcmp(type_str, "--es") == 0){
-            signed short s = (signed short)parse_expr(target_str, error);
+            signed short s = (signed short)eval_expr(target_str, error);
             target = &s;
             target_len = sizeof(signed short);
         }
         else if(strcmp(type_str, "--esu") == 0){
-            unsigned short s = (unsigned short)parse_expr(target_str, error);
+            unsigned short s = (unsigned short)eval_expr(target_str, error);
             target = &s;
             target_len = sizeof(unsigned short);
         }
         else if(strcmp(type_str, "--ed") == 0){
-            signed int i = (signed int)parse_expr(target_str, error);
+            signed int i = (signed int)eval_expr(target_str, error);
             target = &i;
             target_len = sizeof(signed int);
         }
         else if(strcmp(type_str, "--edu") == 0){
-            unsigned int i = (unsigned int)parse_expr(target_str, error);
+            unsigned int i = (unsigned int)eval_expr(target_str, error);
             target = &i;
             target_len = sizeof(unsigned int);
         }
         else if(strcmp(type_str, "--eld") == 0){
-            signed long l = (signed long)parse_expr(target_str, error);
+            signed long l = (signed long)eval_expr(target_str, error);
             target = &l;
             target_len = sizeof(signed long);
         }
         else if(strcmp(type_str, "--eldu") == 0){
-            unsigned long l = (unsigned long)parse_expr(target_str, error);
+            unsigned long l = (unsigned long)eval_expr(target_str, error);
             target = &l;
             target_len = sizeof(unsigned long);
         }
@@ -225,13 +225,13 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
 enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *args, 
         int arg1, char **error){
     char *location_str = argnext(args);
-    long location = parse_expr(location_str, error);
+    long location = eval_expr(location_str, error);
 
     if(*error)
         return CMD_FAILURE;
 
     char *data_str = argnext(args);
-    long data = parse_expr(data_str, error);
+    long data = eval_expr(data_str, error);
 
     if(*error)
         return CMD_FAILURE;
