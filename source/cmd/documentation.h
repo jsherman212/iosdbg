@@ -3,6 +3,8 @@
 
 #include "cmd.h"
 
+void show_all_top_level_cmds(void);
+
 /* Receives a dbg_cmd_t struct and displays its
  * documentation. Only called from
  * prepare_and_call_cmdfunc.

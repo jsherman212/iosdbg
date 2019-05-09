@@ -194,5 +194,58 @@ int concat(char **dst, const char *src, ...){
 
     va_end(args);
 
+    /* Now we can figure out the length of this string,
+     * so realloc to free up unused memory.
+     */
+    *dst = realloc(*dst, strlen(*dst) + 1);
+
     return w;
+}
+
+char **token_array(char *str, const char *delim, int *len){
+    if(!str || !delim || !len)
+        return NULL;
+
+    char *str_cpy = strdup(str);
+
+    *len = 0;
+    char **words = malloc(*len);
+
+    char *word = strtok_r(str_cpy, delim, &str_cpy);
+
+    while(word){
+        words = realloc(words, sizeof(char *) * (++(*len)));
+        words[*len - 1] = strdup(word);
+        word = strtok_r(NULL, " ", &str_cpy);
+    }
+
+    free(str_cpy);
+
+    return words;
+}
+
+void token_array_free(char **arr, int len){
+    for(int i=0; i<len; i++){
+        free(*(arr + i));
+        *(arr + i) = NULL;
+    }
+
+    free(arr);
+    arr = NULL;
+}
+
+char *strnran(size_t len){
+    const char *chars =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const size_t charslen = strlen(chars);
+
+    char *rstr = malloc(len + 1);
+
+    for(size_t i=0; i<len; i++){
+        rstr[i] = chars[rand() % charslen];
+    }
+
+    rstr[len] = '\0';
+
+    return rstr;
 }

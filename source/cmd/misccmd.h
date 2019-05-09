@@ -62,12 +62,13 @@ static const char *DETACH_COMMAND_DOCUMENTATION =
 
 static const char *HELP_COMMAND_DOCUMENTATION =
     "Get help for a command.\n"
-    "This command has one mandatory argument and no optional arguments.\n"
-    "\nMandatory arguments:\n"
+    "This command has no mandatory arguments and one optional argument.\n"
+    "\nOptional arguments:\n"
     "\tcommand\n"
     "\t\tThe command you'll be shown documentation for.\n"
+    "\t\tOmit this argument to be shown all top level commands.\n"
     "\nSyntax:\n"
-    "\thelp command\n"
+    "\thelp command?\n"
     "\n";
 
 static const char *KILL_COMMAND_DOCUMENTATION =
@@ -105,8 +106,9 @@ static const char *TRACE_COMMAND_DOCUMENTATION =
 static const char *ATTACH_COMMAND_REGEX =
     "(?J)((?<waitfor>--waitfor)\\s+(\"(?<target>.*)\"|(?!.*\")(?<target>\\w+)))|^\\s*((\"(?<target>.*)\")|(?!.*\")(?<target>\\w+))";
 
+
 static const char *HELP_COMMAND_REGEX =
-    "(?J)^\"(?<cmd>[\\w\\s]+)\"|^(?<cmd>(?![\\w\\s]+\")\\w+)";
+    "(?<cmd>[\\w\\s]+)?";
 
 /*
  * Regex groups
