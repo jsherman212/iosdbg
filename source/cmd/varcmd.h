@@ -8,7 +8,7 @@ enum cmd_error_t cmdfunc_variable_set(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_variable_unset(struct cmd_args_t *, int, char **);
 
 static const char *VARIABLE_COMMAND_DOCUMENTATION =
-    "'var' describes the group of commands which deal with convenience variables.\n";
+    "'variable' describes the group of commands which deal with convenience variables.\n";
 
 static const char *VARIABLE_PRINT_COMMAND_DOCUMENTATION =
     "Show convenience variables.\n"

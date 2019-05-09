@@ -1,3 +1,21 @@
+5-8-19
+- another completer bug fixed, was confused when commands and arguments were
+the same
+
+5-7-19
+- support for tab command completion in the help command and re-adjusted help cmd regex to agree with this change
+- help command shows all top level commands when no arguments are provided
+commands
+- can run shell commands within debugger by putting '!' at beginning of the
+input line
+
+5-6-19
+- commands which don't have anything to audit shouldn't have audit functions
+
+5-5-19
+- add macros that wrap arguments to create_(parent|child)_cmd for clarity
+- parse_expr renamed to eval_expr
+
 5-4-19
 - re-add ability to delete all breakpoints/watchpoints
 - iosdbg no longer auto-adds ASLR, instead the ASLR slide is stored in $ASLR

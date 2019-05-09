@@ -82,9 +82,11 @@ If you're on iOS 11 and above you'll need to copy it to /usr/bin/:
 If all went well, you should be good to go. If you're below iOS 11, you can run it in your current working directory with `./iosdbg`. Otherwise, you'll have to run it with `iosdbg`. Attach to your program with its PID or executable name and have fun.
 
 ## Commands
-**You only need to type enough characters in the command for iosdbg to unambiguously identify it**. You can view detailed documentation for a command with the `help` command. Enclose multi-word commands in quotes.
+**You only need to type enough characters in the command for iosdbg to unambiguously identify it**. You can view detailed documentation for a command with the `help` command. If you type `help` by itself, you'll be shown all top level commands. Include `!` at the beginning of your input to execute a shell command.
 
-##### You can view what a command does with `help <command>`.
+
+## ASLR
+When I started this project I wanted some commands (`breakpoint set`, `memory read`, etc) to automatically add the ASLR slide to relieve the user the burden of doing it themselves. However, I could not find a good middle ground. The ASLR slide is now stored in the convenience variable `$ASLR`. This way, it can be included in expressions, ex: `breakpoint set 0x100007edc+$ASLR`.
 
 ## ASLR
 When I started this project I wanted some commands (`breakpoint`, `memory read`, etc) to automatically add the ASLR slide to relieve the user the burden of doing it themselves. However, I could not find a good middle ground. The ASLR slide is now stored in the convenience variable `$ASLR`. This way, it can be included in expressions, ex: `breakpoint set 0x100007edc+$ASLR`.

@@ -119,7 +119,7 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
         curarg = argnext(args);
     }
 
-    long location = parse_expr(curarg, error);
+    long location = eval_expr(curarg, error);
 
     if(*error){
         asprintf(error, "expression evaluation failed: %s\n", *error);

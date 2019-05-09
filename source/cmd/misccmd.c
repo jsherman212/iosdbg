@@ -263,6 +263,11 @@ enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_help(struct cmd_args_t *args, 
         int arg1, char **error){
+    if(args->num_args == 0){
+        show_all_top_level_cmds();
+        return CMD_SUCCESS;
+    }
+
     char *cmd = argnext(args);
     documentation_for_cmdname(cmd, error);
 

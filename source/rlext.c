@@ -1,9 +1,11 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <readline/readline.h>
 
-void rl_line_buffer_replace(char *with){
-    rl_delete_text(0, rl_end);
-    rl_point = rl_end = rl_mark = 0;
-    rl_insert_text(with);
+#include "strext.h"
+
+char **rl_line_buffer_word_array(int *len){
+    return token_array(rl_line_buffer, " ", len);
 }
