@@ -17,6 +17,7 @@ enum cmd_error_t cmdfunc_variable_print(struct cmd_args_t *args,
 
     while(cur_convvar){
         p_convvar(cur_convvar);
+        free(cur_convvar);
         cur_convvar = argnext(args);
     }
 
@@ -30,6 +31,9 @@ enum cmd_error_t cmdfunc_variable_set(struct cmd_args_t *args,
 
     set_convvar(var, value, error);
 
+    free(var);
+    free(value);
+
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }
 
@@ -38,6 +42,8 @@ enum cmd_error_t cmdfunc_variable_unset(struct cmd_args_t *args,
     char *var = argnext(args);
 
     void_convvar(var);
+
+    free(var);
 
     return CMD_SUCCESS;
 }

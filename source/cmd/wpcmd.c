@@ -44,6 +44,7 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
             printf("%s\n", *error);
             free(*error);
             *error = NULL;
+            free(cur_id);
             cur_id = argnext(args);
             continue;
         }
@@ -58,6 +59,7 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
         else
             printf("Watchpoint %d deleted\n", id);
 
+        free(cur_id);
         cur_id = argnext(args);
     }
     
@@ -116,10 +118,13 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
         /* If we had a type before the location, we need to get the next
          * argument. After that, current argument is the location to watch.
          */
+        free(curarg);
         curarg = argnext(args);
     }
 
     long location = eval_expr(curarg, error);
+
+    free(curarg);
 
     if(*error){
         asprintf(error, "expression evaluation failed: %s\n", *error);
@@ -129,6 +134,8 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
     /* Current argument: size of data we're watching. */
     curarg = argnext(args);
     int data_len = (int)strtol_err(curarg, error);
+
+    free(curarg);
 
     if(*error)
         return CMD_FAILURE;

@@ -64,8 +64,14 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         char ans = answer("Detach from %s and reattach to %s? (y/n) ", 
                 debuggee->debuggee_name, target);
 
-        if(ans == 'n')
+        if(ans == 'n'){
+            if(waitfor)
+                free(firstarg);
+
+            free(target);
+
             return CMD_SUCCESS;
+        }
 
         /* Detach from what we are attached to
          * and call this function again.
@@ -107,16 +113,29 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     else
         target_pid = parse_pid(target, error);
 
-    if(*error || target_pid == -1)
+    if(*error || target_pid == -1){
+        if(waitfor)
+            free(firstarg);
+
+        free(target);
+
         return CMD_FAILURE;
+    }
 
     kern_return_t err = task_for_pid(mach_task_self(), 
             target_pid, &debuggee->task);
 
     if(err){
+        if(waitfor)
+            free(firstarg);
+
         asprintf(error, "couldn't get task port for %s (pid: %d): %s\n"
-                "Did you forget to sign iosdbg with entitlements?", 
+                "Did you forget to sign iosdbg with entitlements?\n"
+                "Are you privileged enough to debug this process?",
                 target, target_pid, mach_error_string(err));
+
+        free(target);
+
         return CMD_FAILURE;
     }
 
@@ -126,8 +145,12 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     if(is_number_fast(target)){
         char *name = progname_from_pid(debuggee->pid, error);
 
-        if(*error)
+        if(*error){
+            /* We already checked for a pid with waitfor. */
+            free(target);
+
             return CMD_FAILURE;
+        }
 
         debuggee->debuggee_name = strdup(name);
 
@@ -179,6 +202,11 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     }
 
     free(aslr);
+
+    if(waitfor)
+        free(firstarg);
+
+    free(target);
 
     return CMD_SUCCESS;
 }
@@ -270,6 +298,8 @@ enum cmd_error_t cmdfunc_help(struct cmd_args_t *args,
 
     char *cmd = argnext(args);
     documentation_for_cmdname(cmd, error);
+
+    free(cmd);
 
     return (*error) ? CMD_FAILURE : CMD_SUCCESS;
 }

@@ -11,6 +11,20 @@
 #include "../queue.h"
 #include "../strext.h"
 
+static void dispose_on_failure(int argcount, ...){
+    va_list args;
+    va_start(args, argcount);
+
+    for(int i=0; i<argcount; i++){
+        char *arg = va_arg(args, char *);
+
+        if(arg)
+            free(arg);
+    }
+
+    va_end(args);
+}
+
 static void repair_cmd_args(struct cmd_args_t *_args, int argcount, ...){
     va_list args;
     va_start(args, argcount);
@@ -35,11 +49,11 @@ void audit_attach(struct cmd_args_t *args, char **error){
 
     if(!arg1){
         asprintf(error, "no target");
+        dispose_on_failure(1, arg1);
         return;
     }
 
     char *arg2 = argnext(args);
-
     char *target = arg1;
 
     /* arg1 could be '--waitfor' or the target. 
@@ -48,12 +62,14 @@ void audit_attach(struct cmd_args_t *args, char **error){
     if(strcmp(arg1, "--waitfor") == 0){
         if(!arg2){
             asprintf(error, "missing target for --waitfor");
+            dispose_on_failure(2, arg1, arg2);
             return;
         }
 
         /* We cannot wait for PIDs. */
         if(is_number_fast(arg2)){
             asprintf(error, "cannot wait for PIDs");
+            dispose_on_failure(2, arg1, arg2);
             return;
         }
 
@@ -63,6 +79,7 @@ void audit_attach(struct cmd_args_t *args, char **error){
     /* We cannot debug the kernel. */
     if(strcmp(target, "0") == 0 || strcmp(target, "kernel_task") == 0){
         asprintf(error, "cannot debug the kernel");
+        dispose_on_failure(2, arg1, arg2);
         return;
     }
 
@@ -71,6 +88,7 @@ void audit_attach(struct cmd_args_t *args, char **error){
     /* We cannot debug ourselves. */
     if(strcmp(target, "iosdbg") == 0 || target_pid == getpid()){
         asprintf(error, "cannot attach to myself");
+        dispose_on_failure(2, arg1, arg2);
         return;
     }
 
@@ -105,11 +123,13 @@ void audit_delete(struct cmd_args_t *args, char **error){
 
     if(!arg1){
         asprintf(error, "need type");
+        dispose_on_failure(1, arg1);
         return;
     }
 
     if(strcmp(arg1, "b") != 0 && strcmp(arg1, "w") != 0){
         asprintf(error, "unknown type '%s'", arg1);
+        dispose_on_failure(1, arg1);
         return;
     }
 
@@ -134,6 +154,7 @@ void audit_disassemble(struct cmd_args_t *args, char **error){
 
     if(!arg1){
         asprintf(error, "need location");
+        dispose_on_failure(1, arg1);
         return;
     }
 
@@ -142,13 +163,16 @@ void audit_disassemble(struct cmd_args_t *args, char **error){
 
     if(!arg2){
         asprintf(error, "need amount");
+        dispose_on_failure(2, arg1, arg2);
         return;
     }
 
     int amount = (int)strtol_err(arg2, error);
 
-    if(*error)
+    if(*error){
+        dispose_on_failure(2, arg1, arg2);
         return;
+    }
 
     repair_cmd_args(args, 2, arg1, arg2);
 }
@@ -164,6 +188,7 @@ void audit_examine(struct cmd_args_t *args, char **error){
 
     if(!arg1){
         asprintf(error, "need location");
+        dispose_on_failure(1, arg1);
         return;
     }
 
@@ -172,6 +197,7 @@ void audit_examine(struct cmd_args_t *args, char **error){
 
     if(!arg2){
         asprintf(error, "need amount");
+        dispose_on_failure(2, arg1, arg2);
         return;
     }
 
@@ -209,6 +235,12 @@ void audit_memory_find(struct cmd_args_t *args, char **error){
     /* Second argument could be count or the type. */
     char *arg2 = argnext(args);
 
+    if(!arg2){
+        asprintf(error, "no count or no type");
+        dispose_on_failure(2, arg1, arg2);
+        return;
+    }
+
     /* If arg2 is the count, then the next argument will be the type. */
     if(is_number_fast(arg2)){
         /* In this case, the third argument is the type. */
@@ -219,8 +251,10 @@ void audit_memory_find(struct cmd_args_t *args, char **error){
 
         _audit_memory_find_final_args(arg3, arg4, error);
 
-        if(*error)
+        if(*error){
+            dispose_on_failure(4, arg1, arg2, arg3, arg4);
             return;
+        }
 
         repair_cmd_args(args, 4, arg1, arg2, arg3, arg4);
         return;
@@ -231,8 +265,10 @@ void audit_memory_find(struct cmd_args_t *args, char **error){
 
     _audit_memory_find_final_args(arg2, arg3, error);
 
-    if(*error)
+    if(*error){
+        dispose_on_failure(3, arg1, arg2, arg3);
         return;
+    }
 
     repair_cmd_args(args, 3, arg1, arg2, arg3);
 }
@@ -291,8 +327,11 @@ void audit_thread_select(struct cmd_args_t *args, char **error){
     /* First argument is the thread ID. */
     char *arg1 = argnext(args);
 
-    if(!arg1)
+    if(!arg1){
         asprintf(error, "need thread ID");
+        dispose_on_failure(1, arg1);
+        return;
+    }
 
     repair_cmd_args(args, 1, arg1);
 }
@@ -308,6 +347,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
 
     if(!arg1){
         asprintf(error, "need type or location");
+        dispose_on_failure(1, arg1);
         return;
     }
 
@@ -317,6 +357,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
                 strcmp(arg1, "--w") != 0 &&
                 strcmp(arg1, "--rw") != 0){
             asprintf(error, "invalid watchpoint type '%s'", arg1);
+            dispose_on_failure(1, arg1);
             return;
         }
 
@@ -325,6 +366,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
 
         if(!arg2){
             asprintf(error, "need location");
+            dispose_on_failure(2, arg1, arg2);
             return;
         }
 
@@ -333,6 +375,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
 
         if(!arg3){
             asprintf(error, "missing data size");
+            dispose_on_failure(3, arg1, arg2, arg3);
             return;
         }
 
@@ -346,6 +389,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
 
     if(!arg2){
         asprintf(error, "missing data size");
+        dispose_on_failure(2, arg1, arg2);
         return;
     }
 

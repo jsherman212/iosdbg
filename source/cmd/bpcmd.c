@@ -45,6 +45,7 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
             printf("%s\n", *error);
             free(*error);
             *error = NULL;
+            free(cur_id);
             cur_id = argnext(args);
             continue;
         }
@@ -59,6 +60,7 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
         else
             printf("Breakpoint %d deleted\n", id);
 
+        free(cur_id);
         cur_id = argnext(args);
     }
     
@@ -92,6 +94,8 @@ enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args,
         int arg1, char **error){
     char *location_str = argnext(args);
     long location = eval_expr(location_str, error);
+
+    free(location_str);
 
     if(*error){
         asprintf(error, "expression evaluation failed: %s", *error);

@@ -7,6 +7,7 @@
 
 #include "../dbgops.h"
 #include "../sigsupport.h"
+#include "../strext.h"
 
 static const int UNKNOWN_SIGNAL = -1;
 
@@ -63,13 +64,21 @@ enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args,
     
     /* If no arguments were given, the user wants to see settings. */
     if(!signals || !notify_str || !pass_str || !stop_str){
+        if(signals)     free(signals);
+        if(notify_str)  free(notify_str);
+        if(pass_str)    free(pass_str);
+        if(stop_str)    free(stop_str);
+
         ops_printsiginfo();
         return CMD_SUCCESS;
     }
 
-    char *signal = strtok_r(signals, " ", &signals);
+    int len = 0, idx = 0;
+    char **signals_array = token_array(signals, " ", &len);
 
-    while(signal){
+    while(idx < len){
+        char *signal = signals_array[idx++];
+
         int sig = sigstr_to_signum(signal);
 
         int notify = preference(notify_str);
@@ -83,9 +92,14 @@ enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args,
             printf("error: %s\n", e);
             free(e);
         }
-
-        signal = strtok_r(NULL, " ", &signals);
     }
+
+    free(signals);
+    free(notify_str);
+    free(pass_str);
+    free(stop_str);
+
+    token_array_free(signals_array, len);
 
     return CMD_SUCCESS;
 }

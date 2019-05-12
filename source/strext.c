@@ -174,8 +174,13 @@ int is_number_fast(char *str){
 }
 
 int concat(char **dst, const char *src, ...){
-    if(!dst || !(*dst) || !src)
+    if(!src || !dst)
         return 0;
+
+    if(!(*dst)){
+        *dst = malloc(1);
+        *(*dst) = '\0';
+    }
 
     size_t srclen = strlen(src);
     size_t dstlen = strlen(*dst);
@@ -241,9 +246,8 @@ char *strnran(size_t len){
 
     char *rstr = malloc(len + 1);
 
-    for(size_t i=0; i<len; i++){
+    for(size_t i=0; i<len; i++)
         rstr[i] = chars[rand() % charslen];
-    }
 
     rstr[len] = '\0';
 

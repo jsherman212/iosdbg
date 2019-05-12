@@ -1,9 +1,6 @@
-#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/sysctl.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -23,8 +20,8 @@
 
 #include "cmd/audit.h"
 #include "cmd/bpcmd.h"
-#include "cmd/completer.h"
 #include "cmd/cmd.h"
+#include "cmd/completer.h"
 #include "cmd/misccmd.h"
 #include "cmd/memcmd.h"
 #include "cmd/regcmd.h"
@@ -693,81 +690,6 @@ static void initialize_commands(void){
     ADD_CMD(watchpoint);
 }
 
-static void expand_aliases(char **line){
-    /* Only top level commands (level 0) can have aliases,
-     * so we only need to test the first "word".
-     */
-    char *space = strchr(*line, ' ');
-    int bytes_until_space = 0;
-    char *token = NULL;
-
-    if(space){
-        bytes_until_space = space - (*line);
-        token = substr(*line, 0, bytes_until_space);
-    }
-    else
-        token = strdup(*line);
-
-    /* Check for an alias. */
-    for(int i=0; i<NUM_TOP_LEVEL_COMMANDS; i++){
-        struct dbg_cmd_t *current = COMMANDS[i];
-
-        if(current->alias && strcmp(current->alias, token) == 0){
-            /* Replace the alias with its command. */
-            strcut(line, 0, bytes_until_space);
-            strins(line, current->name, 0);
-
-            rl_replace_line(*line, 0);
-
-            free(token);
-
-            return;
-        }
-    }
-
-    free(token);
-}
-
-static void execute_shell_cmd(char *command,
-        char **exit_reason, char **error){
-    if(strlen(command) == 0){
-        asprintf(error, "command missing");
-        return;
-    }
-
-    const int argv_len = 3;
-    char **argv = malloc(sizeof(char *) * (argv_len + 1));
-
-    argv[0] = strdup("sh");
-    argv[1] = strdup("-c");
-    argv[2] = strdup(command);
-    argv[3] = NULL;
-
-    pid_t sh_pid;
-    int status = posix_spawn(&sh_pid,
-            "/bin/sh",
-            NULL,
-            NULL,
-            (char * const *)argv,
-            NULL);
-
-    token_array_free(argv, argv_len);
-
-    if(status != 0){
-        asprintf(error, "posix spawn failed: %s\n", strerror(status));
-        return;
-    }
-
-    waitpid(sh_pid, &status, 0);
-
-    if(WIFEXITED(status))
-        asprintf(exit_reason, "\n\nshell returned %d", WEXITSTATUS(status));
-    else if(WIFSIGNALED(status)){
-        asprintf(exit_reason, "\n\nshell terminated due to signal %d",
-                WTERMSIG(status));
-    }
-}
-
 static void inputloop(void){
     char *line = NULL;
     char *prevline = NULL;
@@ -788,184 +710,21 @@ static void inputloop(void){
             add_history(line);
         }
 
-        strclean(&line);
+        char *linecpy = NULL, *error = NULL;
+        enum cmd_error_t result = do_cmdline_command(line, &linecpy, &error);
 
-        /* If the user hits enter right away, rl_line_buffer will be empty.
-         * The completer relies on rl_line_buffer reflecting the
-         * contents of line, so make that so.
-         */
-        rl_replace_line(line, 0);
-
-        char *linecpy = strdup(line);
-        
-        /* If the first character is a '!', this is a shell command. */
-        if(*line == '!'){
-            char *exit_reason = NULL, *error = NULL;
-            char *shell_cmd = linecpy + 1;
-            execute_shell_cmd(shell_cmd, &exit_reason, &error);
-
-            if(error){
-                printf("error: %s\n", error);
-                free(error);
-            }
-            else{
-                if(exit_reason){
-                    printf("%s\n", exit_reason);
-                    free(exit_reason);
-                }
-            }
-            
-            goto done;
+        if(result && error){
+            printf("error: %s\n", error);
+            free(error);
         }
 
-        expand_aliases(&line);
-
-        /* When a command's argument is the same as the actual command
-         * or one of its sub-commands, the completer will not be able to
-         * correctly figure out the level to match at.
-         *
-         * For example: "attach attach"
-         * completion_generator is called two times with the same text parameter.
-         * During the first call, the level to match will be 0, because 
-         * there's 0 spaces before the first "attach", which is fine.
-         * However, during the second call, we want to find the number of
-         * spaces before the second "attach". But completion_generator knows
-         * no different and finds that the first "attach" matches the text given 
-         * to it. While this is "correct", it isn't what we want.
-         *
-         * To fix this, we silently append a short, randomly generated string
-         * to every token in the user's input. This way, every single token
-         * will (hopefully) be different, and figuring out the level
-         * to match at works as expected. This appended string is ignored
-         * inside of match_at_level. After the command is finished and we're
-         * about to give control back to the user, rl_line_buffer is replaced
-         * with the line the user typed.
-         */
-        int num_tokens = 0;
-        char **tokens = token_array(line, " ", &num_tokens);
-        char *randline = malloc(1);
-        *randline = '\0';
-
-        for(int i=0; i<num_tokens; i++){
-            char *rstr = strnran(RAND_PAD_LEN);
-            char *token = strdup(tokens[i]);
-            
-            concat(&token, "%s", rstr);
-            concat(&randline, "%s ", token);
-
-            free(rstr);
-            free(token);
+        if(linecpy){
+            size_t linecpylen = strlen(linecpy);
+            prevline = realloc(prevline, linecpylen + 1);
+            strncpy(prevline, linecpy, linecpylen + 1);
+            free(linecpy);
         }
 
-        token_array_free(tokens, num_tokens);
-
-        strclean(&randline);
-        rl_replace_line(randline, 0);
-
-        LINE_MODIFIED = 1;
-
-        char *arguments = malloc(1);
-        *arguments = '\0';
-
-        char **prev_completions = NULL;
-        char **completions = NULL;
-
-        int current_start = 0, idx = 0, first_match = 1;
-
-        char **rtokens = token_array(randline, " ", &num_tokens);
-
-        while(idx < num_tokens){
-            char *rtok = rtokens[idx];
-            size_t rtoklen = strlen(rtok);
-
-            /* Force matching to figure out the command. */
-            completions = completer(rtok, current_start, rtoklen);
-
-            /* If we don't get a match the first time around,
-             * it's an unknown command.
-             */
-            if(first_match && !completions){
-                printf("Undefined command \"%s\".  Try \"help\".\n", linecpy);
-                break;
-            }
-
-            first_match = 0;
-
-            /* If there were no matches, we can assume the following
-             * tokens are arguments. We've already taken care of the
-             * case where the command is unknown, so the command
-             * is guarenteed to be known at this point.
-             */
-            if(!completions){
-                while(idx < num_tokens){
-                    rtok = rtokens[idx++];
-
-                    /* We appended a random string, so cut it off. */
-                    rtok[strlen(rtok) - RAND_PAD_LEN] = '\0';
-                    concat(&arguments, " %s", rtok);
-                }
-
-                /* Get rid of leading/training whitespace that
-                 * would mess up regex matching.
-                 */
-                strclean(&arguments);
-
-                break;
-            }
-
-            current_start += rtoklen;
-            prev_completions = completions;
-
-            idx++;
-        }
-
-        token_array_free(rtokens, num_tokens);
-
-        /* We need to test the previous completions in case
-         * this command is a parent command.
-         */
-        if(prev_completions && *(prev_completions + 1)){
-            char *ambiguous_cmd_str = NULL;
-            asprintf(&ambiguous_cmd_str, "Ambiguous command \"%s\": ",
-                    linecpy);
-
-            for(int i=1; prev_completions[i]; i++)
-                concat(&ambiguous_cmd_str, "%s, ", prev_completions[i]);
-
-            /* Get rid of the trailing comma. */
-            ambiguous_cmd_str[strlen(ambiguous_cmd_str) - 2] = '\0';
-
-            printf("%s\n", ambiguous_cmd_str);
-
-            free(ambiguous_cmd_str);
-        }
-        else{
-            char *error = NULL;
-
-            /* Parse arguments, audit them, and if nothing went wrong,
-             * call this command's cmdfunc.
-             */
-            enum cmd_error_t result =
-                prepare_and_call_cmdfunc(arguments, &error);
-
-            if(result && error){
-                printf("error: %s\n", error);
-                free(error);
-            }
-        }
-
-        free(arguments);
-
-        rl_replace_line(linecpy, 0);
-
-        LINE_MODIFIED = 0;
-
-done:;
-        size_t linecpylen = strlen(linecpy);
-        prevline = realloc(prevline, linecpylen + 1);
-        strncpy(prevline, linecpy, linecpylen + 1);
-
-        free(linecpy);
         free(line);
     }
 }
@@ -991,11 +750,6 @@ static void early_configuration(void){
 }
 
 int main(int argc, char **argv, const char **envp){
-    if(getuid() && geteuid()){
-        printf("iosdbg requires root to operate correctly\n");
-        return 1;
-    }
-
     early_configuration();
     setup_initial_debuggee();
     install_handlers();

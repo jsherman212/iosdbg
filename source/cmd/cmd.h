@@ -5,10 +5,11 @@
 
 #include "argparse.h"       /* Defines MAX_GROUPS */
 
+enum cmd_error_t do_cmdline_command(char *, char **, char **);
+
 /* Macros for arguments to create_(parent|child)_cmd.
  * These exist for clarity.
  */
-
 #define _AT_LEVEL(x) (x)
 #define _NUM_GROUPS(x) (x)
 #define _UNK_ARGS(x) (x)

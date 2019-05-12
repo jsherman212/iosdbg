@@ -1,3 +1,11 @@
+5-11-19
+- fixing more memory leaks
+- put command line processing in its own file, preparing for user-defined
+commands
+
+5-9-19
+- free used args, fixing memory leaks
+
 5-8-19
 - another completer bug fixed, was confused when commands and arguments were
 the same

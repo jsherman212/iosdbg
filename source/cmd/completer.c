@@ -97,8 +97,7 @@ static inline void copy_groupnames(struct dbg_cmd_t *from){
  * Return a string of everything before `text` from rl_line_buffer.
  */
 static char *everything_before(const char *text){
-    char *everything = malloc(1);
-    *everything = '\0';
+    char *everything = strdup("");
 
     int len = 0;
     char **words = rl_line_buffer_word_array(&len);
@@ -106,12 +105,16 @@ static char *everything_before(const char *text){
     int idx = 0;
 
     while(idx < len){
-        if(strcmp(words[idx], text) == 0)
+        if(strcmp(words[idx], text) == 0){
+            token_array_free(words, len);
             return everything;
+        }
 
         concat(&everything, "%s ", words[idx]);
         idx++;
     }
+
+    token_array_free(words, len);
 
     return everything;
 }
@@ -127,6 +130,8 @@ static int count_spaces_before(const char *text){
 
     while(idx < len){
         if(strcmp(words[idx], text) == 0){
+            token_array_free(words, len);
+
             /* If we're completing for the help command,
              * matching one level below effectively "ignores"
              * the "help" in rl_line_buffer.
@@ -139,6 +144,8 @@ static int count_spaces_before(const char *text){
 
         idx++;
     }
+
+    token_array_free(words, len);
 
     if(IS_HELP_COMMAND)
         return idx - 1;

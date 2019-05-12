@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "argparse.h"
 
@@ -29,6 +30,8 @@ enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args,
     /* Current argument: the ID of the thread the user wants to focus on. */
     char *curarg = argnext(args);
     int thread_id = (int)strtol_err(curarg, error);
+
+    free(curarg);
 
     if(*error)
         return CMD_FAILURE;

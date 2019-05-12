@@ -14,11 +14,15 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
     char *location_str = argnext(args);
     long location = eval_expr(location_str, error);
 
+    free(location_str);
+
     if(*error)
         return CMD_FAILURE;
 
     char *amount_str = argnext(args);
     int amount = (int)strtol_err(amount_str, error);
+
+    free(amount_str);
 
     if(*error)
         return CMD_FAILURE;
@@ -44,12 +48,16 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
     char *location_str = argnext(args);
     long location = eval_expr(location_str, error);
 
+    free(location_str);
+
     if(*error)
         return CMD_FAILURE;
 
     /* Next, however many bytes are wanted. */
     char *size = argnext(args);
     int amount = (int)strtol_err(size, error);
+
+    free(size);
 
     if(*error)
         return CMD_FAILURE;
@@ -75,6 +83,8 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
     char *start_str = argnext(args);
     long start = eval_expr(start_str, error);
 
+    free(start_str);
+
     if(*error)
         return CMD_FAILURE;
     
@@ -93,14 +103,16 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
 
     if(is_number_fast(arg2)){
         count = strtol_err(arg2, error);
+        free(arg2);
 
         if(*error)
             return CMD_FAILURE;
 
         type_str = argnext(args);
     }
-    else
+    else{
         type_str = arg2;
+    }
 
     char *target_str = argnext(args);
     int target_len = -1;
@@ -170,6 +182,9 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
         }
     }
 
+    free(type_str);
+    free(target_str);
+
     if(*error)
         return CMD_FAILURE;
 
@@ -227,17 +242,23 @@ enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *args,
     char *location_str = argnext(args);
     long location = eval_expr(location_str, error);
 
+    free(location_str);
+
     if(*error)
         return CMD_FAILURE;
 
     char *data_str = argnext(args);
     long data = eval_expr(data_str, error);
 
+    free(data_str);
+
     if(*error)
         return CMD_FAILURE;
 
     char *size_str = argnext(args);
     int size = (int)strtol_err(size_str, error);
+
+    free(size_str);
 
     if(*error)
         return CMD_FAILURE;

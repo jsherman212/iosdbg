@@ -9,33 +9,31 @@
 
 enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args, 
         int arg1, char **error){
-    /* If the user wants a quadword register,
-     * the max string length would be 87.
-     */
-    const int sz = 90;
-
-    char *regstr = malloc(sz);
-
     /* Iterate through and show all the registers the user asked for. */
     char *curreg = argnext(args);
 
     while(curreg){
         debuggee->get_neon_state();
 
+        const size_t curreg_len = strlen(curreg);
+
+        for(int i=0; i<curreg_len; i++)
+            curreg[i] = tolower(curreg[i]);
+
         if(strcmp(curreg, "fpsr") == 0){
+            free(curreg);
             curreg = argnext(args);
             printf("%10s = 0x%8.8x\n", "fpsr", debuggee->neon_state.__fpsr);
             continue;
         }
         else if(strcmp(curreg, "fpcr") == 0){
+            free(curreg);
             curreg = argnext(args);
             printf("%10s = 0x%8.8x\n", "fpcr", debuggee->neon_state.__fpcr);
             continue;
         }
         
-        memset(regstr, '\0', sz);
-
-        char reg_type = tolower(curreg[0]);
+        char reg_type = curreg[0];
         
         /* Move up a byte for the register number. */
         memmove(curreg, curreg + 1, strlen(curreg));
@@ -43,9 +41,11 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
         int reg_num = (int)strtol_err(curreg, error);
 
         if(*error){
-            free(regstr);
+            free(curreg);
             return CMD_FAILURE;
         }
+
+        char *regstr = NULL;
 
         int good_reg_num = (reg_num >= 0 && reg_num <= 31);
         int good_reg_type = ((reg_type == 'q' || reg_type == 'v') 
@@ -53,6 +53,7 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
 
         if(!good_reg_num || !good_reg_type){
             printf("%8sInvalid register\n", "");
+            free(curreg);
             curreg = argnext(args);
             continue;
         }
@@ -74,25 +75,26 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
         }
         /* Doubleword */
         else if(reg_type == 'd')
-            sprintf(regstr, "d%d = %.15g", reg_num, 
+            concat(&regstr, "d%d = %.15g", reg_num, 
                     *(double *)&debuggee->neon_state.__v[reg_num]);
         /* Word */
         else if(reg_type == 's')
-            sprintf(regstr, "s%d = %g", reg_num, 
+            concat(&regstr, "s%d = %g", reg_num, 
                     *(float *)&debuggee->neon_state.__v[reg_num]);
 
         /* Figure out how many bytes the register takes up in the string. */
         char *space = strchr(regstr, ' ');
         int bytes = space - regstr;
-
         int add = 8 - bytes;
         
         printf("%*s\n", (int)(strlen(regstr) + add), regstr);
-        
+    
+        if(regstr)
+            free(regstr);    
+
+        free(curreg);
         curreg = argnext(args);
     }
-
-    free(regstr);
 
     return CMD_SUCCESS;
 }
@@ -101,15 +103,11 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
         int arg1, char **error){
     debuggee->get_thread_state();
 
-    const int sz = 8;
-
     /* If there were no arguments, print every register. */
     if(args->num_args == 0){
         for(int i=0; i<29; i++){        
-            char *regstr = malloc(sz);
-            memset(regstr, '\0', sz);
-
-            sprintf(regstr, "x%d", i);
+            char *regstr = NULL;
+            concat(&regstr, "x%d", i);
 
             printf("%10s = 0x%16.16llx\n", regstr, 
                     debuggee->thread_state.__x[i]);
@@ -130,32 +128,30 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
     char *curreg = argnext(args);
 
     while(curreg){
-        char reg_type = tolower(curreg[0]);
+        const size_t curreg_len = strlen(curreg);
+
+        for(int i=0; i<curreg_len; i++)
+            curreg[i] = tolower(curreg[i]);
+
+        char reg_type = curreg[0];
 
         if(reg_type != 'x' && reg_type != 'w'){
-            char *curreg_cpy = strdup(curreg);
-            size_t curreg_cpy_len = strlen(curreg_cpy);
-
-            /* We need to be able to free it. */
-            for(int i=0; i<curreg_cpy_len; i++)
-                curreg_cpy[i] = tolower(curreg_cpy[i]);
-
-            if(strcmp(curreg_cpy, "fp") == 0)
+            if(strcmp(curreg, "fp") == 0)
                 printf("%8s = 0x%16.16llx\n", "fp", debuggee->thread_state.__fp);
-            else if(strcmp(curreg_cpy, "lr") == 0)
+            else if(strcmp(curreg, "lr") == 0)
                 printf("%8s = 0x%16.16llx\n", "lr", debuggee->thread_state.__lr);
-            else if(strcmp(curreg_cpy, "sp") == 0)
+            else if(strcmp(curreg, "sp") == 0)
                 printf("%8s = 0x%16.16llx\n", "sp", debuggee->thread_state.__sp);
-            else if(strcmp(curreg_cpy, "pc") == 0)
+            else if(strcmp(curreg, "pc") == 0)
                 printf("%8s = 0x%16.16llx\n", "pc", debuggee->thread_state.__pc);
-            else if(strcmp(curreg_cpy, "cpsr") == 0)
+            else if(strcmp(curreg, "cpsr") == 0)
                 printf("%8s = 0x%8.8x\n", "cpsr", debuggee->thread_state.__cpsr);
             else
                 printf("Invalid register\n");
 
-            free(curreg_cpy);
-
+            free(curreg);
             curreg = argnext(args);
+
             continue;
         }
 
@@ -164,18 +160,19 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
 
         int reg_num = (int)strtol_err(curreg, error);
 
-        if(*error)
+        if(*error){
+            free(curreg);
             return CMD_FAILURE;
+        }
         
         if(reg_num < 0 || reg_num > 29){
+            free(curreg);
             curreg = argnext(args);
             continue;
         }
 
-        char *regstr = malloc(sz);
-        memset(regstr, '\0', sz);
-
-        sprintf(regstr, "%c%d", reg_type, reg_num);
+        char *regstr = NULL;
+        concat(&regstr, "%c%d", reg_type, reg_num);
 
         if(reg_type == 'x')
             printf("%8s = 0x%16.16llx\n", regstr,
@@ -185,6 +182,7 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
                     (int)debuggee->thread_state.__x[reg_num]);
 
         free(regstr);
+        free(curreg);
 
         curreg = argnext(args);
     }
@@ -206,7 +204,7 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
     int reg_num = (int)strtol_err(target_str + 1, error);
 
     if(*error)
-        return CMD_FAILURE;
+        goto fail;
 
     int gpr = reg_type == 'x' || reg_type == 'w';
     int fpr = (reg_type == 'q' || reg_type == 'v') ||
@@ -223,12 +221,12 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
     int valued = (int)strtol_err(value_str, error);
 
     if(gpr && *error)
-        return CMD_FAILURE;
+        goto fail;
 
     long valuellx = strtol_err(value_str, error);
 
     if(gpr && *error)
-        return CMD_FAILURE;
+        goto fail;
 
     /* The functions above will have set error
      * if we have a floating point value, so
@@ -239,12 +237,12 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
     float valuef = (float)strtold_err(value_str, error);
 
     if(fpr && !quadword && *error)
-        return CMD_FAILURE;
+        goto fail;
 
     double valuedf = strtold_err(value_str, error);
 
     if(fpr && !quadword && *error)
-        return CMD_FAILURE;
+        goto fail;
 
     /* Take care of any special registers. */
     if(strcmp(target_str, "fp") == 0)
@@ -264,7 +262,7 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
     else{
         if(!good_reg_num || !good_reg_type){
             asprintf(error, "bad register '%s'", target_str);
-            return CMD_FAILURE;
+            goto fail;
         }
 
         if(gpr){
@@ -280,12 +278,12 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
                 if(value_str[0] != '{' ||
                         value_str[strlen(value_str) - 1] != '}'){
                     asprintf(error, "bad value '%s'", value_str);
-                    return CMD_FAILURE;
+                    goto fail;
                 }
 
                 if(strlen(value_str) == 2){
                     asprintf(error, "bad value '%s'", value_str);
-                    return CMD_FAILURE;
+                    goto fail;
                 }
 
                 /* Remove the brackets. */
@@ -294,11 +292,7 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
 
                 size_t value_str_len = strlen(value_str);
 
-                char *hi_str = malloc(value_str_len + 1);
-                char *lo_str = malloc(value_str_len + 1);
-
-                memset(hi_str, '\0', value_str_len);
-                memset(lo_str, '\0', value_str_len);
+                char *hi_str = NULL, *lo_str = NULL;
 
                 for(int i=0; i<sizeof(long)*2; i++){
                     char *space = strrchr(value_str, ' ');
@@ -316,16 +310,10 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
                     unsigned int byte =
                         (unsigned int)strtol(curbyte, NULL, 0);
 
-                    if(i < sizeof(long)){
-                        lo_str = realloc(lo_str, strlen(lo_str) +
-                                strlen(curbyte) + 3);
+                    if(i < sizeof(long))
                         concat(&lo_str, "%02x", byte);
-                    }
-                    else{
-                        hi_str = realloc(hi_str, strlen(hi_str) +
-                                strlen(curbyte) + 3);
-                        concat(&hi_str,  "%02x", byte);
-                    }
+                    else
+                        concat(&hi_str, "%02x", byte);
 
                     free(curbyte);
                 }
@@ -355,5 +343,14 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
     debuggee->set_thread_state();
     debuggee->set_neon_state();
 
+    free(target_str);
+    free(value_str);
+
     return CMD_SUCCESS;
+
+fail:
+    free(target_str);
+    free(value_str);
+
+    return CMD_FAILURE;
 }
