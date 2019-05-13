@@ -14,7 +14,7 @@
 enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
         int arg1, char **error){
     if(debuggee->num_watchpoints == 0){
-        asprintf(error, "no watchpoints");
+        concat(error, "no watchpoints");
         return CMD_FAILURE;
     }
 
@@ -69,7 +69,7 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
 enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
         int arg1, char **error){
     if(debuggee->num_watchpoints == 0){
-        asprintf(error, "no watchpoints");
+        concat(error, "no watchpoints");
         return CMD_FAILURE;
     }
 
@@ -127,7 +127,7 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
     free(curarg);
 
     if(*error){
-        asprintf(error, "expression evaluation failed: %s\n", *error);
+        concat(error, "expression evaluation failed: %s\n", *error);
         return CMD_FAILURE;
     }
 

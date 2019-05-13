@@ -137,7 +137,7 @@ void documentation_for_cmdname(char *_name, char **error){
             }
         }
 
-        asprintf(error, "unknown command \"%s\"", _name);
+        concat(error, "unknown command \"%s\"", _name);
         goto out;
     }
 
@@ -175,7 +175,7 @@ void documentation_for_cmdname(char *_name, char **error){
 
     queue_free(cmdqueue);
 
-    asprintf(error, "unknown command \"%s\"", _name);
+    concat(error, "unknown command \"%s\"", _name);
 
 out:
     token_array_free(tokens, num_tokens);

@@ -22,14 +22,14 @@ static long perform_operation(
         return left * right;
     else if(operator == '/'){
         if(right == 0){
-            asprintf(error, "attempt to divide by zero");
+            concat(error, "attempt to divide by zero");
             return LONG_MIN;
         }
 
         return left / right;
     }
     else{
-        asprintf(error, "unknown operator '%c'", operator);
+        concat(error, "unknown operator '%c'", operator);
         return LONG_MIN;
     }
 }
@@ -161,7 +161,7 @@ static char *lookup_register(char *reg, char **error){
     size_t reglen = strlen(reg);
 
     if(reglen < 3 || reglen > 4){
-        asprintf(error, "bad register '%s'", reg);
+        concat(error, "bad register '%s'", reg);
         return NULL;
     }
 
@@ -186,7 +186,7 @@ static char *lookup_register(char *reg, char **error){
     else{
         /* We cannot include floating point values. */
         if(reg[1] != 'x' && reg[1] != 'w'){
-            asprintf(error, "bad register '%s'", reg);
+            concat(error, "bad register '%s'", reg);
             return NULL;
         }
 
@@ -194,7 +194,7 @@ static char *lookup_register(char *reg, char **error){
         int regnum = strtol(reg + 2, &endptr, 10);
 
         if(endptr && *endptr){
-            asprintf(error, "malformed register string '%s'", reg);
+            concat(error, "malformed register string '%s'", reg);
             return NULL;
         }
 
@@ -204,8 +204,8 @@ static char *lookup_register(char *reg, char **error){
             regval = debuggee->thread_state.__x[regnum] & 0xFFFFFFFF;
     }
 
-    char *regvalstr;
-    asprintf(&regvalstr, "%llx", regval);
+    char *regvalstr = NULL;
+    concat(&regvalstr, "%llx", regval);
 
     return regvalstr;
 }
@@ -250,7 +250,7 @@ static void sub_conv_vars(char **expr, char **error){
                     exprlen = strlen(*expr);
                 }
                 else{
-                    asprintf(error, "expected convenience variable");
+                    concat(error, "expected convenience variable");
                     return;
                 }
             }
@@ -315,7 +315,7 @@ static long evaluate(char *expr, char **error){
      */
     for(int i=1; i<exprlen; i++){
         if(invalid_expr(expr, expr[i], i)){
-            asprintf(error, "unexpected operator '%c' at index %d\n"
+            concat(error, "unexpected operator '%c' at index %d\n"
                     "error around here: %c%c%c%c\n"
                     "%*s^", expr[i], i,
                     exprlen > 0 && expr[i-1] != '\0' ? expr[i-1] : ' ', 
@@ -418,7 +418,7 @@ static long evaluate(char *expr, char **error){
             stack_push(operators, (void *)(uintptr_t)(current));
         }
         else{
-            asprintf(error, "bad character %c at index %d", current, idx);
+            concat(error, "bad character %c at index %d", current, idx);
             goto fail;
         }
 
@@ -458,7 +458,7 @@ fail:
  */
 long eval_expr(char *_expr, char **error){
     if(!_expr || (_expr && strlen(_expr) == 0)){
-        asprintf(error, "empty expression string");
+        concat(error, "empty expression string");
         return LONG_MIN;
     }
 

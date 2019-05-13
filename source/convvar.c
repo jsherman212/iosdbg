@@ -6,6 +6,7 @@
 
 #include "convvar.h"
 #include "linkedlist.h"
+#include "strext.h"
 
 static struct linkedlist *vars;
 
@@ -116,7 +117,7 @@ static int convvar_exists(char *name, char **error){
         return 0;
 
     if(name && name[0] != '$'){
-        asprintf(error, "names of convenience variables must start with '$'");
+        concat(error, "names of convenience variables must start with '$'");
         return 0;
     }
 
@@ -135,14 +136,14 @@ static enum convvar_kind determine_kind(char *value, char **error){
      */
     if(value[0] == '"'){
         if(!strrchr(value, '"')){
-            asprintf(error, "missing closing quotation for string '%s'", value);
+            concat(error, "missing closing quotation for string '%s'", value);
             return -1;
         }
 
         return CONVVAR_STRING;
     }
     else if(first_decimal != last_decimal){
-        asprintf(error, "malformed floating point number '%s'", value);
+        concat(error, "malformed floating point number '%s'", value);
         return -1;
     }
     else if(first_decimal)
@@ -153,7 +154,7 @@ static enum convvar_kind determine_kind(char *value, char **error){
 
 static void update_convvar(struct convvar *var, char *value, char **error){
     if(!value){
-        asprintf(error, "NULL value");
+        concat(error, "NULL value");
         return;
     }
 
@@ -180,7 +181,7 @@ static void update_convvar(struct convvar *var, char *value, char **error){
     }   
 
     if(endptr && *endptr != '\0'){
-        asprintf(error, "invalid number '%s'", value);
+        concat(error, "invalid number '%s'", value);
         convvar_free(var);
         
         return;
@@ -241,7 +242,7 @@ char *convvar_strval(char *name, char **error){
     struct convvar *var = lookup_convvar(name);
 
     if(!var){
-        asprintf(error, "convenience variable '%s' does not exist", name);
+        concat(error, "convenience variable '%s' does not exist", name);
         return NULL;
     }
 
@@ -254,10 +255,10 @@ char *convvar_strval(char *name, char **error){
     char *s = NULL;
 
     if(var->kind == CONVVAR_DOUBLE)
-        asprintf(&s, "%f", *(double *)&var->data.integer);
+        concat(&s, "%f", *(double *)&var->data.integer);
     else{
         long long i = var->data.integer;
-        asprintf(&s, "%s%#llx", i < 0 ? "-" : "", i < 0 ? -i : i);
+        concat(&s, "%s%#llx", i < 0 ? "-" : "", i < 0 ? -i : i);
     }
 
     return s;
@@ -282,7 +283,8 @@ void void_convvar(char *name){
 /* `name` and `value` must be malloc'ed */
 void set_convvar(char *name, char *value, char **error){
     if(invalid_name(name)){
-        asprintf(error, "'%s' is an invalid convenience variable name", name);
+        concat(error, "'%s' is an invalid convenience variable name",
+                name ? name : "NULL");
         return;
     }
     
@@ -306,7 +308,7 @@ void del_convvar(char *name, char **error){
     struct convvar *target = lookup_convvar(name);
 
     if(!target){
-        asprintf(error, "convenience variable '%s' not found", name);
+        concat(error, "convenience variable '%s' not found", name);
         return;
     }
 

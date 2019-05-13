@@ -5,6 +5,7 @@
 #include "debuggee.h"
 #include "linkedlist.h"
 #include "memutils.h"
+#include "strext.h"
 #include "watchpoint.h"
 
 /* Find an available hardware watchpoint register.*/
@@ -47,14 +48,14 @@ static int find_ready_wp_reg(void){
 static struct watchpoint *watchpoint_new(unsigned long location,
         unsigned int data_len, int LSC, char **error){
     if(data_len == 0 || data_len > sizeof(unsigned long)){
-        asprintf(error, "data length (%d) is invalid", data_len);
+        concat(error, "data length (%d) is invalid", data_len);
         return NULL;
     }
 
     kern_return_t result = valid_location(location);
     
     if(result){
-        asprintf(error, "could not set watchpoint: %s",
+        concat(error, "could not set watchpoint: %s",
                 mach_error_string(result));
         return NULL;
     }
@@ -71,7 +72,7 @@ static struct watchpoint *watchpoint_new(unsigned long location,
             wp->data_len);
 
     if(result){
-        asprintf(error, "could not set watchpoint: could not read memory at %#lx",
+        concat(error, "could not set watchpoint: could not read memory at %#lx",
                 location);
         free(wp);
         return NULL;
@@ -80,7 +81,7 @@ static struct watchpoint *watchpoint_new(unsigned long location,
     int available_wp_reg = find_ready_wp_reg();
 
     if(available_wp_reg == -1){
-        asprintf(error, "could not set watchpoint: "
+        concat(error, "could not set watchpoint: "
                 "no more hardware watchpoint registers available (%d/%d) used", 
                 debuggee->num_hw_wps, debuggee->num_hw_wps);
         free(wp);
@@ -205,7 +206,7 @@ void watchpoint_delete(int wp_id, char **error){
         current = current->next;
     }
 
-    asprintf(error, "watchpoint %d not found", wp_id);
+    concat(error, "watchpoint %d not found", wp_id);
 }
 
 void watchpoint_enable_all(void){

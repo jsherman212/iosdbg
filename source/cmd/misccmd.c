@@ -129,7 +129,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         if(waitfor)
             free(firstarg);
 
-        asprintf(error, "couldn't get task port for %s (pid: %d): %s\n"
+        concat(error, "couldn't get task port for %s (pid: %d): %s\n"
                 "Did you forget to sign iosdbg with entitlements?\n"
                 "Are you privileged enough to debug this process?",
                 target, target_pid, mach_error_string(err));
@@ -191,7 +191,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     void_convvar("$_exitsignal");
 
     char *aslr = NULL;
-    asprintf(&aslr, "%#llx", debuggee->aslr_slide);
+    concat(&aslr, "%#llx", debuggee->aslr_slide);
 
     set_convvar("$ASLR", aslr, error);
 
@@ -232,7 +232,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
             sizeof(struct frame_t));
     
     if(err){
-        asprintf(error, "backtrace failed: %s", mach_error_string(err));
+        concat(error, "backtrace failed: %s", mach_error_string(err));
         return CMD_FAILURE;
     }
 
@@ -403,12 +403,12 @@ enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
 enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->tracing_disabled){
-        asprintf(error, "tracing is not supported on this host");
+        concat(error, "tracing is not supported on this host");
         return CMD_FAILURE;
     }
     
     if(debuggee->currently_tracing){
-        asprintf(error, "already tracing");
+        concat(error, "already tracing");
         return CMD_FAILURE;
     }
 

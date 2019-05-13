@@ -15,7 +15,7 @@ struct cmd_args_t {
     int num_args;
 };
 
-struct cmd_args_t *parse_args(char *, const char *, const char **, int, int, char **);
+struct cmd_args_t *parse_and_create_args(char *, const char *, const char **, int, int, char **);
 char *argnext(struct cmd_args_t *);
 void argfree(struct cmd_args_t *);
 

@@ -37,7 +37,7 @@ enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args,
         return CMD_FAILURE;
 
     if(thread_id < 1 || thread_id > debuggee->thread_count){
-        asprintf(error, "out of bounds, must be in [1, %d]", 
+        concat(error, "out of bounds, must be in [1, %d]", 
                 debuggee->thread_count);
         return CMD_FAILURE;
     }
@@ -45,7 +45,7 @@ enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args,
     int result = machthread_setfocusgivenindex(thread_id);
     
     if(result){
-        asprintf(error, "could not set focused thread to thread %d", thread_id);
+        concat(error, "could not set focused thread to thread %d", thread_id);
         return CMD_FAILURE;
     }
 

@@ -6,6 +6,7 @@
 #include "debuggee.h"
 #include "linkedlist.h"
 #include "memutils.h"
+#include "strext.h"
 
 /* Find an available hardware breakpoint register.*/
 static int find_ready_bp_reg(void){
@@ -50,7 +51,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     kern_return_t err = valid_location(location);
 
     if(err){
-        asprintf(error, "could not set breakpoint: %s",
+        concat(error, "could not set breakpoint: %s",
                 mach_error_string(err));
         return NULL;
     }
@@ -103,7 +104,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     err = read_memory_at_location((void *)bp->location, orig_instruction, sz);
 
     if(err){
-        asprintf(error, "could not set breakpoint:"
+        concat(error, "could not set breakpoint:"
                 " could not read memory at %#lx", location);
         free(bp);
         return NULL;
@@ -217,7 +218,7 @@ void breakpoint_delete(int breakpoint_id, char **error){
     }
 
     if(error)
-        asprintf(error, "breakpoint %d not found", breakpoint_id);
+        concat(error, "breakpoint %d not found", breakpoint_id);
 }
 
 void breakpoint_disable(int breakpoint_id, char **error){
@@ -235,7 +236,7 @@ void breakpoint_disable(int breakpoint_id, char **error){
     }
 
     if(error)
-        asprintf(error, "breakpoint %d not found", breakpoint_id);
+        concat(error, "breakpoint %d not found", breakpoint_id);
 }
 
 void breakpoint_enable(int breakpoint_id, char **error){
@@ -253,7 +254,7 @@ void breakpoint_enable(int breakpoint_id, char **error){
     }
 
     if(error)
-        asprintf(error, "breakpoint %d not found", breakpoint_id);
+        concat(error, "breakpoint %d not found", breakpoint_id);
 }
 
 void breakpoint_disable_all(void){

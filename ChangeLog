@@ -1,3 +1,8 @@
+5-12-19
+- asprintf --> concat
+- fixed up memutils.c
+- parse_args --> parse_and_create_args
+
 5-11-19
 - fixing more memory leaks
 - put command line processing in its own file, preparing for user-defined

@@ -32,19 +32,20 @@ static void _reset_matchedcmdinfo(void){
 }
 
 enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
+    enum cmd_error_t result = CMD_SUCCESS;
+
     if(!CURRENT_MATCH_INFO.cmd_function){
         /* We might have a parent command... */
         if(CURRENT_MATCH_INFO.cmd){
             documentation_for_cmd(CURRENT_MATCH_INFO.cmd);
-            _reset_matchedcmdinfo();
-
-            return CMD_SUCCESS;
+            goto out1;
         }
 
-        return CMD_FAILURE;
+        result = CMD_FAILURE;
+        goto out1;
     }
 
-    struct cmd_args_t *parsed_args = parse_args(args,
+    struct cmd_args_t *parsed_args = parse_and_create_args(args,
             CURRENT_MATCH_INFO.rinfo.argregex,
             (const char **)(CURRENT_MATCH_INFO.rinfo.groupnames),
             CURRENT_MATCH_INFO.rinfo.num_groups,
@@ -53,11 +54,8 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
 
     if(*error){
         documentation_for_cmd(CURRENT_MATCH_INFO.cmd);
-
-        _reset_matchedcmdinfo();
-        argfree(parsed_args);
-
-        return CMD_FAILURE;
+        result = CMD_FAILURE;
+        goto out;
     }
 
     /* These audit functions perform checks that don't need to be inside
@@ -71,20 +69,20 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
 
     if(*error){
         documentation_for_cmd(CURRENT_MATCH_INFO.cmd);
-
-        _reset_matchedcmdinfo();
-        argfree(parsed_args);
-
-        return CMD_FAILURE;
+        result = CMD_FAILURE;
+        goto out;
     }
 
-    enum cmd_error_t result =
-        (CURRENT_MATCH_INFO.cmd_function)(parsed_args, 0, error);
+    result = (CURRENT_MATCH_INFO.cmd_function)(parsed_args, 0, error);
 
+out:;
     _reset_matchedcmdinfo();
     argfree(parsed_args);
-
     return result;
+
+out1:;
+     _reset_matchedcmdinfo();
+     return result;
 }
 
 static inline void copy_groupnames(struct dbg_cmd_t *from){

@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <signal.h>
 
+#include "strext.h"
+
 static struct {
     int notify;
     int pass;
@@ -48,12 +50,12 @@ void sigsettings(int signo,
         int set,
         char **error){
     if(signo < 1 || signo >= NSIG){
-        asprintf(error, "unknown signal %d", signo);
+        concat(error, "unknown signal %d", signo);
         return;
     }
 
     if(!set && (!notify || !pass || !stop)){
-        asprintf(error, "cannot place values into NULL pointers");
+        concat(error, "cannot place values into NULL pointers");
         return;
     }
 

@@ -18,7 +18,7 @@ static struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length, char **error){
             length, NULL, 0);
     
     if(err){
-        asprintf(error, "couldn't get the size of our kinfo_proc buffer: %s\n", 
+        concat(error, "couldn't get the size of our kinfo_proc buffer: %s\n", 
                 strerror(errno));
         return NULL;
     }
@@ -28,7 +28,7 @@ static struct kinfo_proc *fill_kinfo_proc_buffer(size_t *length, char **error){
             length, NULL, 0);
     
     if(err){
-        asprintf(error, "second sysctl call failed: %s\n", strerror(errno));
+        concat(error, "second sysctl call failed: %s\n", strerror(errno));
         return NULL;
     }
 
@@ -71,7 +71,7 @@ pid_t pid_of_program(char *progname, char **error){
     free(result);
     
     if(matches > 1){
-        asprintf(error, "multiple instances of '%s': \n%s", progname, matchstr);
+        concat(error, "multiple instances of '%s': \n%s", progname, matchstr);
 
         if(matchstr)
             free(matchstr);
@@ -83,7 +83,7 @@ pid_t pid_of_program(char *progname, char **error){
         free(matchstr);
 
     if(matches == 0){
-        asprintf(error, "could not find a process named '%s'", progname);
+        concat(error, "could not find a process named '%s'", progname);
         return -1;
     }
 
@@ -112,7 +112,7 @@ char *progname_from_pid(pid_t pid, char **error){
         }
     }
 
-    asprintf(error, "could not find process for pid %d", pid);
+    concat(error, "could not find process for pid %d", pid);
 
     return NULL;
 }

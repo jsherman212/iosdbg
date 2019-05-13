@@ -9,9 +9,9 @@
 
 #include "argparse.h"
 
-#include "../convvar.h"
+#include "../strext.h"
 
-struct cmd_args_t *parse_args(char *_args, 
+struct cmd_args_t *parse_and_create_args(char *_args, 
         const char *pattern,
         const char **groupnames,
         int num_groups,
@@ -41,7 +41,7 @@ struct cmd_args_t *parse_args(char *_args,
         PCRE2_UCHAR buf[2048];
         pcre2_get_error_message(errornumber, buf, sizeof(buf));
 
-        asprintf(error, "regex compilation failed at offset %zu: %s",
+        concat(error, "regex compilation failed at offset %zu: %s",
                 erroroffset, buf);
 
         argfree(arguments);
@@ -62,7 +62,7 @@ struct cmd_args_t *parse_args(char *_args,
             NULL);
 
     if(rc < 0){
-        asprintf(error, "malformed arguments");
+        concat(error, "malformed arguments");
 
         pcre2_match_data_free(match_data);
         pcre2_code_free(re);

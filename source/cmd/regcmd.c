@@ -261,7 +261,7 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
         debuggee->neon_state.__fpcr = valued;
     else{
         if(!good_reg_num || !good_reg_type){
-            asprintf(error, "bad register '%s'", target_str);
+            concat(error, "bad register '%s'", target_str);
             goto fail;
         }
 
@@ -277,20 +277,18 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
             if(reg_type == 'q' || reg_type == 'v'){
                 if(value_str[0] != '{' ||
                         value_str[strlen(value_str) - 1] != '}'){
-                    asprintf(error, "bad value '%s'", value_str);
+                    concat(error, "bad value '%s'", value_str);
                     goto fail;
                 }
 
                 if(strlen(value_str) == 2){
-                    asprintf(error, "bad value '%s'", value_str);
+                    concat(error, "bad value '%s'", value_str);
                     goto fail;
                 }
 
                 /* Remove the brackets. */
                 value_str[strlen(value_str) - 1] = '\0';
                 memmove(value_str, value_str + 1, strlen(value_str));
-
-                size_t value_str_len = strlen(value_str);
 
                 char *hi_str = NULL, *lo_str = NULL;
 

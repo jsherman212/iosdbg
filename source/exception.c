@@ -259,7 +259,7 @@ void handle_exception(Request *request){
     char *tname = get_thread_name_from_thread_port(thread);
 
     char *desc = NULL;
-    asprintf(&desc, "\n * Thread %#llx", tid);
+    concat(&desc, "\n * Thread %#llx", tid);
 
     /* A number of things could have happened to cause an exception:
      *      - hardware breakpoint

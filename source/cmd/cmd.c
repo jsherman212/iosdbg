@@ -94,8 +94,8 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
 
     strclean(&user_command);
 
-    /* If the user hits enter right away, rl_command_buffer will be empty.
-     * The completer relies on rl_command_buffer reflecting the
+    /* If the user hits enter right away, rl_line_buffer will be empty.
+     * The completer relies on rl_line_buffer reflecting the
      * contents of user_command, so make that so.
      */
     rl_replace_line(user_command, 0);
@@ -183,7 +183,7 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
          * it's an unknown command.
          */
         if(first_match && !completions){
-            concat(error, "Undefined command \"%s\".  Try \"help\".",
+            concat(error, "undefined command \"%s\".  Try \"help\".",
                     usercommandcpy);
 
             result = CMD_FAILURE;
@@ -230,7 +230,7 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
      */
     if(prev_completions && *(prev_completions + 1)){
         char *ambiguous_cmd_str = NULL;
-        concat(&ambiguous_cmd_str, "Ambiguous command \"%s\": ",
+        concat(&ambiguous_cmd_str, "ambiguous command \"%s\": ",
                 usercommandcpy);
 
         for(int i=1; prev_completions[i]; i++)

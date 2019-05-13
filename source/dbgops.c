@@ -13,6 +13,7 @@
 #include "linkedlist.h"
 #include "ptrace.h"
 #include "sigsupport.h"
+#include "strext.h"
 #include "thread.h"
 #include "watchpoint.h"
 
@@ -40,7 +41,7 @@ void ops_printsiginfo(void){
             sigstr[i] = toupper(sigstr[i]);
         
         char *fullsig = NULL;
-        asprintf(&fullsig, "SIG%s", sigstr);
+        concat(&fullsig, "SIG%s", sigstr);
         free(sigstr);
 
         const char *notify_str = notify ? "true" : "false";

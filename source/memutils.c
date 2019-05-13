@@ -1,6 +1,5 @@
 #include <armadillo.h>
 #include <ctype.h>
-#include <mach/kmod.h>
 #include <mach/mach.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,8 +34,8 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
     const int data_size = 0x4;
     unsigned long current_location = location;
 
-    char *locstr;
-    asprintf(&locstr, "%#lx", location);
+    char *locstr = NULL;
+    concat(&locstr, "%#lx", location);
 
     char *error = NULL;
     set_convvar("$_", locstr, &error);
@@ -45,12 +44,15 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
 
     free(locstr);
 
+    if(error)
+        free(error);
+
     while(current_location < (location + (num_instrs * data_size))){
-        char *data = malloc(data_size);
+        uint8_t *data = malloc(data_size);
         kern_return_t err = read_memory_at_location((void *)current_location,
                 data, data_size);
 
-        unsigned long instr;
+        unsigned long instr = 0;
 
         /* Do not show any of the BRK #0 written by software breakpoints
          * when the user wants to disassemble memory.
@@ -60,25 +62,20 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
         if(active)
             instr = CFSwapInt32(active->old_instruction);
         else{
-            /* Format the memory given back. */
-            char *bigendian = malloc((data_size * 2) + 1);
-            memset(bigendian, '\0', (data_size * 2) + 1);
+            instr = CFSwapInt32(*(unsigned long *)data);
 
-            for(int i=0; i<data_size; i++)
-                concat(&bigendian, "%02x", (uint8_t)data[i]);
-
-            free(data);
-            
-            instr = strtoul(bigendian, NULL, 16);       
-
-            asprintf(&bigendian, "%#lx", instr);
+            char *val = NULL;
+            concat(&val, "%#lx", instr);
 
             error = NULL;
-            set_convvar("$__", bigendian, &error);
+            set_convvar("$__", val, &error);
 
             desc_auto_convvar_error_if_needed("$__", error);
 
-            free(bigendian);
+            free(val);
+
+            if(error)
+                free(error);
         }
 
         char *disassembled = ArmadilloDisassembleB(instr, current_location);
@@ -86,6 +83,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
         err = debuggee->get_thread_state();
         
         if(err){
+            free(data);
             free(disassembled);
             return KERN_FAILURE;
         }
@@ -102,18 +100,17 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
     return KERN_SUCCESS;
 }
 
-kern_return_t dump_memory(unsigned long long location, vm_size_t amount){
+kern_return_t dump_memory(unsigned long location, vm_size_t amount){
     if(amount == 0)
         return KERN_SUCCESS;
 
     const int row_size = 0x10;
 
     int amount_dumped = 0;
-    unsigned long long current_location = location;
+    unsigned long current_location = location;
 
     while(amount_dumped < amount){
-        char *membuffer = malloc(row_size);
-        memset(membuffer, '\0', row_size);
+        uint8_t membuffer[row_size];
 
         kern_return_t ret = read_memory_at_location((void *)current_location,
                 membuffer, row_size);
@@ -126,17 +123,10 @@ kern_return_t dump_memory(unsigned long long location, vm_size_t amount){
         if(current_row_length >= row_size)
             current_row_length = row_size;
 
-        unsigned char data_array[current_row_length];
+        printf("  %#lx: ", current_location);
 
         for(int i=0; i<current_row_length; i++)
-            data_array[i] = (unsigned char)membuffer[i];
-
-        free(membuffer);
-
-        printf("  %#llx: ", current_location);
-
-        for(int i=0; i<current_row_length; i++)
-            printf("%02x ", data_array[i]);
+            printf("%02x ", (uint8_t)(*(membuffer + i)));
 
         if(current_row_length < 0x10){
             /* Print filler spaces.
@@ -149,15 +139,15 @@ kern_return_t dump_memory(unsigned long long location, vm_size_t amount){
         printf("  ");
 
         for(int i=0; i<current_row_length; i++){
-            unsigned char cur_char = data_array[i];
+            uint8_t cur_char = *(membuffer + i);
 
             if(isgraph(cur_char))
-                printf("%c", cur_char);
+                putchar(cur_char);
             else
-                printf(".");
+                putchar('.');
         }
 
-        printf("\n");
+        putchar('\n');
 
         amount_dumped += row_size;
         current_location += row_size;

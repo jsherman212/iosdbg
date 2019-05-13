@@ -15,7 +15,7 @@
 enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
         int arg1, char **error){
     if(debuggee->num_breakpoints == 0){
-        asprintf(error, "no breakpoints");
+        concat(error, "no breakpoints");
         return CMD_FAILURE;
     }
 
@@ -70,7 +70,7 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
 enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
         int arg1, char **error){
     if(debuggee->num_breakpoints == 0){
-        asprintf(error, "no breakpoints");
+        concat(error, "no breakpoints");
         return CMD_FAILURE;
     }
 
@@ -98,7 +98,7 @@ enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args,
     free(location_str);
 
     if(*error){
-        asprintf(error, "expression evaluation failed: %s", *error);
+        concat(error, "expression evaluation failed: %s", *error);
         return CMD_FAILURE;
     }
 

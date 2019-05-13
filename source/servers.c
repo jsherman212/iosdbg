@@ -13,8 +13,10 @@
 #include "debuggee.h"
 #include "exception.h"
 #include "printutils.h"
+#include "strext.h"
 #include "trace.h"
 
+#include "cmd/cmd.h"
 #include "cmd/misccmd.h"
 
 static void *exception_server(void *arg){
@@ -75,8 +77,8 @@ static void *death_server(void *arg){
             printf("\n[%s (%d) exited normally (status = 0x%8.8x)]\n", 
                     debuggee->debuggee_name, debuggee->pid, wexitstatus);
 
-            char *wexitstatusstr;
-            asprintf(&wexitstatusstr, "%#x", wexitstatus);
+            char *wexitstatusstr = NULL;
+            concat(&wexitstatusstr, "%#x", wexitstatus);
 
             void_convvar("$_exitsignal");
             set_convvar("$_exitcode", wexitstatusstr, &error);
@@ -90,8 +92,8 @@ static void *death_server(void *arg){
             printf("\n[%s (%d) terminated due to signal %d]\n", 
                     debuggee->debuggee_name, debuggee->pid, wtermsig);
 
-            char *wtermsigstr;
-            asprintf(&wtermsigstr, "%#x", wtermsig);
+            char *wtermsigstr = NULL;
+            concat(&wtermsigstr, "%#x", wtermsig);
 
             void_convvar("$_exitcode");
             set_convvar("$_exitsignal", wtermsigstr, &error);
@@ -103,7 +105,10 @@ static void *death_server(void *arg){
 
         free(arg);
         
-        ops_detach(1);
+        do_cmdline_command("detach", NULL, &error);
+
+        if(error)
+            free(error);
 
         close(kqid);
         safe_reprompt();

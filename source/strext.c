@@ -6,6 +6,40 @@
 
 #include "expr.h"
 
+int concat(char **dst, const char *src, ...){
+    if(!src || !dst)
+        return 0;
+
+    if(!(*dst)){
+        *dst = malloc(1);
+        *(*dst) = '\0';
+    }
+
+    size_t srclen = strlen(src);
+    size_t dstlen = strlen(*dst);
+
+    const size_t pad = 0x400;
+
+    /* We have no way of knowing how many bytes src will
+     * take up once format specifiers are substituted.
+     */
+    *dst = realloc(*dst, srclen + dstlen + pad);
+
+    va_list args;
+    va_start(args, src);
+
+    int w = vsnprintf(&(*dst)[dstlen], srclen + dstlen + pad, src, args);
+
+    va_end(args);
+
+    /* Now we can figure out the length of this string,
+     * so realloc to free up unused memory.
+     */
+    *dst = realloc(*dst, strlen(*dst) + 1);
+
+    return w;
+}
+
 /* Insert `str` at `where` in `target`. */
 void strins(char **target, char *str, int where){
     if(!target || !(*target))
@@ -116,7 +150,7 @@ void strclean(char **target){
 
 long strtol_err(char *str, char **error){
     if(!str){
-        asprintf(error, "NULL argument `str`");
+        concat(error, "NULL argument `str`");
         return -1;
     }
 
@@ -124,7 +158,7 @@ long strtol_err(char *str, char **error){
     long result = strtol(str, &endptr, 0);
 
     if(endptr && *endptr != '\0'){
-        asprintf(error, "invalid number '%s'", str);
+        concat(error, "invalid number '%s'", str);
         return -1;
     }
 
@@ -133,7 +167,7 @@ long strtol_err(char *str, char **error){
 
 long double strtold_err(char *str, char **error){
     if(!str){
-        asprintf(error, "NULL argument `str`");
+        concat(error, "NULL argument `str`");
         return -1.0;
     }
 
@@ -141,7 +175,7 @@ long double strtold_err(char *str, char **error){
     long double result = strtold(str, &endptr);
 
     if(endptr && *endptr != '\0'){
-        asprintf(error, "invalid number '%s'", str);
+        concat(error, "invalid number '%s'", str);
         return -1.0;
     }
 
@@ -171,40 +205,6 @@ int is_number_fast(char *str){
     strtol_err(str, &error);
 
     return error == NULL;
-}
-
-int concat(char **dst, const char *src, ...){
-    if(!src || !dst)
-        return 0;
-
-    if(!(*dst)){
-        *dst = malloc(1);
-        *(*dst) = '\0';
-    }
-
-    size_t srclen = strlen(src);
-    size_t dstlen = strlen(*dst);
-
-    const size_t pad = 0x400;
-
-    /* We have no way of knowing how many bytes src will
-     * take up once format specifiers are substituted.
-     */
-    *dst = realloc(*dst, srclen + dstlen + pad);
-
-    va_list args;
-    va_start(args, src);
-
-    int w = vsnprintf(&(*dst)[strlen(*dst)], srclen + dstlen + pad, src, args);
-
-    va_end(args);
-
-    /* Now we can figure out the length of this string,
-     * so realloc to free up unused memory.
-     */
-    *dst = realloc(*dst, strlen(*dst) + 1);
-
-    return w;
 }
 
 char **token_array(char *str, const char *delim, int *len){

@@ -28,14 +28,14 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
         return CMD_FAILURE;
 
     if(amount <= 0){
-        asprintf(error, "bad amount %d", amount);
+        concat(error, "bad amount %d", amount);
         return CMD_FAILURE;
     }
 
     kern_return_t err = disassemble_at_location(location, amount);
 
     if(err){
-        asprintf(error, "could not disassemble from %#lx to %#lx: %s", 
+        concat(error, "could not disassemble from %#lx to %#lx: %s", 
                 location, location + amount, mach_error_string(err));
         return CMD_FAILURE;
     }
@@ -63,14 +63,14 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
         return CMD_FAILURE;
     
     if(amount < 0){
-        asprintf(error, "negative amount");
+        concat(error, "negative amount");
         return CMD_FAILURE;
     }
 
     kern_return_t err = dump_memory(location, amount);
 
     if(err){
-        asprintf(error, "could not dump memory from %#lx to %#lx: %s", 
+        concat(error, "could not dump memory from %#lx to %#lx: %s", 
                 location, location + amount, mach_error_string(err));
         return CMD_FAILURE;
     }
@@ -91,7 +91,7 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
     kern_return_t err = valid_location(start);
 
     if(err){
-        asprintf(error, "invalid starting point: %s", mach_error_string(err));
+        concat(error, "invalid starting point: %s", mach_error_string(err));
         return CMD_FAILURE;
     }
 
@@ -197,7 +197,7 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
         limit = LONG_MAX;
     
     if(limit != LONG_MAX && limit < target_len){
-        asprintf(error, "count (%ld) < sizeof(target type) (%d)",
+        concat(error, "count (%ld) < sizeof(target type) (%d)",
                 limit, target_len);
         return CMD_FAILURE;
     }
@@ -266,7 +266,7 @@ enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *args,
     kern_return_t ret = write_memory_to_location(location, data, size);
 
     if(ret){
-        asprintf(error, "couldn't write memory: %s", mach_error_string(ret));
+        concat(error, "couldn't write memory: %s", mach_error_string(ret));
         return CMD_FAILURE;
     }
 

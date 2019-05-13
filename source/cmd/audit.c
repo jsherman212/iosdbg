@@ -41,14 +41,14 @@ static void repair_cmd_args(struct cmd_args_t *_args, int argcount, ...){
 
 void audit_aslr(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 void audit_attach(struct cmd_args_t *args, char **error){
     char *arg1 = argnext(args);
 
     if(!arg1){
-        asprintf(error, "no target");
+        concat(error, "no target");
         dispose_on_failure(1, arg1);
         return;
     }
@@ -61,14 +61,14 @@ void audit_attach(struct cmd_args_t *args, char **error){
      */
     if(strcmp(arg1, "--waitfor") == 0){
         if(!arg2){
-            asprintf(error, "missing target for --waitfor");
+            concat(error, "missing target for --waitfor");
             dispose_on_failure(2, arg1, arg2);
             return;
         }
 
         /* We cannot wait for PIDs. */
         if(is_number_fast(arg2)){
-            asprintf(error, "cannot wait for PIDs");
+            concat(error, "cannot wait for PIDs");
             dispose_on_failure(2, arg1, arg2);
             return;
         }
@@ -78,7 +78,7 @@ void audit_attach(struct cmd_args_t *args, char **error){
 
     /* We cannot debug the kernel. */
     if(strcmp(target, "0") == 0 || strcmp(target, "kernel_task") == 0){
-        asprintf(error, "cannot debug the kernel");
+        concat(error, "cannot debug the kernel");
         dispose_on_failure(2, arg1, arg2);
         return;
     }
@@ -87,7 +87,7 @@ void audit_attach(struct cmd_args_t *args, char **error){
 
     /* We cannot debug ourselves. */
     if(strcmp(target, "iosdbg") == 0 || target_pid == getpid()){
-        asprintf(error, "cannot attach to myself");
+        concat(error, "cannot attach to myself");
         dispose_on_failure(2, arg1, arg2);
         return;
     }
@@ -97,24 +97,24 @@ void audit_attach(struct cmd_args_t *args, char **error){
 
 void audit_backtrace(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 void audit_breakpoint_set(struct cmd_args_t *args, char **error){
     // XXX if I allow setting breakpoints before attaching and resolving them
     // later, this will cause problems
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 void audit_continue(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 void audit_delete(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
         return;
     }
 
@@ -122,13 +122,13 @@ void audit_delete(struct cmd_args_t *args, char **error){
     char *arg1 = argnext(args);
 
     if(!arg1){
-        asprintf(error, "need type");
+        concat(error, "need type");
         dispose_on_failure(1, arg1);
         return;
     }
 
     if(strcmp(arg1, "b") != 0 && strcmp(arg1, "w") != 0){
-        asprintf(error, "unknown type '%s'", arg1);
+        concat(error, "unknown type '%s'", arg1);
         dispose_on_failure(1, arg1);
         return;
     }
@@ -140,12 +140,12 @@ void audit_delete(struct cmd_args_t *args, char **error){
 
 void audit_detach(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 void audit_disassemble(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
         return;
     }
 
@@ -153,7 +153,7 @@ void audit_disassemble(struct cmd_args_t *args, char **error){
     char *arg1 = argnext(args);
 
     if(!arg1){
-        asprintf(error, "need location");
+        concat(error, "need location");
         dispose_on_failure(1, arg1);
         return;
     }
@@ -162,7 +162,7 @@ void audit_disassemble(struct cmd_args_t *args, char **error){
     char *arg2 = argnext(args);
 
     if(!arg2){
-        asprintf(error, "need amount");
+        concat(error, "need amount");
         dispose_on_failure(2, arg1, arg2);
         return;
     }
@@ -179,7 +179,7 @@ void audit_disassemble(struct cmd_args_t *args, char **error){
 
 void audit_examine(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
         return;
     }
 
@@ -187,7 +187,7 @@ void audit_examine(struct cmd_args_t *args, char **error){
     char *arg1 = argnext(args);
 
     if(!arg1){
-        asprintf(error, "need location");
+        concat(error, "need location");
         dispose_on_failure(1, arg1);
         return;
     }
@@ -196,7 +196,7 @@ void audit_examine(struct cmd_args_t *args, char **error){
     char *arg2 = argnext(args);
 
     if(!arg2){
-        asprintf(error, "need amount");
+        concat(error, "need amount");
         dispose_on_failure(2, arg1, arg2);
         return;
     }
@@ -206,14 +206,14 @@ void audit_examine(struct cmd_args_t *args, char **error){
 
 void audit_kill(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 static void _audit_memory_find_final_args(char *arg1, char *arg2,
         char **error){
     if(strcmp(arg1, "--s") == 0){
         if(!arg2){
-            asprintf(error, "attempt to search for empty string");
+            concat(error, "attempt to search for empty string");
             return;
         }
     }
@@ -227,7 +227,7 @@ static void _audit_memory_find_final_args(char *arg1, char *arg2,
 
 void audit_memory_find(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 
     /* First argument is the start, nothing to do. */
     char *arg1 = argnext(args);
@@ -236,7 +236,7 @@ void audit_memory_find(struct cmd_args_t *args, char **error){
     char *arg2 = argnext(args);
 
     if(!arg2){
-        asprintf(error, "no count or no type");
+        concat(error, "no count or no type");
         dispose_on_failure(2, arg1, arg2);
         return;
     }
@@ -275,52 +275,52 @@ void audit_memory_find(struct cmd_args_t *args, char **error){
 
 void audit_memory_write(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 void audit_register_float(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
         return;
     }
 
     if(args->num_args == 0)
-        asprintf(error, "need a register");
+        concat(error, "need a register");
 }
 
 void audit_register_gen(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 void audit_register_write(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 void audit_stepi(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1)
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
 }
 
 void audit_thread_list(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
         return;
     }
 
     if(!debuggee->threads || !debuggee->threads->front)
-        asprintf(error, "no threads");
+        concat(error, "no threads");
 }
 
 void audit_thread_select(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
         return;
     }
 
     if(!debuggee->threads || !debuggee->threads->front){
-        asprintf(error, "no threads");
+        concat(error, "no threads");
         return;
     }
 
@@ -328,7 +328,7 @@ void audit_thread_select(struct cmd_args_t *args, char **error){
     char *arg1 = argnext(args);
 
     if(!arg1){
-        asprintf(error, "need thread ID");
+        concat(error, "need thread ID");
         dispose_on_failure(1, arg1);
         return;
     }
@@ -338,7 +338,7 @@ void audit_thread_select(struct cmd_args_t *args, char **error){
 
 void audit_watchpoint_set(struct cmd_args_t *args, char **error){
     if(debuggee->pid == -1){
-        asprintf(error, "no debuggee");
+        concat(error, "no debuggee");
         return;
     }
 
@@ -346,7 +346,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
     char *arg1 = argnext(args);
 
     if(!arg1){
-        asprintf(error, "need type or location");
+        concat(error, "need type or location");
         dispose_on_failure(1, arg1);
         return;
     }
@@ -356,7 +356,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
         if(strcmp(arg1, "--r") != 0 &&
                 strcmp(arg1, "--w") != 0 &&
                 strcmp(arg1, "--rw") != 0){
-            asprintf(error, "invalid watchpoint type '%s'", arg1);
+            concat(error, "invalid watchpoint type '%s'", arg1);
             dispose_on_failure(1, arg1);
             return;
         }
@@ -365,7 +365,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
         char *arg2 = argnext(args);
 
         if(!arg2){
-            asprintf(error, "need location");
+            concat(error, "need location");
             dispose_on_failure(2, arg1, arg2);
             return;
         }
@@ -374,7 +374,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
         char *arg3 = argnext(args);
 
         if(!arg3){
-            asprintf(error, "missing data size");
+            concat(error, "missing data size");
             dispose_on_failure(3, arg1, arg2, arg3);
             return;
         }
@@ -388,7 +388,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, char **error){
     char *arg2 = argnext(args);
 
     if(!arg2){
-        asprintf(error, "missing data size");
+        concat(error, "missing data size");
         dispose_on_failure(2, arg1, arg2);
         return;
     }

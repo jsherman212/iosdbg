@@ -8,6 +8,7 @@
 
 #include "debuggee.h"
 #include "printutils.h"
+#include "strext.h"
 #include "tarrays.h"
 #include "trace.h"
 
@@ -209,12 +210,12 @@ static void *trace(void *arg){
                 continue;
 
             char *tidstr = NULL;
-            asprintf(&tidstr, "[0x%-6.6llx] ", current.arg5);
+            concat(&tidstr, "[0x%-6.6llx] ", current.arg5);
 
-            char *calling, *returning;
+            char *calling = NULL, *returning = NULL;
 
-            asprintf(&calling, "%s%-10s", tidstr, "Calling:");
-            asprintf(&returning, "%s%-10s", tidstr, "Returning:");
+            concat(&calling, "%s%-10s", tidstr, "Calling:");
+            concat(&returning, "%s%-10s", tidstr, "Returning:");
 
             if(current.debugid & DBG_FUNC_START)
                 printf("\e[42m\e[30m%-*s\e[0m %-35.35s",
@@ -227,12 +228,15 @@ static void *trace(void *arg){
             free(calling);
             free(returning);
 
-            char *arg1desc, *arg2desc, *arg3desc, *arg4desc;
+            char *arg1desc = NULL,
+                 *arg2desc = NULL,
+                 *arg3desc = NULL,
+                 *arg4desc = NULL;
 
-            asprintf(&arg1desc, "\e[32marg1\e[0m = 0x%16.16llx", current.arg1);
-            asprintf(&arg2desc, "\e[94marg2\e[0m = 0x%16.16llx", current.arg2);
-            asprintf(&arg3desc, "\e[38;5;208marg3\e[0m = 0x%16.16llx", current.arg3);
-            asprintf(&arg4desc, "\e[38;5;124marg4\e[0m = 0x%16.16llx", current.arg4);
+            concat(&arg1desc, "\e[32marg1\e[0m = 0x%16.16llx", current.arg1);
+            concat(&arg2desc, "\e[94marg2\e[0m = 0x%16.16llx", current.arg2);
+            concat(&arg3desc, "\e[38;5;208marg3\e[0m = 0x%16.16llx", current.arg3);
+            concat(&arg4desc, "\e[38;5;124marg4\e[0m = 0x%16.16llx", current.arg4);
 
             printf("%1s%s%2s%s%2s%s%2s%s\n",
                     "", arg1desc, "", arg2desc, "", arg3desc, "", arg4desc);
