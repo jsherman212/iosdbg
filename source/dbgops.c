@@ -1,7 +1,5 @@
 #include <ctype.h>
-#include <dlfcn.h>
 #include <signal.h>
-#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -11,10 +9,13 @@
 #include "debuggee.h"
 #include "exception.h"
 #include "linkedlist.h"
+#include "memutils.h"
+#include "printutils.h"
 #include "ptrace.h"
 #include "sigsupport.h"
 #include "strext.h"
 #include "thread.h"
+#include "trace.h"
 #include "watchpoint.h"
 
 void ops_printsiginfo(void){
@@ -113,6 +114,38 @@ void ops_resume(void){
     reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
     debuggee->resume();
     debuggee->interrupted = 0;
+}
+
+void ops_suspend(void){
+    if(debuggee->pid != -1){
+        if(debuggee->interrupted)
+            return;
+
+        kern_return_t err = debuggee->suspend();
+
+        if(err){
+            printf("Cannot suspend: %s\n", mach_error_string(err));
+            debuggee->interrupted = 0;
+
+            return;
+        }
+
+        debuggee->interrupted = 1;
+    }
+
+    stop_trace();
+    
+    if(debuggee->pid != -1){
+        printf("\n");
+
+        debuggee->get_thread_state();
+
+        disassemble_at_location(debuggee->thread_state.__pc, 0x4);
+        
+        printf("%s stopped.\n", debuggee->debuggee_name);
+
+        safe_reprompt();
+    }
 }
 
 void ops_threadupdate(void){

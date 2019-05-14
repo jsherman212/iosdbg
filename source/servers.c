@@ -105,7 +105,7 @@ static void *death_server(void *arg){
 
         free(arg);
         
-        do_cmdline_command("detach", NULL, &error);
+        do_cmdline_command("detach", NULL, 0, &error);
 
         if(error)
             free(error);

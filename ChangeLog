@@ -1,3 +1,7 @@
+5-13-19
+- simulate user commands when needed
+- add 'interrupt' command
+
 5-12-19
 - asprintf --> concat
 - fixed up memutils.c

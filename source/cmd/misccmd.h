@@ -12,6 +12,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_detach(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_help(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_kill(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_quit(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *, int, char **);
@@ -69,6 +70,13 @@ static const char *HELP_COMMAND_DOCUMENTATION =
     "\t\tOmit this argument to be shown all top level commands.\n"
     "\nSyntax:\n"
     "\thelp command?\n"
+    "\n";
+
+static const char *INTERRUPT_COMMAND_DOCUMENTATION =
+    "Interrupt the debuggee.\n"
+    "This commmand has no arguments.\n"
+    "\nSyntax:\n"
+    "\tinterrupt\n"
     "\n";
 
 static const char *KILL_COMMAND_DOCUMENTATION =

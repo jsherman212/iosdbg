@@ -304,6 +304,13 @@ enum cmd_error_t cmdfunc_help(struct cmd_args_t *args,
     return (*error) ? CMD_FAILURE : CMD_SUCCESS;
 }
 
+enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args, 
+        int arg1, char **error){
+    ops_suspend();
+
+    return CMD_SUCCESS;
+}
+
 enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
         int arg1, char **error){
     char ans = answer("Do you really want to kill %s? (y/n) ", 

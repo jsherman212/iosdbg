@@ -11,12 +11,10 @@
 #include "handlers.h"
 #include "linkedlist.h"
 #include "memutils.h"
-#include "printutils.h"
 #include "rlext.h"
 #include "sigsupport.h"
 #include "strext.h"
 #include "thread.h"
-#include "trace.h"
 
 #include "cmd/audit.h"
 #include "cmd/bpcmd.h"
@@ -45,36 +43,8 @@ static void interrupt(int x1){
         printf("\n");
 
     keep_checking_for_process = 0;
-    
-    if(debuggee->pid != -1){
-        if(debuggee->interrupted)
-            return;
 
-        kern_return_t err = debuggee->suspend();
-
-        if(err){
-            printf("Cannot suspend: %s\n", mach_error_string(err));
-            debuggee->interrupted = 0;
-
-            return;
-        }
-
-        debuggee->interrupted = 1;
-    }
-
-    stop_trace();
-    
-    if(debuggee->pid != -1){
-        printf("\n");
-
-        debuggee->get_thread_state();
-
-        disassemble_at_location(debuggee->thread_state.__pc, 0x4);
-        
-        printf("%s stopped.\n", debuggee->debuggee_name);
-
-        safe_reprompt();
-    }
+    ops_suspend();
 }
 
 static void install_handlers(void){
@@ -543,6 +513,14 @@ static void initialize_commands(void){
 
     ADD_CMD(memory);
 
+    struct dbg_cmd_t *interrupt = create_parent_cmd("interrupt",
+            NULL, INTERRUPT_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_interrupt,
+            NULL);
+
+    ADD_CMD(interrupt);
+
     struct dbg_cmd_t *quit = create_parent_cmd("quit",
             "q", QUIT_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
             NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
@@ -711,7 +689,7 @@ static void inputloop(void){
         }
 
         char *linecpy = NULL, *error = NULL;
-        enum cmd_error_t result = do_cmdline_command(line, &linecpy, &error);
+        enum cmd_error_t result = do_cmdline_command(line, &linecpy, 1, &error);
 
         if(result && error){
             printf("error: %s\n", error);

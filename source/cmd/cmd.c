@@ -88,7 +88,7 @@ static void execute_shell_cmd(char *command,
 }
 
 enum cmd_error_t do_cmdline_command(char *user_command_,
-        char **expanded_command, char **error){
+        char **expanded_command, int user_invoked, char **error){
     char *user_command = strdup(user_command_);
     enum cmd_error_t result = CMD_SUCCESS;
 
@@ -162,9 +162,8 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
     if(num_tokens > 0){
         strclean(&randcommand);
         rl_replace_line(randcommand, 0);
+        LINE_MODIFIED = 1;
     }
-
-    LINE_MODIFIED = 1;
 
     char *arguments = NULL;
     char **prev_completions = NULL, **completions = NULL,
@@ -253,7 +252,10 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
 
     free(arguments);
 
-    rl_replace_line(usercommandcpy, 0);
+    if(user_invoked)
+        rl_replace_line(usercommandcpy, 0);
+    else
+        rl_replace_line("", 0);
 
     LINE_MODIFIED = 0;
 

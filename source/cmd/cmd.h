@@ -1,11 +1,11 @@
 #ifndef _CMD_H_
 #define _CMD_H_
 
-#define NUM_TOP_LEVEL_COMMANDS 19
+#define NUM_TOP_LEVEL_COMMANDS 20
 
 #include "argparse.h"       /* Defines MAX_GROUPS */
 
-enum cmd_error_t do_cmdline_command(char *, char **, char **);
+enum cmd_error_t do_cmdline_command(char *, char **, int, char **);
 
 /* Macros for arguments to create_(parent|child)_cmd.
  * These exist for clarity.
