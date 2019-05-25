@@ -1,5 +1,5 @@
-#ifndef _VARIABLECMD_H_
-#define _VARIABLECMD_H_
+#ifndef _VARCMD_H_
+#define _VARCMD_H_
 
 #include "argparse.h"
 

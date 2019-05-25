@@ -6,6 +6,7 @@
 
 #include "../debuggee.h"
 #include "../strext.h"
+#include "../thread.h"
 
 enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args, 
         int arg1, char **error){
@@ -13,7 +14,11 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
     char *curreg = argnext(args);
 
     while(curreg){
-        debuggee->get_neon_state();
+        //debuggee->get_neon_state();
+
+        struct machthread *focused = machthread_getfocused();
+
+        get_neon_state(focused);
 
         const size_t curreg_len = strlen(curreg);
 
@@ -23,13 +28,13 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
         if(strcmp(curreg, "fpsr") == 0){
             free(curreg);
             curreg = argnext(args);
-            printf("%10s = 0x%8.8x\n", "fpsr", debuggee->neon_state.__fpsr);
+            printf("%10s = 0x%8.8x\n", "fpsr", focused->neon_state.__fpsr);
             continue;
         }
         else if(strcmp(curreg, "fpcr") == 0){
             free(curreg);
             curreg = argnext(args);
-            printf("%10s = 0x%8.8x\n", "fpcr", debuggee->neon_state.__fpcr);
+            printf("%10s = 0x%8.8x\n", "fpcr", focused->neon_state.__fpcr);
             continue;
         }
         
@@ -59,8 +64,8 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
         }
         /* Quadword */
         else if(reg_type == 'q' || reg_type == 'v'){
-            long hi = debuggee->neon_state.__v[reg_num] >> 64;
-            long lo = debuggee->neon_state.__v[reg_num];
+            long hi = focused->neon_state.__v[reg_num] >> 64;
+            long lo = focused->neon_state.__v[reg_num];
 
             concat(&regstr, "v%d = {", reg_num);
 
@@ -76,11 +81,11 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
         /* Doubleword */
         else if(reg_type == 'd')
             concat(&regstr, "d%d = %.15g", reg_num, 
-                    *(double *)&debuggee->neon_state.__v[reg_num]);
+                    *(double *)&focused->neon_state.__v[reg_num]);
         /* Word */
         else if(reg_type == 's')
             concat(&regstr, "s%d = %g", reg_num, 
-                    *(float *)&debuggee->neon_state.__v[reg_num]);
+                    *(float *)&focused->neon_state.__v[reg_num]);
 
         /* Figure out how many bytes the register takes up in the string. */
         char *space = strchr(regstr, ' ');
@@ -101,7 +106,11 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args, 
         int arg1, char **error){
-    debuggee->get_thread_state();
+    //debuggee->get_thread_state();
+
+    struct machthread *focused = machthread_getfocused();
+
+    get_thread_state(focused);
 
     /* If there were no arguments, print every register. */
     if(args->num_args == 0){
@@ -110,16 +119,16 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
             concat(&regstr, "x%d", i);
 
             printf("%10s = 0x%16.16llx\n", regstr, 
-                    debuggee->thread_state.__x[i]);
+                    focused->thread_state.__x[i]);
 
             free(regstr);
         }
         
-        printf("%10s = 0x%16.16llx\n", "fp", debuggee->thread_state.__fp);
-        printf("%10s = 0x%16.16llx\n", "lr", debuggee->thread_state.__lr);
-        printf("%10s = 0x%16.16llx\n", "sp", debuggee->thread_state.__sp);
-        printf("%10s = 0x%16.16llx\n", "pc", debuggee->thread_state.__pc);
-        printf("%10s = 0x%8.8x\n", "cpsr", debuggee->thread_state.__cpsr);
+        printf("%10s = 0x%16.16llx\n", "fp", focused->thread_state.__fp);
+        printf("%10s = 0x%16.16llx\n", "lr", focused->thread_state.__lr);
+        printf("%10s = 0x%16.16llx\n", "sp", focused->thread_state.__sp);
+        printf("%10s = 0x%16.16llx\n", "pc", focused->thread_state.__pc);
+        printf("%10s = 0x%8.8x\n", "cpsr", focused->thread_state.__cpsr);
 
         return CMD_SUCCESS;
     }
@@ -137,15 +146,15 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
 
         if(reg_type != 'x' && reg_type != 'w'){
             if(strcmp(curreg, "fp") == 0)
-                printf("%8s = 0x%16.16llx\n", "fp", debuggee->thread_state.__fp);
+                printf("%8s = 0x%16.16llx\n", "fp", focused->thread_state.__fp);
             else if(strcmp(curreg, "lr") == 0)
-                printf("%8s = 0x%16.16llx\n", "lr", debuggee->thread_state.__lr);
+                printf("%8s = 0x%16.16llx\n", "lr", focused->thread_state.__lr);
             else if(strcmp(curreg, "sp") == 0)
-                printf("%8s = 0x%16.16llx\n", "sp", debuggee->thread_state.__sp);
+                printf("%8s = 0x%16.16llx\n", "sp", focused->thread_state.__sp);
             else if(strcmp(curreg, "pc") == 0)
-                printf("%8s = 0x%16.16llx\n", "pc", debuggee->thread_state.__pc);
+                printf("%8s = 0x%16.16llx\n", "pc", focused->thread_state.__pc);
             else if(strcmp(curreg, "cpsr") == 0)
-                printf("%8s = 0x%8.8x\n", "cpsr", debuggee->thread_state.__cpsr);
+                printf("%8s = 0x%8.8x\n", "cpsr", focused->thread_state.__cpsr);
             else
                 printf("Invalid register\n");
 
@@ -176,10 +185,10 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
 
         if(reg_type == 'x')
             printf("%8s = 0x%16.16llx\n", regstr,
-                    debuggee->thread_state.__x[reg_num]);
+                    focused->thread_state.__x[reg_num]);
         else
             printf("%8s = 0x%8.8x\n", regstr, 
-                    (int)debuggee->thread_state.__x[reg_num]);
+                    (int)focused->thread_state.__x[reg_num]);
 
         free(regstr);
         free(curreg);
@@ -214,8 +223,8 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
     int good_reg_num = (reg_num >= 0 && reg_num <= 31);
     int good_reg_type = gpr || fpr;
 
-    debuggee->get_thread_state();
-    debuggee->get_neon_state();
+    //debuggee->get_thread_state();
+    //debuggee->get_neon_state();
 
     /* Various representations of our value string. */
     int valued = (int)strtol_err(value_str, error);
@@ -244,21 +253,26 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
     if(fpr && !quadword && *error)
         goto fail;
 
+    struct machthread *focused = machthread_getfocused();
+
+    get_thread_state(focused);
+    get_neon_state(focused);
+
     /* Take care of any special registers. */
     if(strcmp(target_str, "fp") == 0)
-        debuggee->thread_state.__fp = valuellx;
+        focused->thread_state.__fp = valuellx;
     else if(strcmp(target_str, "lr") == 0)
-        debuggee->thread_state.__lr = valuellx;
+        focused->thread_state.__lr = valuellx;
     else if(strcmp(target_str, "sp") == 0)
-        debuggee->thread_state.__sp = valuellx;
+        focused->thread_state.__sp = valuellx;
     else if(strcmp(target_str, "pc") == 0)
-        debuggee->thread_state.__pc = valuellx;
+        focused->thread_state.__pc = valuellx;
     else if(strcmp(target_str, "cpsr") == 0)
-        debuggee->thread_state.__cpsr = valued;
+        focused->thread_state.__cpsr = valued;
     else if(strcmp(target_str, "fpsr") == 0)
-        debuggee->neon_state.__fpsr = valued;
+        focused->neon_state.__fpsr = valued;
     else if(strcmp(target_str, "fpcr") == 0)
-        debuggee->neon_state.__fpcr = valued;
+        focused->neon_state.__fpcr = valued;
     else{
         if(!good_reg_num || !good_reg_type){
             concat(error, "bad register '%s'", target_str);
@@ -267,10 +281,10 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
 
         if(gpr){
             if(reg_type == 'x')
-                debuggee->thread_state.__x[reg_num] = valuellx;
+                focused->thread_state.__x[reg_num] = valuellx;
             else{
-                debuggee->thread_state.__x[reg_num] &= ~0xFFFFFFFFULL;
-                debuggee->thread_state.__x[reg_num] |= valued;
+                focused->thread_state.__x[reg_num] &= ~0xFFFFFFFFULL;
+                focused->thread_state.__x[reg_num] |= valued;
             }
         }
         else{
@@ -322,8 +336,8 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
                 /* Since this is a 128 bit "number", we have to split it
                  * up into two 64 bit pointers to correctly modify it.
                  */
-                long *H = (long *)(&debuggee->neon_state.__v[reg_num]);
-                long *L = (long *)(&debuggee->neon_state.__v[reg_num]) + 1;
+                long *H = (long *)(&focused->neon_state.__v[reg_num]);
+                long *L = (long *)(&focused->neon_state.__v[reg_num]) + 1;
 
                 *H = hi;
                 *L = lo;
@@ -332,14 +346,17 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
                 free(lo_str);
             }
             else if(reg_type == 'd')
-                debuggee->neon_state.__v[reg_num] = *(long *)&valuedf;
+                focused->neon_state.__v[reg_num] = *(long *)&valuedf;
             else
-                debuggee->neon_state.__v[reg_num] = *(int *)&valuef;
+                focused->neon_state.__v[reg_num] = *(int *)&valuef;
         }
     }
 
-    debuggee->set_thread_state();
-    debuggee->set_neon_state();
+    //debuggee->set_thread_state();
+    //debuggee->set_neon_state();
+
+    set_thread_state(focused);
+    set_neon_state(focused);
 
     free(target_str);
     free(value_str);

@@ -217,19 +217,18 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
         printf(" to %#lx...\n", end);
     
     int results_cnt = 0;
+    const int dump_len = 0x10;
 
     while(start <= end && read_ret == KERN_SUCCESS){
-        void *read_buffer = malloc(target_len);
-        
+        uint8_t read_buffer[target_len];
         read_ret = read_memory_at_location((void *)start, read_buffer, target_len);
 
         if(memcmp(read_buffer, target, target_len) == 0){
             results_cnt++;
-            dump_memory(start, 0x10);
+            dump_memory(start, dump_len);
         }
 
         start++;
-        free(read_buffer);
     }
 
     printf("\n%d result(s)\n", results_cnt);

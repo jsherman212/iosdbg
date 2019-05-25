@@ -204,7 +204,12 @@ int is_number_fast(char *str){
     char *error = NULL;
     strtol_err(str, &error);
 
-    return error == NULL;
+    if(error){
+        free(error);
+        return 0;
+    }
+    
+    return 1;
 }
 
 char **token_array(char *str, const char *delim, int *len){

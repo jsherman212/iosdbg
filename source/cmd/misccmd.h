@@ -4,7 +4,7 @@
 #include "argparse.h"
 
 /* When --waitfor is included as an argument for 'attach'. */
-extern int keep_checking_for_process;
+extern int KEEP_CHECKING_FOR_PROCESS;
 
 enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *, int, char **);
 enum cmd_error_t cmdfunc_attach(struct cmd_args_t *, int, char **);

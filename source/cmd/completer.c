@@ -325,7 +325,7 @@ static int no_ambiguity_before(const char *text){
     if(!text_before)
         return 1;
 
-    int ambiguous = 0, cur_level = 0, idx = 0, len = 0;
+    int cur_level = 0, idx = 0, len = 0;
     char **tokens = token_array(text_before, " ", &len);
 
     while(idx < len){

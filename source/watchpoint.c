@@ -6,6 +6,7 @@
 #include "linkedlist.h"
 #include "memutils.h"
 #include "strext.h"
+#include "thread.h"
 #include "watchpoint.h"
 
 /* Find an available hardware watchpoint register.*/
@@ -46,7 +47,7 @@ static int find_ready_wp_reg(void){
 }
 
 static struct watchpoint *watchpoint_new(unsigned long location,
-        unsigned int data_len, int LSC, char **error){
+        unsigned int data_len, int LSC, int thread, char **error){
     if(data_len == 0 || data_len > sizeof(unsigned long)){
         concat(error, "data length (%d) is invalid", data_len);
         return NULL;
@@ -61,7 +62,9 @@ static struct watchpoint *watchpoint_new(unsigned long location,
     }
     
     struct watchpoint *wp = malloc(sizeof(struct watchpoint));
-    
+
+    wp->thread = thread;
+
     wp->location = location;
     wp->hit_count = 0;
     
@@ -88,7 +91,7 @@ static struct watchpoint *watchpoint_new(unsigned long location,
         return NULL;
     }
 
-    debuggee->get_debug_state();
+    //debuggee->get_debug_state();
 
     wp->LSC = LSC;
 
@@ -104,20 +107,42 @@ static struct watchpoint *watchpoint_new(unsigned long location,
     int BAS_ = (((1 << wp->data_len) - 1) << 5);
     LSC <<= 3;
 
-    debuggee->debug_state.__wcr[available_wp_reg] = 
+    /*debuggee->debug_state.__wcr[available_wp_reg] = 
         WT |
         BAS_ |
         LSC |
         PAC |
         E;
+*/
+
+    __uint64_t wcr = WT | BAS_ | LSC | PAC | E;
 
     /* Bits[1:0] must be clear in DBGWVR<n>_EL1. */
-    location &= ~0x3;
+    //location &= ~0x3;
+    __uint64_t wvr = (location & ~0x3);
 
     /* Put the location in whichever DBGWVR<n>_EL1 is available. */
-    debuggee->debug_state.__wvr[available_wp_reg] = location;
+    //debuggee->debug_state.__wvr[available_wp_reg] = location;
 
-    debuggee->set_debug_state();
+    //debuggee->set_debug_state();
+
+    if(wp->thread == WP_ALL_THREADS){
+        for(struct node_t *current = debuggee->threads->front;
+                current;
+                current = current->next){
+            struct machthread *t = current->data;
+
+            get_debug_state(t);
+
+            t->debug_state.__wcr[available_wp_reg] = wcr;
+            t->debug_state.__wvr[available_wp_reg] = wvr;
+
+            set_debug_state(t);
+        }
+    }
+    else{
+        // XXX struct machthread *target = find_with_id etc etc
+    }
 
     wp->hw_wp_reg = available_wp_reg;
     wp->id = current_watchpoint_id++;
@@ -125,8 +150,8 @@ static struct watchpoint *watchpoint_new(unsigned long location,
     return wp;
 }
 
-
 static void enable_wp(struct watchpoint *wp){
+    /*
     debuggee->get_debug_state();
     
     int BAS_ = (((1 << wp->data_len) - 1) << 5);
@@ -141,12 +166,55 @@ static void enable_wp(struct watchpoint *wp){
     debuggee->debug_state.__wvr[wp->hw_wp_reg] = (wp->location & ~0x3);
 
     debuggee->set_debug_state();
+    */
+
+    int BAS_ = (((1 << wp->data_len) - 1) << 5);
+
+    __uint64_t wcr = WT | BAS_ | wp->LSC | PAC | E;
+    __uint64_t wvr = (wp->location & ~0x3);
+
+    if(wp->thread == WP_ALL_THREADS){
+        for(struct node_t *current = debuggee->threads->front;
+                current;
+                current = current->next){
+            struct machthread *t = current->data;
+
+            get_debug_state(t);
+
+            t->debug_state.__wcr[wp->hw_wp_reg] = wcr;
+            t->debug_state.__wvr[wp->hw_wp_reg] = wvr;
+
+            set_debug_state(t);
+        }
+    }
+    else{
+        // XXX struct machthread *target = find_with_id etc etc
+    }
 }
 
 static void disable_wp(struct watchpoint *wp){
+    /*
     debuggee->get_debug_state();
     debuggee->debug_state.__wcr[wp->hw_wp_reg] = 0;
     debuggee->set_debug_state();
+    */
+
+    if(wp->thread == WP_ALL_THREADS){
+        for(struct node_t *current = debuggee->threads->front;
+                current;
+                current = current->next){
+            struct machthread *t = current->data;
+
+            get_debug_state(t);
+
+            t->debug_state.__wcr[wp->hw_wp_reg] = 0;
+
+            set_debug_state(t);
+        }
+    }
+    else{
+        // XXX struct machthread *target = find_with_id etc etc
+    }
 }
 
 static void wp_set_state_internal(struct watchpoint *wp, int disabled){
@@ -164,8 +232,8 @@ static void wp_delete_internal(struct watchpoint *wp){
 }
 
 void watchpoint_at_address(unsigned long location, unsigned int data_len,
-        int LSC, char **error){
-    struct watchpoint *wp = watchpoint_new(location, data_len, LSC, error);
+        int LSC, int thread, char **error){
+    struct watchpoint *wp = watchpoint_new(location, data_len, LSC, thread, error);
 
     if(!wp)
         return;

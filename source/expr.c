@@ -8,6 +8,7 @@
 #include "debuggee.h"
 #include "stack.h"
 #include "strext.h"
+#include "thread.h"
 
 /* Use 'N' to express a unary negation. */
 #define NEGATION 'N'
@@ -171,18 +172,22 @@ static char *lookup_register(char *reg, char **error){
     for(int i=0; i<reglen; i++)
         reg[i] = tolower(reg[i]);
 
-    debuggee->get_thread_state();
+    //debuggee->get_thread_state();
+
+    struct machthread *focused = machthread_getfocused();
+
+    get_thread_state(focused);
 
     long long regval;
 
     if(strcmp(reg, "$fp") == 0)
-        regval = debuggee->thread_state.__fp;
+        regval = focused->thread_state.__fp;
     else if(strcmp(reg, "$lr") == 0)
-        regval = debuggee->thread_state.__lr;
+        regval = focused->thread_state.__lr;
     else if(strcmp(reg, "$sp") == 0)
-        regval = debuggee->thread_state.__sp;
+        regval = focused->thread_state.__sp;
     else if(strcmp(reg, "$pc") == 0)
-        regval = debuggee->thread_state.__pc;
+        regval = focused->thread_state.__pc;
     else{
         /* We cannot include floating point values. */
         if(reg[1] != 'x' && reg[1] != 'w'){
@@ -199,9 +204,9 @@ static char *lookup_register(char *reg, char **error){
         }
 
         if(reg[1] == 'x')
-            regval = debuggee->thread_state.__x[regnum];
+            regval = focused->thread_state.__x[regnum];
         else
-            regval = debuggee->thread_state.__x[regnum] & 0xFFFFFFFF;
+            regval = focused->thread_state.__x[regnum] & 0xFFFFFFFF;
     }
 
     char *regvalstr = NULL;
@@ -453,7 +458,7 @@ fail:
     return LONG_MIN;
 }
 
-/* Parse an expression.
+/* Evaluate an expression.
  * `error` is set on error.
  */
 long eval_expr(char *_expr, char **error){

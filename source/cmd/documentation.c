@@ -37,7 +37,6 @@ void show_all_top_level_cmds(void){
     }
 
     rl_display_match_list(cmds, len, largest_cmd_len);
-
     token_array_free(cmds, len);
 }
 
@@ -116,11 +115,6 @@ void documentation_for_cmdname(char *_name, char **error){
 
     int idx = 0;
     
-    for(int i=0; i<num_tokens; i++){
-        
-        //printf("'%s'\n", tokens[i]);
-    }
-
     /* If we only have one token, this is a top level command
      * without any sub-commands. There's no need to waste time doing
      * a level order search, a linear search through the command
@@ -130,7 +124,6 @@ void documentation_for_cmdname(char *_name, char **error){
         while(idx < NUM_TOP_LEVEL_COMMANDS){
             struct dbg_cmd_t *current = COMMANDS[idx++];
 
-          //  printf("tokens[0] '%s'\n", tokens[0]);
             if(strcmp(current->name, tokens[0]) == 0){
                 documentation_for_cmd(current);
                 goto out;

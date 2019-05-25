@@ -102,7 +102,8 @@ enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    breakpoint_at_address(location, BP_NO_TEMP, error);    
+    // TODO let user set on specific thread
+    breakpoint_at_address(location, BP_NO_TEMP, BP_ALL_THREADS, error);    
 
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }

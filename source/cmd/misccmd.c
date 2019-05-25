@@ -28,7 +28,7 @@
 #include "../thread.h"
 #include "../trace.h"
 
-int keep_checking_for_process;
+int KEEP_CHECKING_FOR_PROCESS;
 
 static pid_t parse_pid(char *pidstr, char **error){
     return is_number_fast(pidstr) ? (pid_t)strtol_err(pidstr, error)
@@ -98,9 +98,9 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
          * so don't return on error.
          */
         target_pid = parse_pid(target, error);
-        keep_checking_for_process = 1;
+        KEEP_CHECKING_FOR_PROCESS = 1;
 
-        while(target_pid == -1 && keep_checking_for_process){
+        while(target_pid == -1 && KEEP_CHECKING_FOR_PROCESS){
             target_pid = parse_pid(target, error);
 
             *error = NULL;
@@ -108,7 +108,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
             usleep(400);
         }
 
-        keep_checking_for_process = 0;
+        KEEP_CHECKING_FOR_PROCESS = 0;
     }
     else
         target_pid = parse_pid(target, error);
@@ -159,7 +159,10 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     else
         debuggee->debuggee_name = strdup(target);
 
+    debuggee->exc_requests = queue_new();
+
     debuggee->breakpoints = linkedlist_new();
+//    debuggee->exc_requests = linkedlist_new();
     debuggee->watchpoints = linkedlist_new();
     debuggee->threads = linkedlist_new();
 
@@ -176,7 +179,8 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     machthread_updatethreads(threads);
     machthread_setfocused(threads[0]);
 
-    debuggee->get_thread_state();
+    struct machthread *focused = machthread_getfocused();
+    get_thread_state(focused);
 
     debuggee->want_detach = 0;
 
@@ -213,10 +217,14 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
         int arg1, char **error){
-    debuggee->get_thread_state();
+    //debuggee->get_thread_state();
 
-    printf("  * frame #0: 0x%16.16llx\n", debuggee->thread_state.__pc);
-    printf("    frame #1: 0x%16.16llx\n", debuggee->thread_state.__lr);
+    struct machthread *focused = machthread_getfocused();
+
+    get_thread_state(focused);
+
+    printf("  * frame #0: 0x%16.16llx\n", focused->thread_state.__pc);
+    printf("    frame #1: 0x%16.16llx\n", focused->thread_state.__lr);
 
     int frame_counter = 2;
 
@@ -228,7 +236,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
     struct frame_t *current_frame = malloc(sizeof(struct frame_t));
     kern_return_t err = read_memory_at_location(
-            (void *)debuggee->thread_state.__fp, current_frame, 
+            (void *)focused->thread_state.__fp, current_frame, 
             sizeof(struct frame_t));
     
     if(err){
@@ -384,8 +392,8 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
         int arg1, char **error){
-    if(debuggee->pending_messages > 0)
-        reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
+    //if(debuggee->pending_messages > 0)
+      //  reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
 
     /* Disable breakpoints when single stepping so we don't have to deal
      * with more exceptions being raised. Instead, just check if we're at
@@ -393,10 +401,17 @@ enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
      */
     breakpoint_disable_all();
 
+    struct machthread *focused = machthread_getfocused();
+
+    get_debug_state(focused);
+    focused->debug_state.__mdscr_el1 |= 1;
+    set_debug_state(focused);
+
+    /*
     debuggee->get_debug_state();
     debuggee->debug_state.__mdscr_el1 |= 1;
     debuggee->set_debug_state();
-
+    */
     debuggee->is_single_stepping = 1;
 
     rl_already_prompted = 1;

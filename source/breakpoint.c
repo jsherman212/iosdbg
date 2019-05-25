@@ -7,6 +7,7 @@
 #include "linkedlist.h"
 #include "memutils.h"
 #include "strext.h"
+#include "thread.h"
 
 /* Find an available hardware breakpoint register.*/
 static int find_ready_bp_reg(void){
@@ -47,7 +48,7 @@ static int find_ready_bp_reg(void){
 }
 
 struct breakpoint *breakpoint_new(unsigned long location, int temporary, 
-        char **error){
+        int thread, char **error){
     kern_return_t err = valid_location(location);
 
     if(err){
@@ -58,6 +59,8 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     
     struct breakpoint *bp = malloc(sizeof(struct breakpoint));
 
+    bp->thread = thread;
+
     bp->hw = 0;
     bp->hw_bp_reg = -1;
 
@@ -65,8 +68,6 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
 
     /* We have an available breakpoint register, use it. */
     if(available_bp_reg != -1){
-        debuggee->get_debug_state();
-
         bp->hw = 1;
         bp->hw_bp_reg = available_bp_reg;
 
@@ -80,26 +81,37 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
          *    where we are executing.
          *  - E must be 0b1 so this breakpoint is enabled.
          */
-        debuggee->debug_state.__bcr[available_bp_reg] = 
-            BT |
-            BAS |
-            PMC |
-            E;
-        
+        __uint64_t bcr = (BT | BAS | PMC | E);
+
         /* Bits[1:0] must be clear in DBGBVR<n>_EL1 or else the instruction
          * is mis-aligned, so clear those bits in the location.
          */
-        location &= ~0x3;
+        __uint64_t bvr = (location & ~0x3);
+      
+        if(bp->thread == BP_ALL_THREADS){
+            for(struct node_t *current = debuggee->threads->front;
+                    current;
+                    current = current->next){
+                struct machthread *t = current->data;
 
-        /* Put the location in whichever DBGBVR<n>_EL1 is available. */
-        debuggee->debug_state.__bvr[available_bp_reg] = location;
-        debuggee->set_debug_state();
+                get_debug_state(t);
+
+                t->debug_state.__bcr[available_bp_reg] = bcr;
+                t->debug_state.__bvr[available_bp_reg] = bvr;
+
+                set_debug_state(t);
+            }
+        }
+        else{
+            // XXX struct machthread *target = find_with_id etc etc
+        }
     }
     
     bp->location = location;
 
     int sz = 0x4;
-    
+  
+    // XXX why am I using malloc
     unsigned int *orig_instruction = malloc(sizeof(unsigned int));
     err = read_memory_at_location((void *)bp->location, orig_instruction, sz);
 
@@ -128,6 +140,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
 }
 
 static void enable_hw_bp(struct breakpoint *bp){
+    /*
     debuggee->get_debug_state();
 
     debuggee->debug_state.__bcr[bp->hw_bp_reg] = 
@@ -139,12 +152,53 @@ static void enable_hw_bp(struct breakpoint *bp){
     debuggee->debug_state.__bvr[bp->hw_bp_reg] = (bp->location & ~0x3);
 
     debuggee->set_debug_state();
+    */
+
+    __uint64_t bcr = (BT | BAS | PMC | E);
+    __uint64_t bvr = (bp->location & ~0x3);
+
+    if(bp->thread == BP_ALL_THREADS){
+        for(struct node_t *current = debuggee->threads->front;
+                current;
+                current = current->next){
+            struct machthread *t = current->data;
+
+            get_debug_state(t);
+
+            t->debug_state.__bcr[bp->hw_bp_reg] = bcr;
+            t->debug_state.__bvr[bp->hw_bp_reg] = bvr;
+
+            set_debug_state(t);
+        }
+    }
+    else{
+        // XXX struct machthread *target = find_with_id etc etc
+    }
 }
 
 static void disable_hw_bp(struct breakpoint *bp){
+    /*
     debuggee->get_debug_state();
     debuggee->debug_state.__bcr[bp->hw_bp_reg] = 0;
     debuggee->set_debug_state();
+    */
+
+    if(bp->thread == BP_ALL_THREADS){
+        for(struct node_t *current = debuggee->threads->front;
+                current;
+                current = current->next){
+            struct machthread *t = current->data;
+
+            get_debug_state(t);
+
+            t->debug_state.__bcr[bp->hw_bp_reg] = 0;
+
+            set_debug_state(t);
+        }
+    }
+    else{
+        // XXX struct machthread *target = find_with_id etc etc
+    }
 }
 
 /* Set whether or not a breakpoint is disabled or enabled,
@@ -175,8 +229,8 @@ static void bp_delete_internal(struct breakpoint *bp){
 }
 
 void breakpoint_at_address(unsigned long address, int temporary,
-        char **error){
-    struct breakpoint *bp = breakpoint_new(address, temporary, error);
+        int thread, char **error){
+    struct breakpoint *bp = breakpoint_new(address, temporary, thread, error);
 
     if(!bp)
         return;

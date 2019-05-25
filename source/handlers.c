@@ -2,7 +2,8 @@
 
 #include "debuggee.h"
 #include "handlers.h"
-#include "thread.h"
+#include "linkedlist.h"
+//#include "thread.h"
 
 unsigned long long find_slide(void){
     vm_region_basic_info_data_64_t info;
@@ -114,103 +115,4 @@ kern_return_t update_threads(thread_act_port_array_t *threads){
     debuggee->thread_count = thread_count;
 
     return err;
-}
-
-kern_return_t get_debug_state(void){
-    mach_msg_type_number_t count = ARM_DEBUG_STATE64_COUNT;
-
-    struct machthread *focused = machthread_getfocused();
-
-    if(!focused)
-        return KERN_FAILURE;
-
-    kern_return_t kret = thread_get_state(focused->port,
-            ARM_DEBUG_STATE64,
-            (thread_state_t)&debuggee->debug_state,
-            &count);
-
-    return kret;
-}
-
-/* Must call get_debug_state before calling this. */
-kern_return_t set_debug_state(void){
-    mach_msg_type_number_t count = ARM_DEBUG_STATE64_COUNT;
-
-    struct machthread *focused = machthread_getfocused();
-    
-    if(!focused)
-        return KERN_FAILURE;
-
-    kern_return_t kret = thread_set_state(focused->port,
-            ARM_DEBUG_STATE64,
-            (thread_state_t)&debuggee->debug_state,
-            count);
-
-    return kret;
-}
-
-kern_return_t get_thread_state(void){
-    mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-
-    struct machthread *focused = machthread_getfocused();
-
-    if(!focused)
-        return KERN_FAILURE;
-
-    kern_return_t kret = thread_get_state(focused->port,
-            ARM_THREAD_STATE64,
-            (thread_state_t)&debuggee->thread_state,
-            &count);
-
-    return kret;
-}
-
-/* Must call get_thread_state before calling this. */
-kern_return_t set_thread_state(void){
-    mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-
-    struct machthread *focused = machthread_getfocused();
-
-    if(!focused)
-        return KERN_FAILURE;
-    
-    kern_return_t kret = thread_set_state(focused->port,
-            ARM_THREAD_STATE64,
-            (thread_state_t)&debuggee->thread_state,
-            count);
-
-    return kret;
-}
-
-kern_return_t get_neon_state(void){
-    mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
-    
-    struct machthread *focused = machthread_getfocused();
-
-    if(!focused)
-        return KERN_FAILURE;
-
-    kern_return_t kret = thread_get_state(focused->port,
-            ARM_NEON_STATE64,
-            (thread_state_t)&debuggee->neon_state,
-            &count);
-
-    return kret;
-}
-
-/* Must call get_neon_state before calling this. */
-kern_return_t set_neon_state(void){
-    mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
-    
-    struct machthread *focused = machthread_getfocused();
-
-    if(!focused)
-        return KERN_FAILURE;
-
-    kern_return_t kret = thread_set_state(focused->port,
-            ARM_NEON_STATE64,
-            (thread_state_t)&debuggee->neon_state,
-            count);
-
-    return kret;
 }

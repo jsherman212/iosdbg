@@ -23,6 +23,12 @@ struct machthread {
 
     /* Thread state. */
     arm_thread_state64_t thread_state;
+
+    /* Debug state. */
+    arm_debug_state64_t debug_state;
+
+    /* Neon state. */
+    arm_neon_state64_t neon_state;
 };
 
 enum comparison {
@@ -34,6 +40,17 @@ enum comparison {
 struct machthread *machthread_fromport(mach_port_t);
 struct machthread *machthread_find(int);
 struct machthread *machthread_getfocused(void);
+
+/* For clarity. This is only used with the functions below. */
+#define FOR_ALL_THREADS (NULL)
+
+kern_return_t get_thread_state(struct machthread *);
+kern_return_t set_thread_state(struct machthread *);
+kern_return_t get_debug_state(struct machthread *);
+kern_return_t set_debug_state(struct machthread *);
+kern_return_t get_neon_state(struct machthread *);
+kern_return_t set_neon_state(struct machthread *);
+
 int machthread_setfocusgivenindex(int);
 void machthread_updatestate(struct machthread *);
 void machthread_updatethreads(thread_act_port_array_t);

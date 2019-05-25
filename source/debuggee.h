@@ -12,10 +12,10 @@ struct debuggee {
     pid_t pid;
 
     /* Number of pending messages received at the debuggee's exception port. */
-    int pending_messages;
+    int pending_exceptions;
 
-    /* Exception request from exception_server. */
-    void *exc_request;
+    /* Exception requests from exception_server. */
+    struct queue_t *exc_requests;
 
     /* If this variable is non-zero, tracing is not supported. */
     int tracing_disabled;
@@ -56,15 +56,6 @@ struct debuggee {
     /* Whether or not the debuggee wants to detach. */
     int want_detach;
 
-    /* Thread state for the debuggee. */
-    arm_thread_state64_t thread_state;
-
-    /* Debug state for the debuggee. */
-    arm_debug_state64_t debug_state;
-
-    /* Neon state for the debuggee. */
-    arm_neon_state64_t neon_state;
-    
     /* Count of threads for the debuggee. */
     mach_msg_type_number_t thread_count;
 
@@ -112,24 +103,6 @@ struct debuggee {
 
     /* The function pointer to update the list of the debuggee's threads. */
     kern_return_t (*update_threads)(thread_act_port_array_t *);
-
-    /* The function pointer to get the debug thread state of the debuggee's focused thread. */
-    kern_return_t (*get_debug_state)(void);
-
-    /* The function pointer to set the debug thread state of the debuggee's focused thread. */
-    kern_return_t (*set_debug_state)(void);
-    
-    /* The function pointer to get the thread state of the debuggee's focused thread. */
-    kern_return_t (*get_thread_state)(void);
-
-    /* The function pointer to set the thread state of the debuggee's focused thread. */
-    kern_return_t (*set_thread_state)(void);
-
-    /* The function point to get the neon state of the debuggee's focused thread. */
-    kern_return_t (*get_neon_state)(void);
-
-    /* The function point to set the neon state of the debuggee's focused thread. */
-    kern_return_t (*set_neon_state)(void);
 };
 
 /* This structure represents what we are currently debugging. */

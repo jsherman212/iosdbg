@@ -39,10 +39,10 @@ int mach_traps_arr_len;
 int mach_messages_arr_len;
 
 static void interrupt(int x1){
-    if(keep_checking_for_process)
+    if(KEEP_CHECKING_FOR_PROCESS)
         printf("\n");
 
-    keep_checking_for_process = 0;
+    KEEP_CHECKING_FOR_PROCESS = 0;
 
     ops_suspend();
 }
@@ -55,12 +55,13 @@ static void install_handlers(void){
     debuggee->deallocate_ports = &deallocate_ports;
     debuggee->suspend = &suspend;
     debuggee->update_threads = &update_threads;
-    debuggee->get_debug_state = &get_debug_state;
+    /*debuggee->get_debug_state = &get_debug_state;
     debuggee->set_debug_state = &set_debug_state;
     debuggee->get_thread_state = &get_thread_state;
     debuggee->set_thread_state = &set_thread_state;
     debuggee->get_neon_state = &get_neon_state;
     debuggee->set_neon_state = &set_neon_state;
+    */
 }
 
 static int _rl_getc(FILE *stream){
@@ -274,9 +275,13 @@ static void setup_initial_debuggee(void){
     /* If we aren't attached to anything, debuggee's pid is -1. */
     debuggee->pid = -1;
     debuggee->interrupted = 0;
+
+    /*
     debuggee->breakpoints = linkedlist_new();
-    debuggee->watchpoints = linkedlist_new();
+    debuggee->exc_requests = linkedlist_new();
     debuggee->threads = linkedlist_new();
+    debuggee->watchpoints = linkedlist_new();
+    */
 
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
@@ -290,7 +295,7 @@ static void setup_initial_debuggee(void){
     debuggee->tracing_disabled = 0;
     debuggee->currently_tracing = 0;
 
-    debuggee->pending_messages = 0;
+    debuggee->pending_exceptions = 0;
 
     /* Figure out how many hardware breakpoints/watchpoints are supported. */
     size_t len = sizeof(int);
@@ -672,7 +677,7 @@ static void inputloop(void){
     char *line = NULL;
     char *prevline = NULL;
 
-    static const char *prompt = "\e[2m(iosdbg) \e[0m";
+    static const char *prompt = "\033[2m(iosdbg) \033[0m";
 
     while((line = readline(prompt)) != NULL){
         /* If the user hits enter, repeat the last command,

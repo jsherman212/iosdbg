@@ -206,8 +206,9 @@ static void *trace(void *arg){
                 if(!event)
                     continue;
             }
-            else
+            else{
                 continue;
+            }
 
             char *tidstr = NULL;
             concat(&tidstr, "[0x%-6.6llx] ", current.arg5);
@@ -218,11 +219,11 @@ static void *trace(void *arg){
             concat(&returning, "%s%-10s", tidstr, "Returning:");
 
             if(current.debugid & DBG_FUNC_START)
-                printf("\e[42m\e[30m%-*s\e[0m %-35.35s",
+                printf("\033[42m\033[30m%-*s\033[0m %-35.35s",
                         (int)strlen(calling), calling, event);
 
             if(current.debugid & DBG_FUNC_END)
-                printf("\e[46m\e[30m%-*s\e[0m %-35.35s",
+                printf("\033[46m\033[30m%-*s\033[0m %-35.35s",
                         (int)strlen(returning), returning, event);
 
             free(calling);
@@ -233,10 +234,10 @@ static void *trace(void *arg){
                  *arg3desc = NULL,
                  *arg4desc = NULL;
 
-            concat(&arg1desc, "\e[32marg1\e[0m = 0x%16.16llx", current.arg1);
-            concat(&arg2desc, "\e[94marg2\e[0m = 0x%16.16llx", current.arg2);
-            concat(&arg3desc, "\e[38;5;208marg3\e[0m = 0x%16.16llx", current.arg3);
-            concat(&arg4desc, "\e[38;5;124marg4\e[0m = 0x%16.16llx", current.arg4);
+            concat(&arg1desc, "\033[32marg1\033[0m = 0x%16.16llx", current.arg1);
+            concat(&arg2desc, "\033[94marg2\033[0m = 0x%16.16llx", current.arg2);
+            concat(&arg3desc, "\033[38;5;208marg3\033[0m = 0x%16.16llx", current.arg3);
+            concat(&arg4desc, "\033[38;5;124marg4\033[0m = 0x%16.16llx", current.arg4);
 
             printf("%1s%s%2s%s%2s%s%2s%s\n",
                     "", arg1desc, "", arg2desc, "", arg3desc, "", arg4desc);

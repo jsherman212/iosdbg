@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "debuggee.h"
@@ -90,6 +91,180 @@ struct machthread *machthread_getfocused(void){
     return find_with_cond(FOCUSED, NULL);
 }
 
+kern_return_t get_thread_state(struct machthread *thread){
+    mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+
+    if(thread){
+        return thread_get_state(thread->port,
+                ARM_THREAD_STATE64,
+                (thread_state_t)&thread->thread_state,
+                &count);
+    }
+
+    for(struct node_t *current = debuggee->threads->front;
+            current;
+            current = current->next){
+        struct machthread *t = current->data;
+
+        kern_return_t kret = thread_get_state(t->port,
+                ARM_THREAD_STATE64,
+                (thread_state_t)&t->thread_state,
+                &count);
+
+        if(kret){
+            printf("warning: couldn't update thread state for thread %d: %s\n",
+                    t->ID, mach_error_string(kret));
+        }
+    }
+
+    return KERN_SUCCESS;
+}
+
+kern_return_t set_thread_state(struct machthread *thread){
+    mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
+
+    if(thread){
+        return thread_set_state(thread->port,
+                ARM_THREAD_STATE64,
+                (thread_state_t)&thread->thread_state,
+                count);
+    }
+
+    for(struct node_t *current = debuggee->threads->front;
+            current;
+            current = current->next){
+        struct machthread *t = current->data;
+
+        kern_return_t kret = thread_set_state(t->port,
+                ARM_THREAD_STATE64,
+                (thread_state_t)&t->thread_state,
+                count);
+
+        if(kret){
+            printf("warning: couldn't set thread state for thread %d: %s\n",
+                    t->ID, mach_error_string(kret));
+        }
+    }
+
+    return KERN_SUCCESS;
+}
+
+kern_return_t get_debug_state(struct machthread *thread){
+    mach_msg_type_number_t count = ARM_DEBUG_STATE64_COUNT;
+
+    if(thread){
+        return thread_get_state(thread->port,
+                ARM_DEBUG_STATE64,
+                (thread_state_t)&thread->debug_state,
+                &count);
+    }
+
+    for(struct node_t *current = debuggee->threads->front;
+            current;
+            current = current->next){
+        struct machthread *t = current->data;
+
+        kern_return_t kret = thread_get_state(t->port,
+                ARM_DEBUG_STATE64,
+                (thread_state_t)&t->debug_state,
+                &count);
+
+        if(kret){
+            printf("warning: couldn't update debug state for thread %d: %s\n",
+                    t->ID, mach_error_string(kret));
+        }
+    }
+
+    return KERN_SUCCESS;
+}
+
+kern_return_t set_debug_state(struct machthread *thread){
+    mach_msg_type_number_t count = ARM_DEBUG_STATE64_COUNT;
+
+    if(thread){
+        return thread_set_state(thread->port,
+                ARM_DEBUG_STATE64,
+                (thread_state_t)&thread->debug_state,
+                count);
+    }
+
+    for(struct node_t *current = debuggee->threads->front;
+            current;
+            current = current->next){
+        struct machthread *t = current->data;
+
+        kern_return_t kret = thread_set_state(t->port,
+                ARM_DEBUG_STATE64,
+                (thread_state_t)&t->debug_state,
+                count);
+
+        if(kret){
+            printf("warning: couldn't set debug state for thread %d: %s\n",
+                    t->ID, mach_error_string(kret));
+        }
+    }
+
+    return KERN_SUCCESS;
+}
+
+kern_return_t get_neon_state(struct machthread *thread){
+    mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
+
+    if(thread){
+        return thread_get_state(thread->port,
+                ARM_NEON_STATE64,
+                (thread_state_t)&thread->neon_state,
+                &count);
+    }
+    
+    for(struct node_t *current = debuggee->threads->front;
+            current;
+            current = current->next){
+        struct machthread *t = current->data;
+
+        kern_return_t kret = thread_get_state(t->port,
+                ARM_NEON_STATE64,
+                (thread_state_t)&t->neon_state,
+                &count);
+
+        if(kret){
+            printf("warning: couldn't update neon state for thread %d: %s\n",
+                    t->ID, mach_error_string(kret));
+        }
+    }
+
+    return KERN_SUCCESS;
+}
+
+kern_return_t set_neon_state(struct machthread *thread){
+    mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
+
+    if(thread){
+        return thread_set_state(thread->port,
+                ARM_NEON_STATE64,
+                (thread_state_t)&thread->neon_state,
+                count);
+    }
+    
+    for(struct node_t *current = debuggee->threads->front;
+            current;
+            current = current->next){
+        struct machthread *t = current->data;
+
+        kern_return_t kret = thread_set_state(t->port,
+                ARM_NEON_STATE64,
+                (thread_state_t)&t->neon_state,
+                count);
+
+        if(kret){
+            printf("warning: couldn't set neon state for thread %d: %s\n",
+                    t->ID, mach_error_string(kret));
+        }
+    }
+
+    return KERN_SUCCESS;
+}
+
 int machthread_setfocusgivenindex(int focus_index){
     /* We print out the thread list starting at 1. */
     focus_index--;
@@ -120,6 +295,10 @@ void machthread_updatestate(struct machthread *mt){
     if(mt->port == MACH_PORT_NULL)
         return;
     
+    get_thread_state(mt);
+    get_debug_state(mt);
+    get_neon_state(mt);
+    /*
     arm_thread_state64_t thread_state;
     mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
 
@@ -130,8 +309,8 @@ void machthread_updatestate(struct machthread *mt){
 
     if(kret)
         return;
-
-    mt->thread_state = thread_state;
+    */
+    //mt->thread_state = thread_state;
 }
 
 void machthread_updatethreads(thread_act_port_array_t threads){

@@ -10,6 +10,7 @@
 #include "convvar.h"
 #include "memutils.h"
 #include "strext.h"
+#include "thread.h"
 
 /* Thanks https://opensource.apple.com/source/CF/CF-299/Base.subproj/CFByteOrder.h */
 unsigned int CFSwapInt32(unsigned int arg){
@@ -80,8 +81,10 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
 
         char *disassembled = ArmadilloDisassembleB(instr, current_location);
 
-        err = debuggee->get_thread_state();
-        
+        struct machthread *focused = machthread_getfocused();
+
+        err = get_thread_state(focused);
+
         if(err){
             free(data);
             free(disassembled);
@@ -89,7 +92,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
         }
 
         printf("%s%#lx:  %s\n",
-                debuggee->thread_state.__pc == current_location
+                focused->thread_state.__pc == current_location
                 ? "->  " : "    ", current_location, disassembled);
 
         free(disassembled);

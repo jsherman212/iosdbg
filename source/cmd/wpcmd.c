@@ -140,7 +140,7 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
 
-    watchpoint_at_address(location, data_len, LSC, error);
+    watchpoint_at_address(location, data_len, LSC, WP_ALL_THREADS, error);
 
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }

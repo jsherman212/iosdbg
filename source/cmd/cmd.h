@@ -63,6 +63,6 @@ struct matchedcmdinfo_t {
 struct dbg_cmd_t *COMMANDS[NUM_TOP_LEVEL_COMMANDS];
 
 static const char *NO_ARGUMENT_REGEX = "";
-static const char *NO_GROUPS[MAX_GROUPS] = {};
+static const char *NO_GROUPS[MAX_GROUPS] = {0};
 
 #endif

@@ -12,6 +12,7 @@
 #include "memutils.h"
 #include "printutils.h"
 #include "ptrace.h"
+#include "queue.h"
 #include "sigsupport.h"
 #include "strext.h"
 #include "thread.h"
@@ -66,9 +67,25 @@ void ops_detach(int from_death){
     watchpoint_delete_all();
 
     /* Disable hardware single stepping. */
-    debuggee->get_debug_state();
-    debuggee->debug_state.__mdscr_el1 = 0;
-    debuggee->set_debug_state();
+    for(struct node_t *current = debuggee->threads->front;
+            current;
+            current = current->next){
+        struct machthread *t = current->data;
+
+        get_debug_state(t);
+        t->debug_state.__mdscr_el1 = 0;
+        set_debug_state(t);
+    }
+
+    /* Reply to any exceptions. */
+    while(debuggee->pending_exceptions > 0){
+       // void *req = debuggee->exc_requests->front->data;    
+        
+        void *req = dequeue(debuggee->exc_requests);
+        reply_to_exception(req, KERN_SUCCESS);
+
+        //linkedlist_delete(debuggee->exc_requests, req);
+    }
 
     ops_resume();
 
@@ -86,9 +103,12 @@ void ops_detach(int from_death){
     debuggee->deallocate_ports();
     debuggee->restore_exception_ports();
 
+    queue_free(debuggee->exc_requests);
+
     linkedlist_free(debuggee->breakpoints);
-    linkedlist_free(debuggee->watchpoints);
+    //linkedlist_free(debuggee->exc_requests);
     linkedlist_free(debuggee->threads);
+    linkedlist_free(debuggee->watchpoints);
 
     debuggee->breakpoints = NULL;
     debuggee->watchpoints = NULL;
@@ -111,7 +131,23 @@ void ops_detach(int from_death){
 }
 
 void ops_resume(void){
-    reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
+    void *req = dequeue(debuggee->exc_requests);
+    //void *req = debuggee->exc_requests->front->data;
+    printf("%s: dequeueing request %p\n", __func__, req);
+
+    if(req){
+    //while(debuggee->exc_requests->front){    
+        reply_to_exception(req, KERN_SUCCESS);
+        //req = dequeue(debuggee->exc_requests);
+        //debuggee->pending_messages--;
+       // linkedlist_delete(debuggee->exc_requests, req);
+        //if(debuggee->exc_requests->front)
+         //   req = debuggee->exc_requests->front->data;
+    }
+
+    printf("%s: finally, debuggee->pending_exceptions is %d\n",
+            __func__, debuggee->pending_exceptions);
+
     debuggee->resume();
     debuggee->interrupted = 0;
 }
@@ -138,10 +174,11 @@ void ops_suspend(void){
     if(debuggee->pid != -1){
         printf("\n");
 
-        debuggee->get_thread_state();
+        struct machthread *focused = machthread_getfocused();
 
-        disassemble_at_location(debuggee->thread_state.__pc, 0x4);
-        
+        get_thread_state(focused);
+        disassemble_at_location(focused->thread_state.__pc, 4);
+
         printf("%s stopped.\n", debuggee->debuggee_name);
 
         safe_reprompt();

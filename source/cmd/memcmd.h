@@ -95,7 +95,7 @@ static const char *EXAMINE_COMMAND_REGEX =
 
 static const char *MEMORY_FIND_COMMAND_REGEX =
     "(?J)^(?<start>[\\w+\\-*\\/\\$()]+)\\s+"
-    "((?<count>(0[xX])?\\d+)\\s+)?"
+    "((?<count>(0[xX])?[[:xdigit:]]+)\\s+)?"
     "(?<type>--(s|f|fd|fld|ec|ecu|es|esu|ed|edu|eld|eldu))\\s+"
     "(?(?=\")\"(?<target>.*)\"|(?<target>[\\w+\\-*\\/\\$()\\.]+))";
 

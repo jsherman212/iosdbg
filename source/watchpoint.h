@@ -9,7 +9,10 @@ struct watchpoint {
     unsigned int data_len;
     int hw_wp_reg;
     int LSC;
+    int thread;
 };
+
+#define WP_ALL_THREADS (-1)
 
 #define WT (0 << 20)
 #define PAC (2 << 1)
@@ -24,7 +27,7 @@ struct watchpoint {
 
 static int current_watchpoint_id = 1;
 
-void watchpoint_at_address(unsigned long, unsigned int, int, char **);
+void watchpoint_at_address(unsigned long, unsigned int, int, int, char **);
 void watchpoint_hit(struct watchpoint *);
 void watchpoint_delete(int, char **);
 void watchpoint_enable_all(void);
