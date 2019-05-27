@@ -12,11 +12,4 @@ kern_return_t deallocate_ports(void);
 kern_return_t suspend(void);
 kern_return_t update_threads(thread_act_port_array_t *);
 
-kern_return_t get_task_thread_state(void);
-kern_return_t set_task_thread_state(void);
-kern_return_t get_task_debug_state(void);
-kern_return_t set_task_debug_state(void);
-kern_return_t get_task_neon_state(void);
-kern_return_t set_task_neon_state(void);
-
 #endif

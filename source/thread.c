@@ -302,19 +302,6 @@ void machthread_updatestate(struct machthread *mt){
     get_thread_state(mt);
     get_debug_state(mt);
     get_neon_state(mt);
-    /*
-    arm_thread_state64_t thread_state;
-    mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-
-    kern_return_t kret = thread_get_state(mt->port,
-            ARM_THREAD_STATE64,
-            (thread_state_t)&thread_state,
-            &count);
-
-    if(kret)
-        return;
-    */
-    //mt->thread_state = thread_state;
 }
 
 void machthread_updatethreads(thread_act_port_array_t threads){

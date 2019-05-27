@@ -91,8 +91,6 @@ static struct watchpoint *watchpoint_new(unsigned long location,
         return NULL;
     }
 
-    //debuggee->get_debug_state();
-
     wp->LSC = LSC;
 
     /* Setup the DBGWCR<n>_EL1 register.
@@ -104,27 +102,13 @@ static struct watchpoint *watchpoint_new(unsigned long location,
      *    where we are executing.
      *  - E must be 0b1 so this watchpoint is enabled.
      */
-    int BAS_ = (((1 << wp->data_len) - 1) << 5);
+    int BAS = (((1 << wp->data_len) - 1) << 5);
     LSC <<= 3;
 
-    /*debuggee->debug_state.__wcr[available_wp_reg] = 
-        WT |
-        BAS_ |
-        LSC |
-        PAC |
-        E;
-*/
-
-    __uint64_t wcr = WT | BAS_ | LSC | PAC | E;
+    __uint64_t wcr = WT | BAS | LSC | PAC | E;
 
     /* Bits[1:0] must be clear in DBGWVR<n>_EL1. */
-    //location &= ~0x3;
     __uint64_t wvr = (location & ~0x3);
-
-    /* Put the location in whichever DBGWVR<n>_EL1 is available. */
-    //debuggee->debug_state.__wvr[available_wp_reg] = location;
-
-    //debuggee->set_debug_state();
 
     if(wp->thread == WP_ALL_THREADS){
         for(struct node_t *current = debuggee->threads->front;
@@ -151,26 +135,9 @@ static struct watchpoint *watchpoint_new(unsigned long location,
 }
 
 static void enable_wp(struct watchpoint *wp){
-    /*
-    debuggee->get_debug_state();
-    
-    int BAS_ = (((1 << wp->data_len) - 1) << 5);
-    
-    debuggee->debug_state.__wcr[wp->hw_wp_reg] =
-        WT |
-        BAS_ |
-        wp->LSC |
-        PAC |
-        E;
+    int BAS = (((1 << wp->data_len) - 1) << 5);
 
-    debuggee->debug_state.__wvr[wp->hw_wp_reg] = (wp->location & ~0x3);
-
-    debuggee->set_debug_state();
-    */
-
-    int BAS_ = (((1 << wp->data_len) - 1) << 5);
-
-    __uint64_t wcr = WT | BAS_ | wp->LSC | PAC | E;
+    __uint64_t wcr = WT | BAS | wp->LSC | PAC | E;
     __uint64_t wvr = (wp->location & ~0x3);
 
     if(wp->thread == WP_ALL_THREADS){
@@ -193,12 +160,6 @@ static void enable_wp(struct watchpoint *wp){
 }
 
 static void disable_wp(struct watchpoint *wp){
-    /*
-    debuggee->get_debug_state();
-    debuggee->debug_state.__wcr[wp->hw_wp_reg] = 0;
-    debuggee->set_debug_state();
-    */
-
     if(wp->thread == WP_ALL_THREADS){
         for(struct node_t *current = debuggee->threads->front;
                 current;

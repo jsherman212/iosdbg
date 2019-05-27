@@ -1,4 +1,5 @@
 #include <pthread/pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/sysctl.h>
@@ -16,6 +17,7 @@
 #include "sigsupport.h"
 #include "strext.h"
 #include "thread.h"
+#include "trace.h"
 
 #include "cmd/audit.h"
 #include "cmd/bpcmd.h"
@@ -39,12 +41,14 @@ int bsd_syscalls_arr_len;
 int mach_traps_arr_len;
 int mach_messages_arr_len;
 
+pthread_mutex_t REPROMPT_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t HAS_REPLIED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
+pthread_cond_t REPROMPT_COND = PTHREAD_COND_INITIALIZER;
 pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t EXC_SERVER_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
 
 int HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
+int HANDLING_EXCEPTION = 0;
 
 static void interrupt(int x1){
     if(KEEP_CHECKING_FOR_PROCESS)
@@ -52,7 +56,10 @@ static void interrupt(int x1){
 
     KEEP_CHECKING_FOR_PROCESS = 0;
 
-    ops_suspend();
+    stop_trace();
+
+    if(debuggee->pid != -1)
+        kill(debuggee->pid, SIGINT);
 }
 
 static void install_handlers(void){
@@ -63,22 +70,6 @@ static void install_handlers(void){
     debuggee->deallocate_ports = &deallocate_ports;
     debuggee->suspend = &suspend;
     debuggee->update_threads = &update_threads;
-
-    debuggee->get_task_debug_state = &get_task_debug_state;
-    debuggee->set_task_debug_state = &set_task_debug_state;
-    debuggee->get_task_thread_state = &get_task_thread_state;
-    debuggee->set_task_thread_state = &set_task_thread_state;
-    debuggee->get_task_neon_state = &get_task_neon_state;
-    debuggee->set_task_neon_state = &set_task_neon_state;
-    
-
-    /*debuggee->get_debug_state = &get_debug_state;
-    debuggee->set_debug_state = &set_debug_state;
-    debuggee->get_thread_state = &get_thread_state;
-    debuggee->set_thread_state = &set_thread_state;
-    debuggee->get_neon_state = &get_neon_state;
-    debuggee->set_neon_state = &set_neon_state;
-    */
 }
 
 static int _rl_getc(FILE *stream){
@@ -288,18 +279,10 @@ static int setup_tracing(void){
 
 static void setup_initial_debuggee(void){
     debuggee = malloc(sizeof(struct debuggee));
-    debuggee->exc_num = 0;
 
     /* If we aren't attached to anything, debuggee's pid is -1. */
     debuggee->pid = -1;
     debuggee->interrupted = 0;
-
-    /*
-    debuggee->breakpoints = linkedlist_new();
-    debuggee->exc_requests = linkedlist_new();
-    debuggee->threads = linkedlist_new();
-    debuggee->watchpoints = linkedlist_new();
-    */
 
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
@@ -697,7 +680,19 @@ static void inputloop(void){
 
     static const char *prompt = "\033[2m(iosdbg) \033[0m";
 
-    while((line = readline(prompt)) != NULL){
+    while(1){
+        pthread_mutex_lock(&HAS_REPLIED_MUTEX);
+
+        while(HANDLING_EXCEPTION)
+            pthread_cond_wait(&REPROMPT_COND, &HAS_REPLIED_MUTEX);
+
+        pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
+
+        line = readline(prompt);
+
+        if(!line)
+            break;
+
         /* If the user hits enter, repeat the last command,
          * and do not add to the command history if the length
          * of line is 0.
@@ -714,9 +709,23 @@ static void inputloop(void){
         char *linecpy = NULL, *error = NULL;
         enum cmd_error_t result = do_cmdline_command(line, &linecpy, 1, &error);
 
-        if(result && error){
+        if(result == CMD_FAILURE && error){
             printf("error: %s\n", error);
             free(error);
+        }
+        else if(result == CMD_QUIT){
+            if(linecpy)
+                free(linecpy);
+
+            if(prevline)
+                free(prevline);
+
+            if(error)
+                free(error);
+
+            free(line);
+
+            return;
         }
 
         if(linecpy){
@@ -728,6 +737,8 @@ static void inputloop(void){
 
         free(line);
     }
+
+    printf("readline returned NULL... please file an issue on Github\n");
 }
 
 static void early_configuration(void){
@@ -751,14 +762,8 @@ static void early_configuration(void){
 }
 
 int main(int argc, char **argv, const char **envp){
-    /*
-    HAS_REPLIED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+    pthread_setname_np("iosdbg main thread");
 
-    MAIN_THREAD_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
-    EXC_SERVER_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
-
-    HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
-    */
     early_configuration();
     setup_initial_debuggee();
     install_handlers();

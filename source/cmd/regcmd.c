@@ -14,8 +14,6 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
     char *curreg = argnext(args);
 
     while(curreg){
-        //debuggee->get_neon_state();
-
         struct machthread *focused = machthread_getfocused();
 
         get_neon_state(focused);
@@ -106,8 +104,6 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args, 
         int arg1, char **error){
-    //debuggee->get_thread_state();
-
     struct machthread *focused = machthread_getfocused();
 
     get_thread_state(focused);
@@ -222,9 +218,6 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
 
     int good_reg_num = (reg_num >= 0 && reg_num <= 31);
     int good_reg_type = gpr || fpr;
-
-    //debuggee->get_thread_state();
-    //debuggee->get_neon_state();
 
     /* Various representations of our value string. */
     int valued = (int)strtol_err(value_str, error);
@@ -351,9 +344,6 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
                 focused->neon_state.__v[reg_num] = *(int *)&valuef;
         }
     }
-
-    //debuggee->set_thread_state();
-    //debuggee->set_neon_state();
 
     set_thread_state(focused);
     set_neon_state(focused);

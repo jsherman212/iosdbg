@@ -172,8 +172,6 @@ static char *lookup_register(char *reg, char **error){
     for(int i=0; i<reglen; i++)
         reg[i] = tolower(reg[i]);
 
-    //debuggee->get_thread_state();
-
     struct machthread *focused = machthread_getfocused();
 
     get_thread_state(focused);

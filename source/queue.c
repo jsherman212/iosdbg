@@ -33,7 +33,7 @@ void *dequeue(struct queue_t *queue){
         return NULL;
 
     void *ret = *queue->data;
-    
+
     /* Move everything back one. */
     memmove(queue->data, queue->data + 1, queue->capacity-- * sizeof(void *));
 

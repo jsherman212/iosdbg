@@ -162,7 +162,6 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     debuggee->exc_requests = queue_new();
 
     debuggee->breakpoints = linkedlist_new();
-//    debuggee->exc_requests = linkedlist_new();
     debuggee->watchpoints = linkedlist_new();
     debuggee->threads = linkedlist_new();
 
@@ -181,10 +180,6 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     struct machthread *focused = machthread_getfocused();
     get_thread_state(focused);
-
-    debuggee->get_task_thread_state();
-    debuggee->get_task_debug_state();
-    debuggee->get_task_neon_state();
 
     debuggee->want_detach = 0;
 
@@ -221,8 +216,6 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
         int arg1, char **error){
-    //debuggee->get_thread_state();
-
     struct machthread *focused = machthread_getfocused();
 
     get_thread_state(focused);
@@ -266,9 +259,8 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int do_not_print_msg, char **error){
-    // XXX XXX XXX XXX
-    //if(!debuggee->interrupted)
-      //  return CMD_FAILURE;
+    if(!debuggee->interrupted)
+        return CMD_FAILURE;
 
     ops_resume();
 
@@ -319,7 +311,10 @@ enum cmd_error_t cmdfunc_help(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args, 
         int arg1, char **error){
-    ops_suspend();
+    if(debuggee->pid == -1)
+        return CMD_FAILURE;
+
+    kill(debuggee->pid, SIGINT);
 
     return CMD_SUCCESS;
 }
@@ -392,14 +387,11 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
 
     free(debuggee);
     
-    exit(0);
+    return CMD_QUIT;
 }
 
 enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
         int arg1, char **error){
-    //if(debuggee->pending_messages > 0)
-      //  reply_to_exception(debuggee->exc_request, KERN_SUCCESS);
-
     /* Disable breakpoints when single stepping so we don't have to deal
      * with more exceptions being raised. Instead, just check if we're at
      * a breakpointed address every time we step.
@@ -412,18 +404,12 @@ enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
     focused->debug_state.__mdscr_el1 |= 1;
     set_debug_state(focused);
 
-    /*
-    debuggee->get_debug_state();
-    debuggee->debug_state.__mdscr_el1 |= 1;
-    debuggee->set_debug_state();
-    */
     debuggee->is_single_stepping = 1;
 
     rl_already_prompted = 1;
 
-    debuggee->resume();
-    debuggee->interrupted = 0;
-    
+    ops_resume();
+
     return CMD_SUCCESS;
 }
 

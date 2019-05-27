@@ -1,3 +1,12 @@
+5-27-19
+- hardware breakpoints/watchpoints work on multithreaded programs
+- much more reliable exception handling, guarded by locks instead of being
+racy
+- Ctrl-C sends SIGINT to debuggee instead of just suspending it now, same with
+cmdfunc_detach
+- iosdbg prompt shouldn't duplicate anymore
+- return CMD_QUIT in cmdfunc_quit instead of exit(0)
+
 5-21-19
 - can use hex in count argument for memory find
 

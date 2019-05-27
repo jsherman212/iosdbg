@@ -19,13 +19,6 @@
 #include "trace.h"
 #include "watchpoint.h"
 
-extern pthread_mutex_t HAS_REPLIED_MUTEX;
-
-extern pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND;
-extern pthread_cond_t EXC_SERVER_CHANGED_REPLIED_VAR_COND;
-
-extern int HAS_REPLIED_TO_LATEST_EXCEPTION;
-
 void ops_printsiginfo(void){
     printf("%-11s %-5s %-5s %-6s\n", "NAME", "PASS", "STOP", "NOTIFY");
     printf("=========== ===== ===== ======\n");
@@ -65,6 +58,8 @@ void ops_printsiginfo(void){
 }
 
 void ops_detach(int from_death){
+    pthread_mutex_lock(&HAS_REPLIED_MUTEX);
+
     debuggee->want_detach = 1;
 
     void_convvar("$_");
@@ -86,11 +81,9 @@ void ops_detach(int from_death){
 
     /* Reply to any exceptions. */
     while(debuggee->pending_exceptions > 0){
-        void *req = dequeue(debuggee->exc_requests);
-        reply_to_exception(req, KERN_SUCCESS);
+        void *request = dequeue(debuggee->exc_requests);
+        reply_to_exception(request, KERN_SUCCESS);
     }
-
-    ops_resume();
 
     /* Send SIGSTOP to set debuggee's process status to
      * SSTOP so we can detach. Calling ptrace with PT_THUPDATE
@@ -106,12 +99,20 @@ void ops_detach(int from_death){
     debuggee->deallocate_ports();
     debuggee->restore_exception_ports();
 
+    debuggee->resume();
+    debuggee->interrupted = 0;
+
     queue_free(debuggee->exc_requests);
+    debuggee->exc_requests = NULL;
 
     linkedlist_free(debuggee->breakpoints);
-    //linkedlist_free(debuggee->exc_requests);
+    debuggee->breakpoints = NULL;
+
     linkedlist_free(debuggee->threads);
+    debuggee->threads = NULL;
+    
     linkedlist_free(debuggee->watchpoints);
+    debuggee->watchpoints = NULL;
 
     debuggee->breakpoints = NULL;
     debuggee->watchpoints = NULL;
@@ -132,107 +133,26 @@ void ops_detach(int from_death){
     void_convvar("$ASLR");
 
     debuggee->want_detach = 0;
+    pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
 }
 
-#include <errno.h>
-//#include <unistd.h>
 void ops_resume(void){
-    /*
-    printf("%s: before crit section debuggee pending exceptions %d\n", __func__, debuggee->pending_exceptions);
-    
-    if(debuggee->pending_exceptions > 0){
-        // XXX start critical section
-        pthread_mutex_lock(&HAS_REPLIED_MUTEX);
-
-        HAS_REPLIED_TO_LATEST_EXCEPTION = 1;
-        // tell the exception thread to wake up and call reply_to_exception
-        pthread_cond_signal(&MAIN_THREAD_CHANGED_REPLIED_VAR_COND);
-
-        // in the meantime, wait for the replying to be done with
-        pthread_cond_wait(&EXC_SERVER_CHANGED_REPLIED_VAR_COND,
-                &HAS_REPLIED_MUTEX);
-
-
-        printf("%s: debuggee pending exceptions %d\n", __func__, debuggee->pending_exceptions);
-
-        pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
-        // XXX end critical section
-    }
-    else{
-        HAS_REPLIED_TO_LATEST_EXCEPTION = 1;
-    }
-    */
-
-    // XXX start critical section
     pthread_mutex_lock(&HAS_REPLIED_MUTEX);
 
-    while(HAS_REPLIED_TO_LATEST_EXCEPTION){
-        printf("%s: waiting for the exception thread...\n", __func__);
-        pthread_cond_wait(&EXC_SERVER_CHANGED_REPLIED_VAR_COND,
-                &HAS_REPLIED_MUTEX);
-    }
+    void *request = dequeue(debuggee->exc_requests);
 
-    void *req = dequeue(debuggee->exc_requests);
-    //void *req = debuggee->exc_requests->front->data;
-    //printf("%s: dequeueing request %p\n", __func__, req);
-
-    if(req){
-        printf("%d. *****START REPLYING\n", debuggee->exc_num);
-        reply_to_exception(req, KERN_SUCCESS);
-        printf("%d. *****END REPLYING\n", debuggee->exc_num);
-
+    if(request){
+        reply_to_exception(request, KERN_SUCCESS);
         HAS_REPLIED_TO_LATEST_EXCEPTION = 1;
-        //req = dequeue(debuggee->exc_requests);
-        //debuggee->pending_messages--;
-       // linkedlist_delete(debuggee->exc_requests, req);
-        //if(debuggee->exc_requests->front)
-         //   req = debuggee->exc_requests->front->data;
     }
 
-
-    printf("%s: signaling the exception thread...\n", __func__);
+    /* Wake up the exception thread. */
     pthread_cond_signal(&MAIN_THREAD_CHANGED_REPLIED_VAR_COND);
-
-    pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
-    // XXX end critical section
-    //printf("%s: finally, debuggee->pending_exceptions is %d\n",
-      //      __func__, debuggee->pending_exceptions);
 
     debuggee->resume();
     debuggee->interrupted = 0;
-}
 
-void ops_suspend(void){
-    if(debuggee->pid != -1){
-        if(debuggee->interrupted)
-            return;
-
-        kern_return_t err = debuggee->suspend();
-
-        if(err){
-            printf("Cannot suspend: %s\n", mach_error_string(err));
-            debuggee->interrupted = 0;
-
-            return;
-        }
-
-        debuggee->interrupted = 1;
-    }
-
-    stop_trace();
-    
-    if(debuggee->pid != -1){
-        printf("\n");
-
-        struct machthread *focused = machthread_getfocused();
-
-        get_thread_state(focused);
-        disassemble_at_location(focused->thread_state.__pc, 4);
-
-        printf("%s stopped.\n", debuggee->debuggee_name);
-
-        safe_reprompt();
-    }
+    pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
 }
 
 void ops_threadupdate(void){

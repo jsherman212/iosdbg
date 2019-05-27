@@ -1,9 +1,7 @@
 #include <stdio.h>
 
 #include "debuggee.h"
-#include "handlers.h"
 #include "linkedlist.h"
-//#include "thread.h"
 
 unsigned long long find_slide(void){
     vm_region_basic_info_data_64_t info;
@@ -115,58 +113,4 @@ kern_return_t update_threads(thread_act_port_array_t *threads){
     debuggee->thread_count = thread_count;
 
     return err;
-}
-
-kern_return_t get_task_thread_state(void){
-    mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-
-    return task_get_state(debuggee->task,
-            ARM_THREAD_STATE64,
-            (thread_state_t)&debuggee->task_thread_state,
-            &count);
-}
-
-kern_return_t set_task_thread_state(void){
-    mach_msg_type_number_t count = ARM_THREAD_STATE64_COUNT;
-
-    return task_set_state(debuggee->task,
-            ARM_THREAD_STATE64,
-            (thread_state_t)&debuggee->task_thread_state,
-            count);
-}
-
-kern_return_t get_task_debug_state(void){
-    mach_msg_type_number_t count = ARM_DEBUG_STATE64_COUNT;
-
-    return task_get_state(debuggee->task,
-            ARM_DEBUG_STATE64,
-            (thread_state_t)&debuggee->task_debug_state,
-            &count);
-}
-
-kern_return_t set_task_debug_state(void){
-    mach_msg_type_number_t count = ARM_DEBUG_STATE64_COUNT;
-
-    return task_set_state(debuggee->task,
-            ARM_DEBUG_STATE64,
-            (thread_state_t)&debuggee->task_debug_state,
-            count);
-}
-
-kern_return_t get_task_neon_state(void){
-    mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
-
-    return task_get_state(debuggee->task,
-            ARM_NEON_STATE64,
-            (thread_state_t)&debuggee->task_neon_state,
-            &count);
-}
-
-kern_return_t set_task_neon_state(void){
-    mach_msg_type_number_t count = ARM_NEON_STATE64_COUNT;
-
-    return task_set_state(debuggee->task,
-            ARM_NEON_STATE64,
-            (thread_state_t)&debuggee->task_neon_state,
-            count);
 }

@@ -21,29 +21,16 @@
 #include "cmd/cmd.h"
 #include "cmd/misccmd.h"
 
-extern pthread_mutex_t HAS_REPLIED_MUTEX;
-
-extern pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND;
-extern pthread_cond_t EXC_SERVER_CHANGED_REPLIED_VAR_COND;
-
-extern int HAS_REPLIED_TO_LATEST_EXCEPTION;
-
-#ifndef PRINT
-//#define PRINT
-#endif
-
 static void *exception_server(void *arg){
+    pthread_setname_np("exception thread");
+
     struct msg {
         mach_msg_header_t hdr;
         char data[256];
     } req, rpl;
 
-    //struct msg req, rpl;
-
-    kern_return_t err;
-    // while MACH_PORT_VALID...
-    while(1){
-        mach_msg(&req.hdr,
+    while(MACH_PORT_VALID(debuggee->exception_port)){
+        kern_return_t err = mach_msg(&req.hdr,
                 MACH_RCV_MSG,
                 0,
                 sizeof(req),
@@ -51,48 +38,51 @@ static void *exception_server(void *arg){
                 MACH_MSG_TIMEOUT_NONE,
                 MACH_PORT_NULL);
 
-        Request *r = (Request *)&req;
+        pthread_mutex_lock(&HAS_REPLIED_MUTEX);
 
-        if(r){
-            //printf("\n%s: enqueueing request %p, pending exceptions %d\n", __func__, r,
-            //      debuggee->pending_exceptions);
-            
-            // XXX start critical section
-            pthread_mutex_lock(&HAS_REPLIED_MUTEX);
+        Request *request = (Request *)&req;
 
+        if(request && debuggee->exc_requests){
+            /* Get rid of duplicate (iosdbg) prompts. */
+            rl_clear_visible_line();
+            rl_redisplay();
 
-            enqueue(debuggee->exc_requests, r);
+            HANDLING_EXCEPTION = 1;
+
+            enqueue(debuggee->exc_requests, request);
             debuggee->pending_exceptions++;
 
-            debuggee->exc_num++;
+            handle_exception(request);
 
-            printf("%d. *****START HANDLING\n", debuggee->exc_num);
-            handle_exception(r);
-            printf("%d. *****END HANDLING\n", debuggee->exc_num);
+            HANDLING_EXCEPTION = 0;
+
+            rl_already_prompted = 0;
+
+            safe_reprompt();
+
+            /* Wake up the main thread for user input. */
+            pthread_cond_signal(&REPROMPT_COND);
 
             while(!HAS_REPLIED_TO_LATEST_EXCEPTION){
-                printf("%s: waiting for the main thread...\n", __func__);
+                /* Wait until the user has continued execution, which will reply
+                 * to the latest exception.
+                 */
                 pthread_cond_wait(&MAIN_THREAD_CHANGED_REPLIED_VAR_COND,
                         &HAS_REPLIED_MUTEX);
             }
 
             HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
-
-            printf("%s: signaling the main thread...\n", __func__);
-            pthread_cond_signal(&EXC_SERVER_CHANGED_REPLIED_VAR_COND);
-            
-            pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
-            /*
-            // XXX higher value in usleep minimizes the possibility of a screw up
-            while(!HAS_REPLIED_TO_LATEST_EXCEPTION){usleep(10000);}
-
-            HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
-            */
         }
+
+        pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
     }
+
+    return NULL;
 }
 
 static void *death_server(void *arg){
+    pthread_setname_np("death event thread");
+
     int kqid = *(int *)arg;
 
     while(1){

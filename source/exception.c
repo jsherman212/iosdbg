@@ -1,5 +1,4 @@
 #include <ctype.h>
-#include <dlfcn.h>
 #include <mach/mach.h>
 #include <signal.h>
 #include <stdio.h>
@@ -13,7 +12,6 @@
 #include "exception.h"
 #include "linkedlist.h"
 #include "memutils.h"
-#include "printutils.h"
 #include "ptrace.h"
 #include "sigsupport.h"
 #include "strext.h"
@@ -22,11 +20,6 @@
 #include "watchpoint.h"
 
 #include "cmd/misccmd.h"
-
-/*static int JUST_HIT_WATCHPOINT;
-static int JUST_HIT_BREAKPOINT;
-static int JUST_HIT_SW_BREAKPOINT;
-*/
 
 static const char *exc_str(exception_type_t exception){
     switch(exception){
@@ -62,10 +55,6 @@ static const char *exc_str(exception_type_t exception){
 }
 
 static void set_single_step(struct machthread *t, int enabled){
-   //printf("*****%s: setting single step for '%s' (tid %#llx) enabled? %d\n",
-   //        __func__, t->tname, t->tid, enabled);
-
-    
     get_debug_state(t);
 
     if(enabled)
@@ -74,26 +63,9 @@ static void set_single_step(struct machthread *t, int enabled){
         t->debug_state.__mdscr_el1 = 0;
 
     set_debug_state(t);
-    
-/*    for(struct node_t *current = debuggee->threads->front;
-            current;
-            current = current->next){
-        struct machthread *t = current->data;
-
-        if(t->just_hit_breakpoint){
-            get_debug_state(t);
-
-            if(enabled)
-                t->debug_state.__mdscr_el1 |= 1;
-            else
-                t->debug_state.__mdscr_el1 = 0;
-
-            set_debug_state(t);
-        }
-    }*/
 }
 
-static void describe_hit_watchpoint(void *prev_data, void *cur_data, 
+static void describe_hit_watchpoint(void *prev_data, void *cur_data,
         unsigned int sz){
     long old_val = *(long *)prev_data;
     long new_val = *(long *)cur_data;
@@ -132,7 +104,10 @@ static void describe_hit_watchpoint(void *prev_data, void *cur_data,
 static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
         int notify, int pass, int stop){
     if(debuggee->want_detach){
+        pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
         ops_resume();
+        pthread_mutex_lock(&HAS_REPLIED_MUTEX);
+
         return;
     }
 
@@ -176,46 +151,10 @@ static void handle_hit_watchpoint(void){
     debuggee->last_hit_wp_loc = 0;
     debuggee->last_hit_wp_PC = 0;
 }
-extern pthread_mutex_t HAS_REPLIED_MUTEX;
 
-extern pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND;
-extern pthread_cond_t EXC_SERVER_CHANGED_REPLIED_VAR_COND;
-
-extern int HAS_REPLIED_TO_LATEST_EXCEPTION;
-static void resume_after_exception(Request *request){
-//    reply_to_exception(request, KERN_SUCCESS);
-    //dequeue(debuggee->exc_requests);
-    
-    /* This will reply to the latest exception. */
-    //pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
-    //HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
-    //ops_resume();
-    //pthread_mutex_lock(&HAS_REPLIED_MUTEX);
-
-    /*void *req = dequeue(debuggee->exc_requests);
-    //void *req = debuggee->exc_requests->front->data;
-    //printf("%s: dequeueing request %p\n", __func__, req);
-
-    if(req){
-        printf("%d. *****START REPLYING\n", debuggee->exc_num);
-        reply_to_exception(req, KERN_SUCCESS);
-        printf("%d. *****END REPLYING\n", debuggee->exc_num);
-
-        //req = dequeue(debuggee->exc_requests);
-        //debuggee->pending_messages--;
-       // linkedlist_delete(debuggee->exc_requests, req);
-        //if(debuggee->exc_requests->front)
-         //   req = debuggee->exc_requests->front->data;
-    }
-    debuggee->resume();
-    debuggee->interrupted = 0;
-    */
-
-    pthread_cond_signal(&EXC_SERVER_CHANGED_REPLIED_VAR_COND);
+static void resume_after_exception(void){
     pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
-
     ops_resume();
-
     pthread_mutex_lock(&HAS_REPLIED_MUTEX);
 
     if(debuggee->currently_tracing){
@@ -224,31 +163,17 @@ static void resume_after_exception(Request *request){
     }
 }
 
-static void handle_single_step(struct machthread *t, Request *request){
+static void handle_single_step(struct machthread *t){
     /* Re-enable all the breakpoints we disabled while performing the
      * single step. This function is called when the CPU raises the software
      * step exception after the single step occurs.
      */
-    //breakpoint_enable_all();
+    if(debuggee->is_single_stepping)
+        breakpoint_enable_all();
 
-    //printf("*****%s: JUST_HIT_BREAKPOINT %d\n", __func__, JUST_HIT_BREAKPOINT);
-
-    //printf("*****%s: thread '%s' (tid %#llx) just hit a breakpoint? %d\n",
-      //      __func__, t->tname, t->tid, t->just_hit_breakpoint);
-
-    // XXX if debuggee->is_single_stepping enable all breakpoints?
-
-    //if(JUST_HIT_BREAKPOINT){
     if(t->just_hit_breakpoint){
-        //breakpoint_enable(debuggee->last_hit_bkpt_ID, NULL);
-        //if(JUST_HIT_SW_BREAKPOINT){
         if(t->just_hit_sw_breakpoint){
-#if 0
-            printf("%s: we just hit a sw bp (id %d), re-enabling...\n",
-                    __func__, debuggee->last_hit_bkpt_ID);
-#endif
             breakpoint_enable(debuggee->last_hit_bkpt_ID, NULL);
-         //   JUST_HIT_SW_BREAKPOINT = 0;
             t->just_hit_sw_breakpoint = 0;
         }
 
@@ -258,17 +183,11 @@ static void handle_single_step(struct machthread *t, Request *request){
          * just continue as normal. Otherwise, if we manually single step
          * right after a breakpoint hit, just print the disassembly.
          */
-        if(!debuggee->is_single_stepping){
-     //       printf("*****%s: resuming after software step exception for '%s' tid %#llx\n",
-       //             __func__, t->tname, t->tid);
-            set_single_step(t, 0);
-            resume_after_exception(request);
-        }
-        else{
+        if(!debuggee->is_single_stepping)
+            resume_after_exception();
+        else
             disassemble_at_location(t->thread_state.__pc, 4);
-        }
 
-        //JUST_HIT_BREAKPOINT = 0;
         t->just_hit_breakpoint = 0;
 
         debuggee->is_single_stepping = 0;
@@ -287,21 +206,22 @@ static void handle_hit_breakpoint(struct machthread *t,
         long subcode, char **desc){
     struct breakpoint *hit = find_bp_with_address(subcode);
 
+    /* This could be possible. If the user deletes all breakpoints before
+     * we have a chance to handle an exception related to a breakpoint,
+     * we'll end up with hit being NULL.
+     */
+    if(!hit)
+        return;
+
     breakpoint_hit(hit);
 
     concat(desc, " breakpoint %d at %#lx hit %d time(s).\n",
             hit->id, hit->location, hit->hit_count);
 
     if(!hit->hw){
-        //JUST_HIT_SW_BREAKPOINT = 1;
         t->just_hit_sw_breakpoint = 1;
-#if 0
-        printf("%s: we just hit a sw bp (id %d), disabling for the single step...\n",
-                __func__, hit->id);
-#endif
         breakpoint_disable(hit->id, NULL);
     }
-    //breakpoint_disable(hit->id, NULL);
 
     debuggee->last_hit_bkpt_ID = hit->id;
 }
@@ -311,7 +231,7 @@ void handle_exception(Request *request){
      * and this gets rid of it.
      */
     rl_clear_visible_line();
-    rl_already_prompted = 0;
+    rl_already_prompted = 1;
 
     /* Finish printing everything while tracing so
      * we don't get caught in the middle of it.
@@ -330,26 +250,18 @@ void handle_exception(Request *request){
     long code = ((long *)request->code)[0];
     long subcode = ((long *)request->code)[1];
 
-    printf("Exception for task %x (debuggee task %x), thread %x, code %ld subcode %ld, exc '%s'\n",
-            task, debuggee->task, thread, code, subcode, exc);
-
     /* Give focus to whatever caused this exception. */
     struct machthread *focused = machthread_getfocused();
 
     if(!focused || focused->port != thread){
-//        printf("\n[Switching to thread %#llx]\n", 
-  //              (unsigned long long)get_tid_from_thread_port(thread));
         machthread_setfocused(thread);
         focused = machthread_getfocused();
     }
 
     get_thread_state(focused);
 
-    unsigned long tid = get_tid_from_thread_port(thread);
-    char *tname = get_thread_name_from_thread_port(thread);
-
     char *desc = NULL;
-    concat(&desc, "\n * Thread #%d (tid = %#llx)", focused->ID, tid);
+    concat(&desc, "\n * Thread #%d (tid = %#llx)", focused->ID, focused->tid);
 
     /* A number of things could have happened to cause an exception:
      *      - hardware breakpoint
@@ -370,14 +282,17 @@ void handle_exception(Request *request){
             free(error);
         }
         
-        concat(&desc, ", '%s' received signal ", tname);
+        concat(&desc, ", '%s' received signal ", focused->tname);
         handle_soft_signal(thread, subcode, &desc, notify, pass, stop);
         
         if(stop)
             concat(&desc, "%#llx in debuggee.\n", focused->thread_state.__pc);
         else{
             concat(&desc, "Resuming execution.");
+
+            pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
             ops_resume();
+            pthread_mutex_lock(&HAS_REPLIED_MUTEX);
         }
         
         /* Don't print any of this if we're detaching. */
@@ -388,17 +303,13 @@ void handle_exception(Request *request){
                 disassemble_at_location(focused->thread_state.__pc, 4);
         }
 
-        free(tname);
         free(desc);
-
-        safe_reprompt();
     }
     /* A hardware watchpoint hit. However, we need to single step in 
      * order for the CPU to execute the instruction at this address
      * so the value actually changes.
      */
     else if(code == EXC_ARM_DA_DEBUG){
-        //JUST_HIT_WATCHPOINT = 1;
         focused->just_hit_watchpoint = 1;
 
         debuggee->last_hit_wp_loc = subcode;
@@ -407,25 +318,16 @@ void handle_exception(Request *request){
         set_single_step(focused, 1);
         
         /* Continue execution so the software step exception occurs. */
-        resume_after_exception(request);
-
-        free(tname);
+        resume_after_exception();
     }
     /* A hardware/software breakpoint hit, or the software step
      * exception has occured.
      */
     else if(exception == EXC_BREAKPOINT && code == EXC_ARM_BREAKPOINT){
         if(subcode == 0){
-            //if(JUST_HIT_WATCHPOINT){
             if(focused->just_hit_watchpoint){
                 handle_hit_watchpoint();
-
-                //JUST_HIT_WATCHPOINT = 0;
                 focused->just_hit_watchpoint = 0;
-                
-                safe_reprompt();
-
-                free(tname);
 
                 return;
             }
@@ -440,39 +342,28 @@ void handle_exception(Request *request){
                 breakpoint_hit(hit);
 
                 concat(&desc, ": '%s': breakpoint %d at %#lx hit %d time(s).\n",
-                        tname, hit->id, hit->location, hit->hit_count);
+                        focused->tname, hit->id, hit->location, hit->hit_count);
 
                 printf("%s", desc);
             }
-
-        //    printf("*****%s: about to handle software step exception for '%s' tid %#llx\n",
-          //          __func__, focused->tname, focused->tid);
     
-            handle_single_step(focused, request);
-
-            safe_reprompt();
-
+            handle_single_step(focused);
             free(desc);
-            free(tname);
 
             return;
         }
         
-        //JUST_HIT_BREAKPOINT = 1;
         focused->just_hit_breakpoint = 1;
 
-        concat(&desc, ": '%s':", tname);
+        concat(&desc, ": '%s':", focused->tname);
         handle_hit_breakpoint(focused, subcode, &desc);
 
         printf("%s", desc);
 
         free(desc);
-        free(tname);
 
         disassemble_at_location(focused->thread_state.__pc, 4);
         set_single_step(focused, 1);
-        
-        safe_reprompt();
     }
 }
 

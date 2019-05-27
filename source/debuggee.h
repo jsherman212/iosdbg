@@ -17,8 +17,6 @@ struct debuggee {
     /* Exception requests from exception_server. */
     struct queue_t *exc_requests;
 
-    int exc_num;
-
     /* If this variable is non-zero, tracing is not supported. */
     int tracing_disabled;
 
@@ -54,10 +52,6 @@ struct debuggee {
 
     /* Whether or not the debuggee is single stepping. */
     int is_single_stepping;
-
-    arm_thread_state64_t task_thread_state;
-    arm_debug_state64_t task_debug_state;
-    arm_neon_state64_t task_neon_state;
 
     /* Whether or not the debuggee wants to detach. */
     int want_detach;
@@ -109,13 +103,6 @@ struct debuggee {
 
     /* The function pointer to update the list of the debuggee's threads. */
     kern_return_t (*update_threads)(thread_act_port_array_t *);
-
-    kern_return_t (*get_task_thread_state)(void);
-    kern_return_t (*set_task_thread_state)(void);
-    kern_return_t (*get_task_debug_state)(void);
-    kern_return_t (*set_task_debug_state)(void);
-    kern_return_t (*get_task_neon_state)(void);
-    kern_return_t (*set_task_neon_state)(void);
 };
 
 /* This structure represents what we are currently debugging. */

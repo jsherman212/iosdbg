@@ -7,7 +7,8 @@
 
 enum cmd_error_t {
     CMD_SUCCESS,
-    CMD_FAILURE
+    CMD_FAILURE,
+    CMD_QUIT
 };
 
 struct cmd_args_t {
