@@ -21,6 +21,17 @@
 #include "cmd/cmd.h"
 #include "cmd/misccmd.h"
 
+extern pthread_mutex_t HAS_REPLIED_MUTEX;
+
+extern pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND;
+extern pthread_cond_t EXC_SERVER_CHANGED_REPLIED_VAR_COND;
+
+extern int HAS_REPLIED_TO_LATEST_EXCEPTION;
+
+#ifndef PRINT
+//#define PRINT
+#endif
+
 static void *exception_server(void *arg){
     struct msg {
         mach_msg_header_t hdr;
@@ -29,69 +40,55 @@ static void *exception_server(void *arg){
 
     //struct msg req, rpl;
 
+    kern_return_t err;
     // while MACH_PORT_VALID...
     while(1){
-        //printf("\nWaiting for exception... debuggee->pending_exceptions %d\n",
-          //      debuggee->pending_exceptions);
-
-        /*
-        while(debuggee->pending_exceptions > 0){
-            Request *req = dequeue(debuggee->exc_requests);
-            printf("Got an exception! debuggee->pending_exceptions %d req %p\n",
-                    debuggee->pending_exceptions, req);
-
-            if(req)
-                handle_exception(req);
-            
-            usleep(400);
-        }*/
         mach_msg(&req.hdr,
-                MACH_RCV_MSG /*| MACH_RCV_INTERRUPT*/,
+                MACH_RCV_MSG,
                 0,
                 sizeof(req),
                 debuggee->exception_port,
                 MACH_MSG_TIMEOUT_NONE,
                 MACH_PORT_NULL);
 
-
-        //debuggee->pending_exceptions++;
-
-        debuggee->pending_exceptions++;
-
-
-        //while(debuggee->pending_exceptions > 1);
-
         Request *r = (Request *)&req;
-        printf("\n%s: enqueueing request %p, pending exceptions %d\n", __func__, r,
-                debuggee->pending_exceptions);
-        enqueue(debuggee->exc_requests, r);
-        
-        //linkedlist_add(debuggee->exc_requests, r);
 
-        handle_exception(r);
-
-        //debuggee->exc_request = (Request *)&req;
-
-        Request *last_req = NULL;
-
-        // XXX decremented in reply_to_exception 
-        /*while(debuggee->pending_exceptions > 0){
-            //Request *req = dequeue(debuggee->exc_requests);
-            //printf("Got an exception! debuggee->pending_exceptions %d req %p\n",
-              //      debuggee->pending_exceptions, req);
-
-            Request *req = debuggee->exc_requests->front->data;
-
-            if(req && req != last_req)
-                handle_exception(req);
-
-            last_req = req;
-            //linkedlist_delete(debuggee->exc_requests, req);
+        if(r){
+            //printf("\n%s: enqueueing request %p, pending exceptions %d\n", __func__, r,
+            //      debuggee->pending_exceptions);
             
-            //usleep(400);
-        }*/
+            // XXX start critical section
+            pthread_mutex_lock(&HAS_REPLIED_MUTEX);
 
-        //handle_exception(r);
+
+            enqueue(debuggee->exc_requests, r);
+            debuggee->pending_exceptions++;
+
+            debuggee->exc_num++;
+
+            printf("%d. *****START HANDLING\n", debuggee->exc_num);
+            handle_exception(r);
+            printf("%d. *****END HANDLING\n", debuggee->exc_num);
+
+            while(!HAS_REPLIED_TO_LATEST_EXCEPTION){
+                printf("%s: waiting for the main thread...\n", __func__);
+                pthread_cond_wait(&MAIN_THREAD_CHANGED_REPLIED_VAR_COND,
+                        &HAS_REPLIED_MUTEX);
+            }
+
+            HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
+
+            printf("%s: signaling the main thread...\n", __func__);
+            pthread_cond_signal(&EXC_SERVER_CHANGED_REPLIED_VAR_COND);
+            
+            pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
+            /*
+            // XXX higher value in usleep minimizes the possibility of a screw up
+            while(!HAS_REPLIED_TO_LATEST_EXCEPTION){usleep(10000);}
+
+            HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
+            */
+        }
     }
 }
 

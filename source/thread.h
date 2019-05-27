@@ -29,6 +29,10 @@ struct machthread {
 
     /* Neon state. */
     arm_neon_state64_t neon_state;
+
+    int just_hit_watchpoint;
+    int just_hit_breakpoint;
+    int just_hit_sw_breakpoint;
 };
 
 enum comparison {

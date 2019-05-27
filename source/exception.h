@@ -2,6 +2,15 @@
 #define _EXCEPTION_H_
 
 #include <mach/mach.h>
+#include <pthread/pthread.h>
+
+//static pthread_mutex_t HAS_REPLIED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+
+/*static pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t EXC_SERVER_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
+
+static int HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
+*/
 
 typedef struct {
     mach_msg_header_t Head;

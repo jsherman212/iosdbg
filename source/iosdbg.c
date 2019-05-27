@@ -1,3 +1,4 @@
+#include <pthread/pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/sysctl.h>
@@ -38,6 +39,13 @@ int bsd_syscalls_arr_len;
 int mach_traps_arr_len;
 int mach_messages_arr_len;
 
+pthread_mutex_t HAS_REPLIED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+
+pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
+pthread_cond_t EXC_SERVER_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
+
+int HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
+
 static void interrupt(int x1){
     if(KEEP_CHECKING_FOR_PROCESS)
         printf("\n");
@@ -55,6 +63,15 @@ static void install_handlers(void){
     debuggee->deallocate_ports = &deallocate_ports;
     debuggee->suspend = &suspend;
     debuggee->update_threads = &update_threads;
+
+    debuggee->get_task_debug_state = &get_task_debug_state;
+    debuggee->set_task_debug_state = &set_task_debug_state;
+    debuggee->get_task_thread_state = &get_task_thread_state;
+    debuggee->set_task_thread_state = &set_task_thread_state;
+    debuggee->get_task_neon_state = &get_task_neon_state;
+    debuggee->set_task_neon_state = &set_task_neon_state;
+    
+
     /*debuggee->get_debug_state = &get_debug_state;
     debuggee->set_debug_state = &set_debug_state;
     debuggee->get_thread_state = &get_thread_state;
@@ -271,6 +288,7 @@ static int setup_tracing(void){
 
 static void setup_initial_debuggee(void){
     debuggee = malloc(sizeof(struct debuggee));
+    debuggee->exc_num = 0;
 
     /* If we aren't attached to anything, debuggee's pid is -1. */
     debuggee->pid = -1;
@@ -733,6 +751,14 @@ static void early_configuration(void){
 }
 
 int main(int argc, char **argv, const char **envp){
+    /*
+    HAS_REPLIED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+
+    MAIN_THREAD_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
+    EXC_SERVER_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
+
+    HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
+    */
     early_configuration();
     setup_initial_debuggee();
     install_handlers();

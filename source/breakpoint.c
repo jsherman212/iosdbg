@@ -101,6 +101,14 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
 
                 set_debug_state(t);
             }
+
+        /*    debuggee->get_task_debug_state();
+
+            debuggee->task_debug_state.__bcr[available_bp_reg] = bcr;
+            debuggee->task_debug_state.__bvr[available_bp_reg] = bvr;
+
+            debuggee->set_task_debug_state();
+            */
         }
         else{
             // XXX struct machthread *target = find_with_id etc etc
@@ -170,6 +178,13 @@ static void enable_hw_bp(struct breakpoint *bp){
 
             set_debug_state(t);
         }
+     /*   debuggee->get_task_debug_state();
+
+        debuggee->task_debug_state.__bcr[bp->hw_bp_reg] = bcr;
+        debuggee->task_debug_state.__bvr[bp->hw_bp_reg] = bvr;
+
+        debuggee->set_task_debug_state();
+    */
     }
     else{
         // XXX struct machthread *target = find_with_id etc etc
@@ -195,6 +210,11 @@ static void disable_hw_bp(struct breakpoint *bp){
 
             set_debug_state(t);
         }
+
+        /*debuggee->get_task_debug_state();
+        debuggee->task_debug_state.__bcr[bp->hw_bp_reg] = 0;
+        debuggee->set_task_debug_state();
+        */
     }
     else{
         // XXX struct machthread *target = find_with_id etc etc
@@ -235,16 +255,16 @@ void breakpoint_at_address(unsigned long address, int temporary,
     if(!bp)
         return;
 
+    linkedlist_add(debuggee->breakpoints, bp);
+
+    if(!temporary)
+        printf("Breakpoint %d at %#lx\n", bp->id, bp->location);
+
     /* If we ran out of hardware breakpoints, set a software breakpoint
      * by writing BRK #0 to bp->location.
      */
     if(!bp->hw)
         write_memory_to_location(bp->location, CFSwapInt32(BRK), 4);
-
-    linkedlist_add(debuggee->breakpoints, bp);
-
-    if(!temporary)
-        printf("Breakpoint %d at %#lx\n", bp->id, bp->location);
 }
 
 void breakpoint_hit(struct breakpoint *bp){
@@ -294,6 +314,7 @@ void breakpoint_disable(int breakpoint_id, char **error){
 }
 
 void breakpoint_enable(int breakpoint_id, char **error){
+    //printf("**********%s: for id %d\n", __func__, breakpoint_id);
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){
@@ -323,6 +344,7 @@ void breakpoint_disable_all(void){
 }
 
 void breakpoint_enable_all(void){
+    //printf("**********%s\n", __func__);
     struct node_t *current = debuggee->breakpoints->front;
 
     while(current){

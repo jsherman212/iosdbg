@@ -182,6 +182,10 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     struct machthread *focused = machthread_getfocused();
     get_thread_state(focused);
 
+    debuggee->get_task_thread_state();
+    debuggee->get_task_debug_state();
+    debuggee->get_task_neon_state();
+
     debuggee->want_detach = 0;
 
     printf("Attached to %s (pid: %d), slide: %#llx.\n",
@@ -262,8 +266,9 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int do_not_print_msg, char **error){
-    if(!debuggee->interrupted)
-        return CMD_FAILURE;
+    // XXX XXX XXX XXX
+    //if(!debuggee->interrupted)
+      //  return CMD_FAILURE;
 
     ops_resume();
 

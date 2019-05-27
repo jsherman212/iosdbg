@@ -29,6 +29,10 @@ static struct machthread *machthread_new(mach_port_t thread_port){
     
     mt->ID = current_machthread_id++;
 
+    mt->just_hit_watchpoint = 0;
+    mt->just_hit_breakpoint = 0;
+    mt->just_hit_sw_breakpoint = 0;
+
     return mt;  
 }
 
