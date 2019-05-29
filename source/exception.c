@@ -103,14 +103,6 @@ static void describe_hit_watchpoint(void *prev_data, void *cur_data,
 
 static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
         int notify, int pass, int stop){
-    if(debuggee->want_detach){
-        pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
-        ops_resume();
-        pthread_mutex_lock(&HAS_REPLIED_MUTEX);
-
-        return;
-    }
-
     char *sigstr = strdup(sys_signame[subcode]);
     size_t sigstrlen = strlen(sigstr);
 
@@ -132,6 +124,9 @@ static void handle_hit_watchpoint(void){
     struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
 
     watchpoint_hit(hit);
+
+    if(!hit)
+        return;
 
     unsigned int sz = hit->data_len;
 
@@ -283,7 +278,7 @@ void handle_exception(Request *request){
         }
         
         concat(&desc, ", '%s' received signal ", focused->tname);
-        handle_soft_signal(thread, subcode, &desc, notify, pass, stop);
+        handle_soft_signal(focused->port, subcode, &desc, notify, pass, stop);
         
         if(stop)
             concat(&desc, "%#llx in debuggee.\n", focused->thread_state.__pc);

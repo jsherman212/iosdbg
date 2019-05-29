@@ -27,10 +27,52 @@ static void *exception_server(void *arg){
     struct msg {
         mach_msg_header_t hdr;
         char data[256];
-    } req, rpl;
+    } req;
 
-    while(MACH_PORT_VALID(debuggee->exception_port)){
-        kern_return_t err = mach_msg(&req.hdr,
+    while(MACH_PORT_VALID(debuggee->exception_port)){ 
+        pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+        /* Tell the main thread we're ready to collect the remaining exceptions. */
+        pthread_cond_signal(&WAIT_TO_SIGNAL_EXCEPTION_SERVER_IS_DETACHING_COND);
+
+        if(debuggee->want_detach){
+            /* Even though we're ready, the main thread might not be. Wait for it
+             * to tell us we're good to go.
+             */
+            pthread_cond_wait(&EXCEPTION_SERVER_IS_DETACHING_COND,
+                    &EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+            kern_return_t err = KERN_SUCCESS;
+
+            /* Gather the remaining exceptions. */
+            while(err != MACH_RCV_TIMED_OUT){
+                err = mach_msg(&req.hdr,
+                        MACH_RCV_MSG | MACH_RCV_TIMEOUT,
+                        0,
+                        sizeof(req),
+                        debuggee->exception_port,
+                        0,
+                        MACH_PORT_NULL);
+
+                Request *request = (Request *)&req;
+
+                if(request){
+                    enqueue(debuggee->exc_requests, request);
+                    debuggee->pending_exceptions++;
+                }
+            }
+
+            /* Tell the main thread we're done. */
+            pthread_cond_signal(&IS_DONE_HANDLING_EXCEPTIONS_BEFORE_DETACH_COND);
+
+            pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+            pthread_exit(NULL);
+        }
+
+        pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+        
+        mach_msg(&req.hdr,
                 MACH_RCV_MSG,
                 0,
                 sizeof(req),
@@ -38,11 +80,27 @@ static void *exception_server(void *arg){
                 MACH_MSG_TIMEOUT_NONE,
                 MACH_PORT_NULL);
 
+        pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+        if(debuggee->want_detach){
+            Request *request = (Request *)&req;
+            
+            /* Reply to the SIGSTOP that was sent by ops_detach. */
+            if(request)
+                reply_to_exception(request, KERN_SUCCESS);
+
+            pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+            continue;
+        }
+
+        pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
         pthread_mutex_lock(&HAS_REPLIED_MUTEX);
 
         Request *request = (Request *)&req;
 
-        if(request && debuggee->exc_requests){
+        if(request){
             /* Get rid of duplicate (iosdbg) prompts. */
             rl_clear_visible_line();
             rl_redisplay();
@@ -57,7 +115,6 @@ static void *exception_server(void *arg){
             HANDLING_EXCEPTION = 0;
 
             rl_already_prompted = 0;
-
             safe_reprompt();
 
             /* Wake up the main thread for user input. */
@@ -102,7 +159,7 @@ static void *death_server(void *arg){
             free(arg);
             pthread_exit(NULL);
         }
-        
+
         wait_for_trace();
 
         /* Figure out how the debuggee exited. */
@@ -143,8 +200,13 @@ static void *death_server(void *arg){
         }
 
         free(arg);
-        
-        do_cmdline_command("detach", NULL, 0, &error);
+
+        pthread_mutex_lock(&DEATH_SERVER_DETACHED_MUTEX);
+
+        ops_detach(1);
+
+        pthread_cond_signal(&DEATH_SERVER_DETACHED_COND);
+        pthread_mutex_unlock(&DEATH_SERVER_DETACHED_MUTEX);
 
         if(error)
             free(error);
@@ -174,7 +236,7 @@ void setup_servers(void){
     struct kevent kev;
 
     EV_SET(&kev, debuggee->pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
-    
+
     /* Tell the kernel to add this event to the monitored list. */
     kevent(kqid, &kev, 1, NULL, 0, NULL);
 

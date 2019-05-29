@@ -2,6 +2,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "breakpoint.h"
 #include "convvar.h"
@@ -58,17 +59,66 @@ void ops_printsiginfo(void){
 }
 
 void ops_detach(int from_death){
+    if(!from_death){
+        pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+        debuggee->want_detach = 1;
+
+        /* Boot exception_server out of mach_msg. Using SIGCONT was an arbitrary choice.
+         * We have to do this first so this SIGCONT doesn't get handled.
+         */
+        kill(debuggee->pid, SIGCONT);
+
+        pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+        pthread_mutex_lock(&HAS_REPLIED_MUTEX);
+
+        HAS_REPLIED_TO_LATEST_EXCEPTION = 1;
+        
+        /* If exception_server wasn't in mach_msg, we need to tell it to move
+         * on and wait for EXCEPTION_SERVER_IS_DETACHING_COND to get signaled.
+         */
+        pthread_cond_signal(&MAIN_THREAD_CHANGED_REPLIED_VAR_COND);
+
+        pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
+
+        pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+        /* Wait for exception_server to tell us it's ready to collect
+         * the remaining exceptions.
+         */
+        pthread_cond_wait(&WAIT_TO_SIGNAL_EXCEPTION_SERVER_IS_DETACHING_COND,
+                &EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+        /* Reply to the latest exception before we collect the rest. */
+        void *request = dequeue(debuggee->exc_requests);
+
+        if(request)
+            reply_to_exception(request, KERN_SUCCESS);
+
+        /* We're good to go, tell exception_server to collect the remaining
+         * exceptions for the debuggee.
+         */    
+        pthread_cond_signal(&EXCEPTION_SERVER_IS_DETACHING_COND);
+
+        /* Wait for exception_server to be done. */
+        pthread_cond_wait(&IS_DONE_HANDLING_EXCEPTIONS_BEFORE_DETACH_COND,
+                &EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+
+        debuggee->want_detach = 0;
+
+        pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+    }
+
     pthread_mutex_lock(&HAS_REPLIED_MUTEX);
 
-    debuggee->want_detach = 1;
-
-    void_convvar("$_");
-    void_convvar("$__");
+    debuggee->suspend();
+    debuggee->interrupted = 1;  
 
     breakpoint_delete_all();
     watchpoint_delete_all();
 
-    /* Disable hardware single stepping. */
+    /* Disable hardware single stepping on all threads. */
     for(struct node_t *current = debuggee->threads->front;
             current;
             current = current->next){
@@ -85,6 +135,9 @@ void ops_detach(int from_death){
         reply_to_exception(request, KERN_SUCCESS);
     }
 
+    debuggee->deallocate_ports();
+    debuggee->restore_exception_ports();
+
     /* Send SIGSTOP to set debuggee's process status to
      * SSTOP so we can detach. Calling ptrace with PT_THUPDATE
      * to handle Unix signals sets this status to SRUN, and ptrace 
@@ -92,15 +145,18 @@ void ops_detach(int from_death){
      */
     if(!from_death){
         kill(debuggee->pid, SIGSTOP);
-        ptrace(PT_DETACH, debuggee->pid, 0, 0);
+        int ret = ptrace(PT_DETACH, debuggee->pid, (caddr_t)1, 0);
+
+        /* In some cases, it takes a while for the debuggee to notice the
+         * SIGSTOP.
+         */
+        while(ret == -1){
+            ret = ptrace(PT_DETACH, debuggee->pid, 0, 0);
+            usleep(500);
+        }
+
         kill(debuggee->pid, SIGCONT);
     }
-
-    debuggee->deallocate_ports();
-    debuggee->restore_exception_ports();
-
-    debuggee->resume();
-    debuggee->interrupted = 0;
 
     queue_free(debuggee->exc_requests);
     debuggee->exc_requests = NULL;
@@ -130,9 +186,13 @@ void ops_detach(int from_death){
     free(debuggee->debuggee_name);
     debuggee->debuggee_name = NULL;
 
+    void_convvar("$_");
+    void_convvar("$__");
     void_convvar("$ASLR");
 
-    debuggee->want_detach = 0;
+    debuggee->resume();
+    debuggee->interrupted = 0;
+
     pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
 }
 

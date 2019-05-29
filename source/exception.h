@@ -6,9 +6,15 @@
 
 extern pthread_mutex_t REPROMPT_MUTEX;
 extern pthread_mutex_t HAS_REPLIED_MUTEX;
+extern pthread_mutex_t DEATH_SERVER_DETACHED_MUTEX;
+extern pthread_mutex_t EXCEPTION_SERVER_IS_DETACHING_MUTEX;
 
 extern pthread_cond_t REPROMPT_COND;
 extern pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND;
+extern pthread_cond_t DEATH_SERVER_DETACHED_COND;
+extern pthread_cond_t EXCEPTION_SERVER_IS_DETACHING_COND;
+extern pthread_cond_t IS_DONE_HANDLING_EXCEPTIONS_BEFORE_DETACH_COND;
+extern pthread_cond_t WAIT_TO_SIGNAL_EXCEPTION_SERVER_IS_DETACHING_COND;
 
 extern int HAS_REPLIED_TO_LATEST_EXCEPTION;
 extern int HANDLING_EXCEPTION;

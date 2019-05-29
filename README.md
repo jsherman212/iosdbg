@@ -22,19 +22,19 @@ Skip this step if it's already installed on your computer. I have been using the
 
 Theos is a cross-platform suite of tools capable of building iOS software without Xcode. Refer to this link for instructions on installing Theos on your computer: https://github.com/theos/theos/wiki/Installation-macOS
 
-#### GNU readline 7.0
-This project uses GNU readline 7.0. Compile it for `aarch64-apple-darwin`:
+#### GNU readline 8.0
+This project uses GNU readline 8.0. Compile it for `aarch64-apple-darwin`:
 
 ```
-curl -O ftp://ftp.cwru.edu/pub/bash/readline-7.0.tar.gz
-tar xvzf readline-7.0.tar.gz
-cd readline-7.0
+curl -O ftp://ftp.cwru.edu/pub/bash/readline-8.0.tar.gz
+tar xvzf readline-8.0.tar.gz
+cd readline-8.0
 export CFLAGS='-arch arm64 -isysroot /path/to/your/iPhoneOS/sdk'
 ./configure --host=aarch64-apple-darwin
 make
 ```
 
-After you build it, you'll find `libreadline.a` and `libhistory.a` inside of the current working directory. Upload those files to your device at `/path/to/theos/sdks/your/sdk/usr/lib/`. Rename them to `libreadline7.0.a` and `libhistory7.0.a` and fakesign them with `ldid`.
+After you build it, you'll find `libreadline.a` and `libhistory.a` inside of the current working directory. Upload those files to your device at `/path/to/theos/sdks/your/sdk/usr/lib/`. Rename them to `libreadline8.0.a` and `libhistory8.0.a` and fakesign them with `ldid`.
 
 #### pcre2
 This project uses pcre2 10.32. Compile it for `aarch64-apple-darwin`:

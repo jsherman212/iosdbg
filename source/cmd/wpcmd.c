@@ -126,10 +126,8 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
 
     free(curarg);
 
-    if(*error){
-        concat(error, "expression evaluation failed: %s\n", *error);
+    if(*error)
         return CMD_FAILURE;
-    }
 
     /* Current argument: size of data we're watching. */
     curarg = argnext(args);

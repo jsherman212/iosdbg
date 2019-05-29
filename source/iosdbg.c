@@ -43,9 +43,15 @@ int mach_messages_arr_len;
 
 pthread_mutex_t REPROMPT_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t HAS_REPLIED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t DEATH_SERVER_DETACHED_MUTEX  = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t EXCEPTION_SERVER_IS_DETACHING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_cond_t REPROMPT_COND = PTHREAD_COND_INITIALIZER;
 pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
+pthread_cond_t DEATH_SERVER_DETACHED_COND = PTHREAD_COND_INITIALIZER;
+pthread_cond_t EXCEPTION_SERVER_IS_DETACHING_COND = PTHREAD_COND_INITIALIZER;
+pthread_cond_t IS_DONE_HANDLING_EXCEPTIONS_BEFORE_DETACH_COND = PTHREAD_COND_INITIALIZER;
+pthread_cond_t WAIT_TO_SIGNAL_EXCEPTION_SERVER_IS_DETACHING_COND = PTHREAD_COND_INITIALIZER;
 
 int HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
 int HANDLING_EXCEPTION = 0;
@@ -59,7 +65,7 @@ static void interrupt(int x1){
     stop_trace();
 
     if(debuggee->pid != -1)
-        kill(debuggee->pid, SIGINT);
+        kill(debuggee->pid, SIGSTOP);
 }
 
 static void install_handlers(void){
@@ -97,7 +103,6 @@ static int _rl_getc(FILE *stream){
 
 static void initialize_readline(void){
     rl_catch_signals = 0;
-    rl_erase_empty_line = 1;
 
     rl_attempted_completion_function = completer;
 
@@ -675,8 +680,7 @@ static void initialize_commands(void){
 }
 
 static void inputloop(void){
-    char *line = NULL;
-    char *prevline = NULL;
+    char *line = NULL, *prevline = NULL;
 
     static const char *prompt = "\033[2m(iosdbg) \033[0m";
 
@@ -693,15 +697,21 @@ static void inputloop(void){
         if(!line)
             break;
 
+        size_t linelen = strlen(line);
+
         /* If the user hits enter, repeat the last command,
          * and do not add to the command history if the length
          * of line is 0.
          */
-        if(strlen(line) == 0 && prevline){
-            line = realloc(line, strlen(prevline) + 1);
-            strncpy(line, prevline, strlen(prevline) + 1);
+        if(linelen == 0 && prevline){
+            size_t prevlinelen = strlen(prevline);
+
+            char *line_replacement = realloc(line, prevlinelen + 1);
+            strncpy(line_replacement, prevline, prevlinelen + 1);
+
+            line = line_replacement;
         }
-        else if(strlen(line) > 0 &&
+        else if(linelen > 0 &&
                 (!prevline || (prevline && strcmp(line, prevline) != 0))){
             add_history(line);
         }
@@ -730,9 +740,10 @@ static void inputloop(void){
 
         if(linecpy){
             size_t linecpylen = strlen(linecpy);
-            prevline = realloc(prevline, linecpylen + 1);
-            strncpy(prevline, linecpy, linecpylen + 1);
+            char *prevline_replacement = realloc(prevline, linecpylen + 1);
+            strncpy(prevline_replacement, linecpy, linecpylen + 1);
             free(linecpy);
+            prevline = prevline_replacement;
         }
 
         free(line);

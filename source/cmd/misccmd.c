@@ -98,6 +98,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
          * so don't return on error.
          */
         target_pid = parse_pid(target, error);
+    
         KEEP_CHECKING_FOR_PROCESS = 1;
 
         while(target_pid == -1 && KEEP_CHECKING_FOR_PROCESS){
@@ -110,8 +111,9 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
         KEEP_CHECKING_FOR_PROCESS = 0;
     }
-    else
+    else{
         target_pid = parse_pid(target, error);
+    }
 
     if(*error || target_pid == -1){
         if(waitfor)
@@ -156,8 +158,9 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
         free(name);
     }
-    else
+    else{
         debuggee->debuggee_name = strdup(target);
+    }
 
     debuggee->exc_requests = queue_new();
 
@@ -188,7 +191,10 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     /* Have Unix signals be sent as Mach exceptions. */
     ptrace(PT_ATTACHEXC, debuggee->pid, 0, 0);
-    ptrace(PT_SIGEXC, debuggee->pid, 0, 0);
+
+    pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+    pthread_cond_signal(&EXCEPTION_SERVER_IS_DETACHING_COND);
+    pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
 
     void_convvar("$_exitcode");
     void_convvar("$_exitsignal");
@@ -306,7 +312,7 @@ enum cmd_error_t cmdfunc_help(struct cmd_args_t *args,
 
     free(cmd);
 
-    return (*error) ? CMD_FAILURE : CMD_SUCCESS;
+    return *error ? CMD_FAILURE : CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args, 
@@ -314,7 +320,7 @@ enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args,
     if(debuggee->pid == -1)
         return CMD_FAILURE;
 
-    kill(debuggee->pid, SIGINT);
+    kill(debuggee->pid, SIGSTOP);
 
     return CMD_SUCCESS;
 }
@@ -344,14 +350,23 @@ enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
 
     kill(debuggee->pid, SIGKILL);
 
+    ops_resume();
+
     /* We're gonna eventually detach, so wait until that happens before
      * we revert the settings back for SIGKILL.
      */
-    while(debuggee->pid != -1);
+    pthread_mutex_lock(&DEATH_SERVER_DETACHED_MUTEX);
+
+    while(debuggee->pid != -1){
+        pthread_cond_wait(&DEATH_SERVER_DETACHED_COND,
+                &DEATH_SERVER_DETACHED_MUTEX);
+    }
+
+    pthread_mutex_unlock(&DEATH_SERVER_DETACHED_MUTEX);
 
     sigsettings(SIGKILL, &notify_backup, &pass_backup, &stop_backup, 1, error);
 
-    return (*error) ? CMD_FAILURE : CMD_SUCCESS;
+    return *error ? CMD_FAILURE : CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 

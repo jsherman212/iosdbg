@@ -2,7 +2,7 @@ SDK=~/theos/sdks/iPhoneOS11.2.sdk
 IPHONESDK=/var/theos/sdks/iPhoneOS10.3.sdk
 CC=clang
 CFLAGS=-g -arch arm64 -isysroot $(SDK) -pedantic
-LDFLAGS=-arch arm64 -lreadline7.0 -lhistory7.0 -lncurses -larmadillo -lpcre2-8.0 -miphoneos-version-min=12.0 -fsanitize=address -rpath $(IPHONESDK)/usr/lib
+LDFLAGS=-arch arm64 -lreadline8.0 -lhistory8.0 -lncurses -larmadillo -lpcre2-8.0 -miphoneos-version-min=12.2 -fsanitize=address -rpath $(IPHONESDK)/usr/lib
 SRC=source
 CMDSRC=$(SRC)/cmd
 

@@ -23,19 +23,26 @@ int concat(char **dst, const char *src, ...){
     /* We have no way of knowing how many bytes src will
      * take up once format specifiers are substituted.
      */
-    *dst = realloc(*dst, srclen + dstlen + pad);
+    char *dst1 = malloc(srclen + dstlen + pad);
+    strncpy(dst1, *dst, dstlen + 1);
 
     va_list args;
     va_start(args, src);
 
-    int w = vsnprintf(&(*dst)[dstlen], srclen + dstlen + pad, src, args);
+    int w = vsnprintf(&(dst1)[dstlen], srclen + dstlen + pad, src, args);
 
     va_end(args);
 
     /* Now we can figure out the length of this string,
      * so realloc to free up unused memory.
      */
-    *dst = realloc(*dst, strlen(*dst) + 1);
+    char *dst2 = realloc(dst1, strlen(dst1) + 1);
+
+    /* Free whatever *dst had in it before assigning it to this
+     * malloc'd pointer.
+     */
+    free(*dst);
+    *dst = dst2;
 
     return w;
 }

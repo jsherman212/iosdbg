@@ -30,7 +30,7 @@ static const char *WATCHPOINT_LIST_COMMAND_DOCUMENTATION =
     "\n";
 
 static const char *WATCHPOINT_SET_COMMAND_DOCUMENTATION =
-    "Set a watchpoint. ASLR is never accounted for.\n"
+    "Set a watchpoint.\n"
     "This command has two mandatory arguments and one optional argument.\n"
     "\nMandatory arguments:\n"
     "\tlocation\n"

@@ -1,9 +1,17 @@
+5-29-19
+- kill command while stopped at exception won't deadlock anymore
+- concat does not use the pointer passed to realloc anymore
+- no more jumbled error messages while settings breakpoints or watchpoints
+- Ctrl-C and interrupt command send SIGSTOP instead of SIGINT now
+- keep checking if ptrace sets errno to EBUSY to make sure we detach properly
+- gather & reply to pending exceptions upon detach
+
 5-27-19
 - hardware breakpoints/watchpoints work on multithreaded programs
 - much more reliable exception handling, guarded by locks instead of being
 racy
 - Ctrl-C sends SIGINT to debuggee instead of just suspending it now, same with
-cmdfunc_detach
+cmdfunc_interrupt
 - iosdbg prompt shouldn't duplicate anymore
 - return CMD_QUIT in cmdfunc_quit instead of exit(0)
 
