@@ -95,6 +95,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
                 focused->thread_state.__pc == current_location
                 ? "->  " : "    ", current_location, disassembled);
 
+        free(data);
         free(disassembled);
 
         current_location += data_size;

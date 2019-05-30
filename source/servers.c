@@ -24,7 +24,7 @@
 static void *exception_server(void *arg){
     pthread_setname_np("exception thread");
 
-    struct msg {
+    struct {
         mach_msg_header_t hdr;
         char data[256];
     } req;
@@ -85,7 +85,7 @@ static void *exception_server(void *arg){
         if(debuggee->want_detach){
             Request *request = (Request *)&req;
             
-            /* Reply to the SIGSTOP that was sent by ops_detach. */
+            /* Reply to the SIGCONT that was sent by ops_detach. */
             if(request)
                 reply_to_exception(request, KERN_SUCCESS);
 

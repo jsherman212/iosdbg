@@ -120,7 +120,7 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
     ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
 }
 
-static void handle_hit_watchpoint(void){
+static void handle_hit_watchpoint(struct machthread *t, char *desc){
     struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
 
     watchpoint_hit(hit);
@@ -136,7 +136,9 @@ static void handle_hit_watchpoint(void){
 
     read_memory_at_location((void *)hit->location, hit->data, sz);
     
-    printf("\nWatchpoint %d hit:\n\n", hit->id);
+    concat(&desc, ": '%s': watchpoint %d at %#lx hit %d time(s).\n",
+            t->tname, hit->id, hit->location, hit->hit_count);
+    printf("%s\n", desc);
 
     describe_hit_watchpoint(prev_data, hit->data, sz);
     disassemble_at_location(debuggee->last_hit_wp_PC + 4, 4);
@@ -314,6 +316,8 @@ void handle_exception(Request *request){
         
         /* Continue execution so the software step exception occurs. */
         resume_after_exception();
+
+        free(desc);
     }
     /* A hardware/software breakpoint hit, or the software step
      * exception has occured.
@@ -321,8 +325,10 @@ void handle_exception(Request *request){
     else if(exception == EXC_BREAKPOINT && code == EXC_ARM_BREAKPOINT){
         if(subcode == 0){
             if(focused->just_hit_watchpoint){
-                handle_hit_watchpoint();
+                handle_hit_watchpoint(focused, desc);
                 focused->just_hit_watchpoint = 0;
+
+                free(desc);
 
                 return;
             }

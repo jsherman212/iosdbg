@@ -162,17 +162,12 @@ void ops_detach(int from_death){
     debuggee->exc_requests = NULL;
 
     linkedlist_free(debuggee->breakpoints);
-    debuggee->breakpoints = NULL;
-
     linkedlist_free(debuggee->threads);
-    debuggee->threads = NULL;
-    
     linkedlist_free(debuggee->watchpoints);
-    debuggee->watchpoints = NULL;
 
     debuggee->breakpoints = NULL;
-    debuggee->watchpoints = NULL;
     debuggee->threads = NULL;
+    debuggee->watchpoints = NULL;
 
     debuggee->interrupted = 0;
     debuggee->last_hit_bkpt_ID = 0;

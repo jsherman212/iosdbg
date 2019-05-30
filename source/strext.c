@@ -38,10 +38,6 @@ int concat(char **dst, const char *src, ...){
      */
     char *dst2 = realloc(dst1, strlen(dst1) + 1);
 
-    /* Free whatever *dst had in it before assigning it to this
-     * malloc'd pointer.
-     */
-    free(*dst);
     *dst = dst2;
 
     return w;
