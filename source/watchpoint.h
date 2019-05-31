@@ -3,7 +3,8 @@
 
 struct watchpoint {
     int id;
-    unsigned long location;
+    unsigned long user_location;
+    unsigned long watch_location;
     int hit_count;
     void *data;
     unsigned int data_len;
@@ -14,7 +15,6 @@ struct watchpoint {
 
 #define WP_ALL_THREADS (-1)
 
-#define WT (0 << 20)
 #define PAC (2 << 1)
 #define E (1)
 

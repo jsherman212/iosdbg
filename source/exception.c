@@ -120,35 +120,6 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
     ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
 }
 
-static void handle_hit_watchpoint(struct machthread *t, char *desc){
-    struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
-
-    watchpoint_hit(hit);
-
-    if(!hit)
-        return;
-
-    unsigned int sz = hit->data_len;
-
-    /* Save previous data for comparison. */
-    void *prev_data = malloc(sz);
-    memcpy(prev_data, hit->data, sz);
-
-    read_memory_at_location((void *)hit->location, hit->data, sz);
-    
-    concat(&desc, ": '%s': watchpoint %d at %#lx hit %d time(s).\n",
-            t->tname, hit->id, hit->location, hit->hit_count);
-    printf("%s\n", desc);
-
-    describe_hit_watchpoint(prev_data, hit->data, sz);
-    disassemble_at_location(debuggee->last_hit_wp_PC + 4, 4);
-
-    free(prev_data);
-    
-    debuggee->last_hit_wp_loc = 0;
-    debuggee->last_hit_wp_PC = 0;
-}
-
 static void resume_after_exception(void){
     pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
     ops_resume();
@@ -158,6 +129,37 @@ static void resume_after_exception(void){
         rl_already_prompted = 1;
         putchar('\n');
     }
+}
+
+static void handle_hit_watchpoint(struct machthread *t, char *desc){
+    struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
+
+    watchpoint_hit(hit);
+
+    if(!hit){
+        resume_after_exception();
+        return;
+    }
+
+    unsigned int sz = hit->data_len;
+
+    /* Save previous data for comparison. */
+    void *prev_data = malloc(sz);
+    memcpy(prev_data, hit->data, sz);
+
+    read_memory_at_location((void *)hit->user_location, hit->data, sz);
+    
+    concat(&desc, ": '%s': watchpoint %d at %#lx hit %d time(s).\n",
+            t->tname, hit->id, hit->user_location, hit->hit_count);
+    printf("%s\n", desc);
+
+    describe_hit_watchpoint(prev_data, hit->data, sz);
+    disassemble_at_location(debuggee->last_hit_wp_PC + 4, 4);
+
+    free(prev_data);
+    
+    debuggee->last_hit_wp_loc = 0;
+    debuggee->last_hit_wp_PC = 0;
 }
 
 static void handle_single_step(struct machthread *t){

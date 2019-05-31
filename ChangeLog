@@ -1,3 +1,7 @@
+5-31-19
+- improvements for watchpoints, set up BAS and align DBGWVR<n>_EL1
+correctly
+
 5-29-19
 - kill command while stopped at exception won't deadlock anymore
 - concat does not use the pointer passed to realloc anymore

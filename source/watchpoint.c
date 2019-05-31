@@ -65,13 +65,13 @@ static struct watchpoint *watchpoint_new(unsigned long location,
 
     wp->thread = thread;
 
-    wp->location = location;
+    wp->user_location = location;
     wp->hit_count = 0;
     
     wp->data_len = data_len;
     wp->data = malloc(wp->data_len);
 
-    result = read_memory_at_location((void *)wp->location, wp->data,
+    result = read_memory_at_location((void *)wp->user_location, wp->data,
             wp->data_len);
 
     if(result){
@@ -95,20 +95,23 @@ static struct watchpoint *watchpoint_new(unsigned long location,
 
     /* Setup the DBGWCR<n>_EL1 register.
      * We need the following criteria to correctly set up this watchpoint:
-     *  - WT must be 0, we hare doing an unlinked data match.
      *  - BAS must be <data_len> active bits.
      *  - LSC varies on what arguments the user provides.
      *  - PAC must be 0b10 so these watchpoints generate debug events in EL0,
      *    where we are executing.
      *  - E must be 0b1 so this watchpoint is enabled.
      */
-    int BAS = (((1 << wp->data_len) - 1) << 5);
+    unsigned BAS = (((1 << wp->data_len) - 1) << (wp->user_location & 0x7) << 5);
     LSC <<= 3;
 
-    __uint64_t wcr = WT | BAS | LSC | PAC | E;
+    __uint64_t wcr = BAS | LSC | PAC | E;
 
-    /* Bits[1:0] must be clear in DBGWVR<n>_EL1. */
-    __uint64_t wvr = (location & ~0x3);
+    /* ARM depricates programming a DBGWVR<n>_EL1 to an address that
+     * is not double-word aligned.
+     */
+    __uint64_t wvr = (wp->user_location & ~0x7);
+
+    wp->watch_location = wvr;
 
     if(wp->thread == WP_ALL_THREADS){
         for(struct node_t *current = debuggee->threads->front;
@@ -135,10 +138,10 @@ static struct watchpoint *watchpoint_new(unsigned long location,
 }
 
 static void enable_wp(struct watchpoint *wp){
-    int BAS = (((1 << wp->data_len) - 1) << 5);
+    unsigned BAS = (((1 << wp->data_len) - 1) << (wp->user_location & 0x7) << 5);
 
-    __uint64_t wcr = WT | BAS | wp->LSC | PAC | E;
-    __uint64_t wvr = (wp->location & ~0x3);
+    __uint64_t wcr = BAS | wp->LSC | PAC | E;
+    __uint64_t wvr = wp->watch_location;
 
     if(wp->thread == WP_ALL_THREADS){
         for(struct node_t *current = debuggee->threads->front;
@@ -209,7 +212,7 @@ void watchpoint_at_address(unsigned long location, unsigned int data_len,
         type = "rw";
 
     printf("Watchpoint %d: addr = %#lx size = %d type = %s\n",
-            wp->id, wp->location, wp->data_len, type);
+            wp->id, wp->user_location, wp->data_len, type);
     
     debuggee->num_watchpoints++;
 }
@@ -222,68 +225,58 @@ void watchpoint_hit(struct watchpoint *wp){
 }
 
 void watchpoint_delete(int wp_id, char **error){
-    struct node_t *current = debuggee->watchpoints->front;
+    for(struct node_t *current = debuggee->watchpoints->front;
+            current;
+            current = current->next){
+        struct watchpoint *wp = current->data;
 
-    while(current){
-        struct watchpoint *current_watchpoint = current->data;
-
-        if(current_watchpoint->id == wp_id){        
-            wp_delete_internal(current_watchpoint);
+        if(wp->id == wp_id){
+            wp_delete_internal(wp);
             return;
         }
-
-        current = current->next;
     }
 
     concat(error, "watchpoint %d not found", wp_id);
 }
 
 void watchpoint_enable_all(void){
-    struct node_t *current = debuggee->watchpoints->front;
-
-    while(current){
-        struct watchpoint *current_watchpoint = current->data;
-
-        wp_set_state_internal(current_watchpoint, WP_ENABLED);
-
-        current = current->next;
+    for(struct node_t *current = debuggee->watchpoints->front;
+            current;
+            current = current->next){
+        struct watchpoint *wp = current->data;
+        wp_set_state_internal(wp, WP_ENABLED);
     }
 }
 
 void watchpoint_disable_all(void){
-    struct node_t *current = debuggee->watchpoints->front;
-
-    while(current){
-        struct watchpoint *current_watchpoint = current->data;
-        
-        wp_set_state_internal(current_watchpoint, WP_DISABLED);
-
-        current = current->next;
+    for(struct node_t *current = debuggee->watchpoints->front;
+            current;
+            current = current->next){
+        struct watchpoint *wp = current->data;
+        wp_set_state_internal(wp, WP_DISABLED);
     }
 }
 
 void watchpoint_delete_all(void){
-    struct node_t *current = debuggee->watchpoints->front;
-
-    while(current){
-        struct watchpoint *current_watchpoint = current->data;
-        
-        wp_delete_internal(current_watchpoint);
-        
-        current = current->next;
+    for(struct node_t *current = debuggee->watchpoints->front;
+            current;
+            current = current->next){
+        struct watchpoint *wp = current->data;
+        wp_delete_internal(wp);
     }
 }
 
 struct watchpoint *find_wp_with_address(unsigned long addr){
-    struct node_t *current = debuggee->watchpoints->front;
+    /* Double-word align addr to match with wp->watch_location. */
+    addr &= ~0x7;
 
-    while(current){
-        struct watchpoint *current_watchpoint = current->data;
+    for(struct node_t *current = debuggee->watchpoints->front;
+            current;
+            current = current->next){
+        struct watchpoint *wp = current->data;
 
-        if(current_watchpoint->location == addr)
-            return current_watchpoint;
-
-        current = current->next;
+        if(wp->watch_location == addr)
+            return wp;
     }
     
     return NULL;
