@@ -77,7 +77,7 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
 
     return CMD_SUCCESS;
 }
-
+#include <math.h>
 enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
         int arg1, char **error){
     char *start_str = argnext(args);

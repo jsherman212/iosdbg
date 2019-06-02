@@ -1,38 +1,83 @@
+#include <mach-o/loader.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "debuggee.h"
 #include "linkedlist.h"
+#include "memutils.h"
 
-unsigned long long find_slide(void){
-    vm_region_basic_info_data_64_t info;
-    vm_address_t address = 0;
-    vm_size_t size;
-    mach_port_t object_name;
-    mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
-    
-    kern_return_t err = vm_region_64(debuggee->task,
-            &address,
-            &size,
-            VM_REGION_BASIC_INFO,
-            (vm_region_info_t)&info,
-            &info_count,
-            &object_name);
+unsigned long find_slide(void){
+    kern_return_t err = KERN_SUCCESS;
+    vm_address_t addr = 0;
+    unsigned int depth;
+    vm_size_t sz = 0;
 
-    if(err)
-        return err;
+    unsigned long addrof__mh_execute_header = 0;
+    struct mach_header_64 mh = {0};
+
+    while(1){
+        struct vm_region_submap_info_64 info;
+        mach_msg_type_number_t count = VM_REGION_SUBMAP_INFO_COUNT_64;
+
+        err = vm_region_recurse_64(debuggee->task, &addr, &sz, &depth,
+                (vm_region_info_t)&info, &count);
+
+        if(err)
+            return 0;
+
+        err = read_memory_at_location((void *)addr, &mh, sizeof(mh));
+
+        if(err == KERN_SUCCESS){
+            if(mh.magic == MH_MAGIC_64 && mh.filetype == MH_EXECUTE){
+                addrof__mh_execute_header = addr;
+                break;
+            }
+        }
+
+        addr += sz;
+    }
+
+    if(addrof__mh_execute_header == 0)
+        return -1;
     
-    return address - 0x100000000;
+    struct load_command *cmd = malloc(sizeof(struct load_command));
+
+    addr += sizeof(mh);
+
+    err = read_memory_at_location((void *)addr, cmd, sizeof(struct load_command));
+
+    for(int i=0; i<mh.ncmds; i++){
+        struct segment_command_64 *segcmd = malloc(sizeof(struct segment_command_64));
+        read_memory_at_location((void *)addr, segcmd, sizeof(struct segment_command_64));
+
+        if(segcmd && segcmd->cmd == LC_SEGMENT_64){
+            if(strcmp(segcmd->segname, "__TEXT") == 0){
+                free(cmd);
+                free(segcmd);
+                return (addrof__mh_execute_header - segcmd->vmaddr);
+            }
+        }
+
+        free(segcmd);
+        
+        addr += segcmd->cmdsize;
+    }
+
+    free(cmd);
+
+    return -1;
 }
 
 kern_return_t restore_exception_ports(void){
     for(mach_msg_type_number_t i=0;
             i<debuggee->original_exception_ports.count;
-            i++)
+            i++){
         task_set_exception_ports(debuggee->task, 
                 debuggee->original_exception_ports.masks[i], 
                 debuggee->original_exception_ports.ports[i], 
                 debuggee->original_exception_ports.behaviors[i], 
                 debuggee->original_exception_ports.flavors[i]);
+    }
 
     return KERN_SUCCESS;
 }
@@ -103,7 +148,7 @@ kern_return_t suspend(void){
     return task_suspend(debuggee->task);
 }
 
-kern_return_t update_threads(thread_act_port_array_t *threads){
+kern_return_t get_threads(thread_act_port_array_t *threads){
     mach_msg_type_number_t thread_count;
     
     kern_return_t err = task_threads(debuggee->task, threads, &thread_count);

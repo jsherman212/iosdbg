@@ -11,8 +11,6 @@
 
 /* Find an available hardware watchpoint register.*/
 static int find_ready_wp_reg(void){
-    struct node_t *current = debuggee->watchpoints->front;
-    
     /* Keep track of what hardware watchpoint registers are used
      * in the watchpoints currently active.
      */
@@ -21,15 +19,13 @@ static int find_ready_wp_reg(void){
     /* -1 means the hardware watchpoint register representing that spot
      * in the array has not been used. 0 means the opposite.
      */
-    for(int i=0; i<debuggee->num_hw_wps; i++)
-        wp_map[i] = -1;
+    memset(wp_map, -1, sizeof(int) * debuggee->num_hw_wps);
 
-    while(current){
-        struct watchpoint *current_watchpoint = current->data;
-
-        wp_map[current_watchpoint->hw_wp_reg] = 0;
-
-        current = current->next;
+    for(struct node_t *current = debuggee->watchpoints->front;
+            current;
+            current = current->next){
+        struct watchpoint *wp = current->data;
+        wp_map[wp->hw_wp_reg] = 0;
     }
 
     /* Now search wp_map for any empty spots. */

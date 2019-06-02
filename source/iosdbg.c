@@ -75,7 +75,7 @@ static void install_handlers(void){
     debuggee->setup_exception_handling = &setup_exception_handling;
     debuggee->deallocate_ports = &deallocate_ports;
     debuggee->suspend = &suspend;
-    debuggee->update_threads = &update_threads;
+    debuggee->get_threads = &get_threads;
 }
 
 static int _rl_getc(FILE *stream){
@@ -183,26 +183,32 @@ static int setup_tracing(void){
         if(strnstr(event, "BSC", 3)){
             int eventidx = (codenum & 0xfff) / 4;
 
+            char **bsd_syscalls_rea;
+
             /* There's a couple more not following the
              * "increment by 4" code pattern.
              */
             if(codenum > 0x40c0824){
                 eventidx = (codenum & ~0xff00000) / 4;
 
-                bsd_syscalls = realloc(bsd_syscalls, sizeof(char *) *
+                bsd_syscalls_rea = realloc(bsd_syscalls, sizeof(char *) *
                         (curline + eventidx));
             }
-            else
-                bsd_syscalls = realloc(bsd_syscalls, sizeof(char *) *
+            else{
+                bsd_syscalls_rea = realloc(bsd_syscalls, sizeof(char *) *
                         (curline + 1));
+            }
 
+            bsd_syscalls = bsd_syscalls_rea;
             bsd_syscalls_arr_len = eventidx;
         }
         else if(strnstr(event, "MSC", 3)){
             int eventidx = (codenum & 0xfff) / 4;
 
-            mach_traps = realloc(mach_traps, sizeof(char *) * (curline + 1));
-
+            char **mach_traps_rea = realloc(mach_traps,
+                    sizeof(char *) * (curline + 1));
+            
+            mach_traps = mach_traps_rea;
             mach_traps_arr_len = eventidx;
         }
         else if(strnstr(event, "MSG", 3)){
@@ -212,9 +218,10 @@ static int setup_tracing(void){
                 int num_ptrs_to_allocate = eventidx - largest_mach_msg_entry;
                 int cur_array_size = largest_mach_msg_entry;
 
-                mach_messages = realloc(mach_messages, sizeof(char *) *
+                char **mach_messages_rea = realloc(mach_messages, sizeof(char *) *
                         (cur_array_size + num_ptrs_to_allocate + 1));
 
+                mach_messages = mach_messages_rea;
                 largest_mach_msg_entry = eventidx + 1;
             }
 

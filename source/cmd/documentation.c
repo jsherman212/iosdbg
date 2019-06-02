@@ -25,7 +25,8 @@ void show_all_top_level_cmds(void){
         struct dbg_cmd_t *cmd = COMMANDS[idx++];
 
         if(cmd->level == 0){
-            cmds = realloc(cmds, sizeof(char *) * (++len + 1));
+            char **cmds_rea = realloc(cmds, sizeof(char *) * (++len + 1));
+            cmds = cmds_rea;
             cmds[len - 1] = strdup(cmd->name);
             cmds[len] = NULL;
 
@@ -73,7 +74,8 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
 
             /* Only grab direct descendants of `cmd`. */
             if(cursubcmd->level == (cmd->level + 1)){
-                subcmds = realloc(subcmds, sizeof(char *) * (++subcmdnum + 1));
+                char **subcmds_rea = realloc(subcmds, sizeof(char *) * (++subcmdnum + 1));
+                subcmds = subcmds_rea;
                 subcmds[subcmdnum - 1] = strdup(cursubcmd->name);
 
                 size_t sclen = strlen(subcmds[subcmdnum - 1]);

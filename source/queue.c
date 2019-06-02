@@ -17,8 +17,10 @@ void enqueue(struct queue_t *queue, void *data){
     if(!queue)
         return;
 
-    queue->data = realloc(queue->data, sizeof(void *)
+    void **data_rea = realloc(queue->data, sizeof(void *)
             * (++queue->capacity + 1));
+
+    queue->data = data_rea;
     queue->data[queue->capacity] = data;
 }
 

@@ -61,7 +61,8 @@ void strins(char **target, char *str, int where){
     if(slen == 0)
         return;
 
-    *target = realloc(*target, targetlen + slen + 1);
+    char *target_rea = realloc(*target, targetlen + slen + 1);
+    *target = target_rea;
     (*target)[targetlen + slen] = '\0';
     char *saved = strdup(*target + where);
     strncpy(*target + where, str, slen);
@@ -227,7 +228,8 @@ char **token_array(char *str, const char *delim, int *len){
     char *word = strtok_r(str_cpy, delim, &str_cpy);
 
     while(word){
-        words = realloc(words, sizeof(char *) * (++(*len)));
+        char **words_rea = realloc(words, sizeof(char *) * (++(*len)));
+        words = words_rea;
         words[*len - 1] = strdup(word);
         word = strtok_r(NULL, " ", &str_cpy);
     }

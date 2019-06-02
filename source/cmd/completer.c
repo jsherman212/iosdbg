@@ -217,19 +217,16 @@ static void match_at_level(const char *text, int target_level,
 
                         if(!IS_HELP_COMMAND && LINE_MODIFIED){
                             size_t subfrom = parentlen;
-                            subfrom -=
-                                parentlen > (size_t)RAND_PAD_LEN ?
-                                (size_t)RAND_PAD_LEN :
-                                (size_t)0;
+
+                            if(parentlen > RAND_PAD_LEN)
+                                subfrom -= RAND_PAD_LEN;
 
                             parent_cmd_name[subfrom] = '\0';
                             parentlen = strlen(parent_cmd_name);
 
                             /* Ignore the random string tacked on. */
-                            comparelen -= 
-                                len > (size_t)RAND_PAD_LEN ?
-                                (size_t)RAND_PAD_LEN :
-                                (size_t)0;
+                            if(len > RAND_PAD_LEN)
+                                comparelen -= RAND_PAD_LEN;
                         }
 
                         if(strncmp(curparent->name, parent_cmd_name, parentlen) == 0 &&
@@ -255,8 +252,9 @@ static void match_at_level(const char *text, int target_level,
 
                                 (*matches)[(*num_matches)++] =
                                     strdup(cursubcmd->name);
-                                *matches = realloc(*matches, sizeof(char *) *
+                                char **matches_rea = realloc(*matches, sizeof(char *) *
                                         ((*num_matches) + 1));
+                                *matches = matches_rea;
                             }
                         }
 
@@ -272,10 +270,8 @@ static void match_at_level(const char *text, int target_level,
             size_t comparelen = len;
 
             if(!IS_HELP_COMMAND && LINE_MODIFIED){
-                comparelen -=
-                    len > (size_t)RAND_PAD_LEN ?
-                    (size_t)RAND_PAD_LEN :
-                    (size_t)0;
+                if(len > RAND_PAD_LEN)
+                    comparelen -= RAND_PAD_LEN;
             }
 
             if(strncmp(current->name, text, comparelen) == 0){
@@ -299,8 +295,9 @@ static void match_at_level(const char *text, int target_level,
                         current->audit_function;
 
                     (*matches)[(*num_matches)++] = strdup(current->name);
-                    *matches = realloc(*matches, sizeof(char *) *
+                    char **matches_rea = realloc(*matches, sizeof(char *) *
                             ((*num_matches) + 1));
+                    *matches = matches_rea;
                 }
             }
         }

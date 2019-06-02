@@ -37,7 +37,7 @@ static pid_t parse_pid(char *pidstr, char **error){
 
 enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
         int arg1, char **error){
-    printf("%7s%#llx\n", "", debuggee->aslr_slide);
+    printf("%7s%#lx\n", "", debuggee->aslr_slide);
     return CMD_SUCCESS;
 }
 
@@ -76,11 +76,16 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         /* Detach from what we are attached to
          * and call this function again.
          */     
-        cmdfunc_detach(NULL, 0, error);
+        cmdfunc_detach(NULL, 0, NULL);
 
         /* Re-construct the argument queue for the next call. */
-        enqueue(args->argqueue, firstarg);
-        enqueue(args->argqueue, target);
+        enqueue(args->argqueue, strdup(firstarg));
+        enqueue(args->argqueue, strdup(target));
+
+        if(waitfor)
+            free(firstarg);
+
+        free(target);
 
         return cmdfunc_attach(args, 0, error);
     }
@@ -141,9 +146,13 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    debuggee->pid = target_pid;
     debuggee->aslr_slide = debuggee->find_slide();
-    
+
+    if(debuggee->aslr_slide == -1)
+        printf("warning: couldn't find debuggee's ASLR slide\n");
+
+    debuggee->pid = target_pid;
+
     if(is_number_fast(target)){
         char *name = progname_from_pid(debuggee->pid, error);
 
@@ -174,7 +183,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     debuggee->num_watchpoints = 0;
 
     thread_act_port_array_t threads;
-    debuggee->update_threads(&threads);
+    debuggee->get_threads(&threads);
     
     resetmtid();
     
@@ -186,7 +195,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     debuggee->want_detach = 0;
 
-    printf("Attached to %s (pid: %d), slide: %#llx.\n",
+    printf("Attached to %s (pid: %d), slide: %#lx.\n",
             debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
     /* Have Unix signals be sent as Mach exceptions. */
@@ -202,12 +211,12 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     char *aslr = NULL;
     concat(&aslr, "%#llx", debuggee->aslr_slide);
 
-    set_convvar("$ASLR", aslr, error);
+    char *e = NULL;
+    set_convvar("$ASLR", aslr, &e);
 
-    if(*error){
-        printf("warning: %s\n", *error);
-        free(*error);
-        *error = NULL;
+    if(e){
+        printf("warning: %s\n", e);
+        free(e);
     }
 
     free(aslr);
@@ -229,12 +238,10 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     printf("  * frame #0: 0x%16.16llx\n", focused->thread_state.__pc);
     printf("    frame #1: 0x%16.16llx\n", focused->thread_state.__lr);
 
-    int frame_counter = 2;
-
     /* There's a linked list of frame pointers. */
     struct frame_t {
         struct frame_t *next;
-        unsigned long long frame;
+        unsigned long frame;
     };
 
     struct frame_t *current_frame = malloc(sizeof(struct frame_t));
@@ -247,8 +254,10 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
+    int frame_counter = 2;
+
     while(current_frame->next){
-        printf("    frame #%d: 0x%16.16llx\n", frame_counter, 
+        printf("%4sframe #%d: 0x%16.16lx\n", "", frame_counter, 
                 current_frame->frame);
 
         read_memory_at_location((void *)current_frame->next, 

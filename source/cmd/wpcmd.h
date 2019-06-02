@@ -52,7 +52,7 @@ static const char *WATCHPOINT_SET_COMMAND_DOCUMENTATION =
  * Regexes
  */
 static const char *WATCHPOINT_DELETE_COMMAND_REGEX =
-    "(?<ids>\\d+)?";
+    "(?<ids>[\\d\\s]+)?";
 
 static const char *WATCHPOINT_SET_COMMAND_REGEX =
     "(?(?=--[rw])(?<type>--[rw]{1,2}))\\s*"

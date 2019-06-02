@@ -37,32 +37,31 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
         return CMD_SUCCESS;
     }
 
-    while(cur_id){
-        int id = (int)strtol_err(cur_id, error);
+    int len = 0;
+    char **ids = token_array(cur_id, " ", &len);
 
-        if(*error){
-            printf("%s\n", *error);
-            free(*error);
-            *error = NULL;
-            free(cur_id);
-            cur_id = argnext(args);
-            continue;
+    for(int i=0; i<len; i++){
+        char *e = NULL;
+        int id = (int)strtol_err(ids[i], &e);
+
+        if(e){
+            free(e);
+            e = NULL;
         }
 
-        watchpoint_delete(id, error);
+        watchpoint_delete(id, &e);
 
-        if(*error){
-            printf("%s\n", *error);
-            free(*error);
-            *error = NULL;
+        if(e){
+            printf("%s\n", e);
+            free(e);
         }
-        else
+        else{
             printf("Watchpoint %d deleted\n", id);
-
-        free(cur_id);
-        cur_id = argnext(args);
+        }
     }
-    
+
+    token_array_free(ids, len);
+
     return CMD_SUCCESS;
 }
 
@@ -75,15 +74,13 @@ enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
 
     printf("Current watchpoints:\n");
 
-    int count = 1;
-
     for(struct node_t *current = debuggee->watchpoints->front;
             current;
             current = current->next){
         struct watchpoint *w = current->data;
 
-        printf("%4s%d<id: %d>: address = %-16.16lx, hit count = %d, size = %d",
-                "", count++, w->id, w->location, w->hit_count, w->data_len);
+        printf("%4s%d: address = %-16.16lx, hit count = %d, size = %d",
+                "", w->id, w->user_location, w->hit_count, w->data_len);
 
         const char *type = "r";
 

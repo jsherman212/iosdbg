@@ -38,31 +38,30 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
         return CMD_SUCCESS;
     }
 
-    while(cur_id){
-        int id = (int)strtol_err(cur_id, error);
+    int len = 0;
+    char **ids = token_array(cur_id, " ", &len);
 
-        if(*error){
-            printf("%s\n", *error);
-            free(*error);
-            *error = NULL;
-            free(cur_id);
-            cur_id = argnext(args);
-            continue;
+    for(int i=0; i<len; i++){
+        char *e = NULL;
+        int id = (int)strtol_err(ids[i], &e);
+
+        if(e){
+            free(e);
+            e = NULL;
         }
 
-        breakpoint_delete(id, error);
+        breakpoint_delete(id, &e);
 
-        if(*error){
-            printf("%s\n", *error);
-            free(*error);
-            *error = NULL;
+        if(e){
+            printf("%s\n", e);
+            free(e);
         }
-        else
+        else{
             printf("Breakpoint %d deleted\n", id);
-
-        free(cur_id);
-        cur_id = argnext(args);
+        }
     }
+
+    token_array_free(ids, len);
     
     return CMD_SUCCESS;
 }
@@ -76,15 +75,13 @@ enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
 
     printf("Current breakpoints:\n");
 
-    int count = 1;
-
     for(struct node_t *current = debuggee->breakpoints->front;
             current;
             current = current->next){
         struct breakpoint *b = current->data;
 
-        printf("%4s%d<id: %d>: address = %-16.16lx, hit count = %d\n",
-                "", b->id, count++, b->location, b->hit_count);
+        printf("%4s%d: address = %-16.16lx, hit count = %d, hardware = %d\n",
+                "", b->id, b->location, b->hit_count, b->hw);
     }
     
     return CMD_SUCCESS;

@@ -81,10 +81,10 @@ struct debuggee {
     struct linkedlist *threads;
 
     /* The debuggee's ASLR slide. */
-    unsigned long long aslr_slide;
+    unsigned long aslr_slide;
 
     /* The function pointer to find the debuggee's ASLR slide. */
-    unsigned long long (*find_slide)(void);
+    unsigned long (*find_slide)(void);
 
     /* The function pointer to restore original exception ports. */
     kern_return_t (*restore_exception_ports)(void);
@@ -102,7 +102,7 @@ struct debuggee {
     kern_return_t (*suspend)(void);
 
     /* The function pointer to update the list of the debuggee's threads. */
-    kern_return_t (*update_threads)(thread_act_port_array_t *);
+    kern_return_t (*get_threads)(thread_act_port_array_t *);
 };
 
 /* This structure represents what we are currently debugging. */

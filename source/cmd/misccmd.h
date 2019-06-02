@@ -101,7 +101,7 @@ static const char *STEPI_COMMAND_DOCUMENTATION =
     "\n";
 
 static const char *TRACE_COMMAND_DOCUMENTATION =
-    "This command provides similar functionality to strace through"
+    "This command provides similar functionality as strace through"
     " the kdebug interface.\n"
     "This command has no arguments.\n"
     "\nSyntax:\n"
@@ -112,7 +112,10 @@ static const char *TRACE_COMMAND_DOCUMENTATION =
  * Regexes
  */
 static const char *ATTACH_COMMAND_REGEX =
-    "(?J)((?<waitfor>--waitfor)\\s+(\"(?<target>.*)\"|(?!.*\")(?<target>\\w+)))|^\\s*((\"(?<target>.*)\")|(?!.*\")(?<target>\\w+))";
+    "(?J)((?<waitfor>--waitfor)\\s+"
+    "(\"(?<target>.*)\"|(?!.*\")(?<target>\\w+)))|"
+    "^\\s*((\"(?<target>.*)\")|"
+    "(?!.*\")(?<target>\\w+))";
 
 
 static const char *HELP_COMMAND_REGEX =

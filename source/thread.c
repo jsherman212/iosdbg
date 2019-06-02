@@ -17,12 +17,10 @@ static struct machthread *machthread_new(mach_port_t thread_port){
     
     if(tname){
         strcpy(mt->tname, tname);
-
         free(tname);
     }
     else{
-        const char *n = "";
-        strcpy(mt->tname, (char *)n);
+        strcpy(mt->tname, "");
     }
     
     machthread_updatestate(mt);

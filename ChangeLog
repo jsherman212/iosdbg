@@ -1,3 +1,13 @@
+6-2-19
+- fix software breakpoint bug - setting two at the same spot would cause the
+second one to pick up BRK #0 as the original instruction
+- do away with using the pointer passed to realloc again
+- fix (breakpoint|watchpoint)_delete regexes - allow more than one ID to be
+given
+- rewrite the way iosdbg figures out the debuggee's ASLR slide
+- fix double free when attaching to something different while already attached
+to something
+
 5-31-19
 - improvements for watchpoints, set up BAS and align DBGWVR<n>_EL1
 correctly

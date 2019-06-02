@@ -2,7 +2,7 @@
 #define _COMPLETER_H_
 
 #define MAX_GROUPS 4
-#define RAND_PAD_LEN 10
+#define RAND_PAD_LEN ((size_t)10)
 
 extern int IS_HELP_COMMAND;
 extern int LINE_MODIFIED;

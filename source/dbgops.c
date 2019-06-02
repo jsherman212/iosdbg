@@ -64,7 +64,7 @@ void ops_detach(int from_death){
 
         debuggee->want_detach = 1;
 
-        /* Boot exception_server out of mach_msg. Using SIGCONT was an arbitrary choice.
+        /* Boot exception_server out of mach_msg. SIGCONT was an arbitrary choice.
          * We have to do this first so this SIGCONT doesn't get handled.
          */
         kill(debuggee->pid, SIGCONT);
@@ -212,7 +212,7 @@ void ops_resume(void){
 
 void ops_threadupdate(void){
     thread_act_port_array_t threads;
-    debuggee->update_threads(&threads);
+    debuggee->get_threads(&threads);
 
     machthread_updatethreads(threads);
 

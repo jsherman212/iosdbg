@@ -18,7 +18,9 @@ void stack_push(struct stack_t *stack, void *data){
     if(!stack)
         return;
 
-    stack->data = realloc(stack->data, sizeof(void *) * (++stack->top + 1));
+    void **data_rea = realloc(stack->data, sizeof(void *) * (++stack->top + 1));
+
+    stack->data = data_rea;
     stack->data[stack->top] = data;
 }
 

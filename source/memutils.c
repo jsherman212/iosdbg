@@ -32,7 +32,6 @@ unsigned long long CFSwapInt64(unsigned long long arg){
 }
 
 kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
-    const int data_size = 0x4;
     unsigned long current_location = location;
 
     char *locstr = NULL;
@@ -48,10 +47,16 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
     if(error)
         free(error);
 
+    enum { data_size = 4 };
+
     while(current_location < (location + (num_instrs * data_size))){
-        uint8_t *data = malloc(data_size);
+        uint8_t data[data_size];
+
         kern_return_t err = read_memory_at_location((void *)current_location,
                 data, data_size);
+
+        if(err)
+            return err;
 
         unsigned long instr = 0;
 
@@ -62,22 +67,21 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
 
         if(active)
             instr = CFSwapInt32(active->old_instruction);
-        else{
+        else
             instr = CFSwapInt32(*(unsigned long *)data);
 
-            char *val = NULL;
-            concat(&val, "%#lx", instr);
+        char *val = NULL;
+        concat(&val, "%#lx", instr);
 
-            error = NULL;
-            set_convvar("$__", val, &error);
+        error = NULL;
+        set_convvar("$__", val, &error);
 
-            desc_auto_convvar_error_if_needed("$__", error);
+        desc_auto_convvar_error_if_needed("$__", error);
 
-            free(val);
+        free(val);
 
-            if(error)
-                free(error);
-        }
+        if(error)
+            free(error);
 
         char *disassembled = ArmadilloDisassembleB(instr, current_location);
 
@@ -86,7 +90,6 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
         err = get_thread_state(focused);
 
         if(err){
-            free(data);
             free(disassembled);
             return KERN_FAILURE;
         }
@@ -95,7 +98,6 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
                 focused->thread_state.__pc == current_location
                 ? "->  " : "    ", current_location, disassembled);
 
-        free(data);
         free(disassembled);
 
         current_location += data_size;
@@ -108,12 +110,12 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount){
     if(amount == 0)
         return KERN_SUCCESS;
 
-    const int row_size = 0x10;
-
     int amount_dumped = 0;
     unsigned long current_location = location;
 
     while(amount_dumped < amount){
+        enum { row_size = 0x10 };
+
         uint8_t membuffer[row_size];
 
         kern_return_t ret = read_memory_at_location((void *)current_location,
@@ -132,7 +134,7 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount){
         for(int i=0; i<current_row_length; i++)
             printf("%02x ", (uint8_t)(*(membuffer + i)));
 
-        if(current_row_length < 0x10){
+        if(current_row_length < row_size){
             /* Print filler spaces.
              * Two spaces for would be '%02x', one more for the space after.
              */
@@ -171,8 +173,6 @@ kern_return_t read_memory_at_location(void *location, void *buffer,
 
 kern_return_t write_memory_to_location(vm_address_t location,
         vm_offset_t data, vm_size_t size){
-    kern_return_t ret;
-
     /* Get old protections and figure out whether the
      * location we're writing to exists.
      */
@@ -182,7 +182,7 @@ kern_return_t write_memory_to_location(vm_address_t location,
     mach_port_t object_name;
     mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
     
-    ret = vm_region_64(debuggee->task,
+    kern_return_t ret = vm_region_64(debuggee->task,
             &region_location,
             &region_size,
             VM_REGION_BASIC_INFO,

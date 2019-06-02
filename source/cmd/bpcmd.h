@@ -44,7 +44,7 @@ static const char *BREAKPOINT_SET_COMMAND_DOCUMENTATION =
  * Regexes
  */
 static const char *BREAKPOINT_DELETE_COMMAND_REGEX =
-    "(?<ids>\\d+)?";
+    "(?<ids>[\\d\\s]+)?";
 
 static const char *BREAKPOINT_SET_COMMAND_REGEX =
     "(?<args>[\\w+\\-*\\/\\$()]+)";
