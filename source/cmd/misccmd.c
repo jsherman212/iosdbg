@@ -43,19 +43,8 @@ enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args, 
         int arg1, char **error){
-    /* First argument could either be '--waitfor' or what the user
-     * wants to attach to.
-     */
-    char *firstarg = argnext(args);
-    int waitfor = strcmp(firstarg, "--waitfor") == 0;
-
-    /* If we got '--waitfor' as the first argument, whatever the user
-     * wants to attach to will be next.
-     */
-    char *target = firstarg;
-
-    if(waitfor)
-        target = argnext(args);
+    char *waitfor = argcopy(args, ATTACH_COMMAND_REGEX_GROUPS[0]);
+    char *target = argcopy(args, ATTACH_COMMAND_REGEX_GROUPS[1]);
 
     /* Check if the user wants to attach to something else while attached
      * to something.
@@ -66,7 +55,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
         if(ans == 'n'){
             if(waitfor)
-                free(firstarg);
+                free(waitfor);
 
             free(target);
 
@@ -79,11 +68,11 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         cmdfunc_detach(NULL, 0, NULL);
 
         /* Re-construct the argument queue for the next call. */
-        enqueue(args->argqueue, strdup(firstarg));
-        enqueue(args->argqueue, strdup(target));
+        argins(args, ATTACH_COMMAND_REGEX_GROUPS[0], waitfor ? strdup(waitfor) : NULL);
+        argins(args, ATTACH_COMMAND_REGEX_GROUPS[1], strdup(target));
 
         if(waitfor)
-            free(firstarg);
+            free(waitfor);
 
         free(target);
 
@@ -122,7 +111,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     if(*error || target_pid == -1){
         if(waitfor)
-            free(firstarg);
+            free(waitfor);
 
         free(target);
 
@@ -134,7 +123,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     if(err){
         if(waitfor)
-            free(firstarg);
+            free(waitfor);
 
         concat(error, "couldn't get task port for %s (pid: %d): %s\n"
                 "Did you forget to sign iosdbg with entitlements?\n"
@@ -222,7 +211,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     free(aslr);
 
     if(waitfor)
-        free(firstarg);
+        free(target);
 
     free(target);
 

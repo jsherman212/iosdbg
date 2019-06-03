@@ -4,6 +4,7 @@
 #include <readline/readline.h>
 
 #include "argparse.h"
+#include "bpcmd.h"
 
 #include "../breakpoint.h"
 #include "../debuggee.h"
@@ -89,15 +90,56 @@ enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args, 
         int arg1, char **error){
-    char *location_str = argnext(args);
-    long location = eval_expr(location_str, error);
+    char *thread_str = argcopy(args, BREAKPOINT_SET_COMMAND_REGEX_GROUPS[0]);
 
-    free(location_str);
+    int thread = BP_ALL_THREADS;
 
-    if(*error)
-        return CMD_FAILURE;
+    if(thread_str){
+        thread = (int)strtol(thread_str, NULL, 10);
 
-    breakpoint_at_address(location, BP_NO_TEMP, BP_ALL_THREADS, error);    
+        if(!(thread >= 1 && thread <= debuggee->thread_count)){
+            concat(error, "bad thread number %d", thread);
+            free(thread_str);
+            return CMD_FAILURE;
+        }
 
-    return *error ? CMD_FAILURE : CMD_SUCCESS;
+        if(!debuggee->interrupted){
+            int len = (int)strlen("warning: ");
+
+            printf("warning: debuggee is not stopped"
+                    ", thread IDs could have changed.\n"
+                    "%*sIt is suggested to interrupt the debuggee,"
+                    " remind yourself of the list of threads,\n"
+                    "%*sand set the breakpoint again.\n",
+                    len, "", len, "");
+        }
+    }
+
+    free(thread_str);
+
+    char *location_str = argcopy(args, BREAKPOINT_SET_COMMAND_REGEX_GROUPS[1]);
+
+    while(location_str){
+        char *e = NULL;
+        long location = eval_expr(location_str, &e);
+
+        if(e){
+            printf("warning: could not set breakpoint: %s\n", e);
+            free(e);
+            e = NULL;
+        }
+        else{
+            breakpoint_at_address(location, BP_NO_TEMP, thread, &e);
+
+            if(e){
+                printf("warning: could not set breakpoint: %s\n", e);
+                free(e);
+            }
+        }
+
+        free(location_str);
+        location_str = argcopy(args, BREAKPOINT_SET_COMMAND_REGEX_GROUPS[1]);
+    }
+
+    return CMD_SUCCESS;
 }

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "argparse.h"
+#include "tcmd.h"
 
 #include "../debuggee.h"
 #include "../linkedlist.h"
@@ -10,16 +11,14 @@
 
 enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args, 
         int arg1, char **error){
-    struct node_t *current = debuggee->threads->front;
-
-    while(current){
+    for(struct node_t *current = debuggee->threads->front;
+            current;
+            current = current->next){
         struct machthread *t = current->data;
 
         printf("\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", 
                 t->focused ? "* " : "", t->ID, t->tid, t->tname, 
                 t->thread_state.__pc);
-        
-        current = current->next;
     }
 
     return CMD_SUCCESS;
@@ -27,11 +26,10 @@ enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args, 
         int arg1, char **error){
-    /* Current argument: the ID of the thread the user wants to focus on. */
-    char *curarg = argnext(args);
-    int thread_id = (int)strtol_err(curarg, error);
+    char *thread_id_str = argcopy(args, THREAD_SELECT_COMMAND_REGEX_GROUPS[0]);
+    int thread_id = (int)strtol_err(thread_id_str, error);
 
-    free(curarg);
+    free(thread_id_str);
 
     if(*error)
         return CMD_FAILURE;

@@ -340,7 +340,7 @@ static struct dbg_cmd_t *common_initialization(const char *name,
         const char *argregex, int num_groups, int unk_num_args,
         const char *groupnames[MAX_GROUPS],
         enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **),
-        void (*audit_function)(struct cmd_args_t *, char **)){
+        void (*audit_function)(struct cmd_args_t *, const char **, char **)){
     struct dbg_cmd_t *c = malloc(sizeof(struct dbg_cmd_t));
 
     c->name = strdup(name);
@@ -375,7 +375,7 @@ static struct dbg_cmd_t *create_parent_cmd(const char *name,
         const char *argregex, int num_groups, int unk_num_args,
         const char *groupnames[MAX_GROUPS], int numsubcmds,
         enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **),
-        void (*audit_function)(struct cmd_args_t *, char **)){
+        void (*audit_function)(struct cmd_args_t *, const char **, char **)){
     struct dbg_cmd_t *c = common_initialization(name,
             alias, documentation, level, argregex, num_groups,
             unk_num_args, groupnames, cmd_function, audit_function);
@@ -393,7 +393,7 @@ static struct dbg_cmd_t *create_child_cmd(const char *name,
         const char *argregex, int num_groups, int unk_num_args,
         const char *groupnames[MAX_GROUPS],
         enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **),
-        void (*audit_function)(struct cmd_args_t *, char **)){
+        void (*audit_function)(struct cmd_args_t *, const char **, char **)){
     struct dbg_cmd_t *c = common_initialization(name,
             alias, documentation, level, argregex, num_groups,
             unk_num_args, groupnames, cmd_function, audit_function);
@@ -450,7 +450,7 @@ static void initialize_commands(void){
                 NULL);
         struct dbg_cmd_t *set = create_child_cmd("set",
                 NULL, BREAKPOINT_SET_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
-                BREAKPOINT_SET_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
+                BREAKPOINT_SET_COMMAND_REGEX, _NUM_GROUPS(2), _UNK_ARGS(1),
                 BREAKPOINT_SET_COMMAND_REGEX_GROUPS, cmdfunc_breakpoint_set,
                 audit_breakpoint_set);
 

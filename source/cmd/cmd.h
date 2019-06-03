@@ -49,7 +49,7 @@ struct dbg_cmd_t {
     int parentcmd;
 
     enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **);
-    void (*audit_function)(struct cmd_args_t *, char **);
+    void (*audit_function)(struct cmd_args_t *, const char **, char **);
 };
 
 struct matchedcmdinfo_t {
@@ -57,7 +57,7 @@ struct matchedcmdinfo_t {
     struct regexinfo rinfo;
     struct dbg_cmd_t *cmd;
     enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **);
-    void (*audit_function)(struct cmd_args_t *, char **);
+    void (*audit_function)(struct cmd_args_t *, const char **, char **);
 };
 
 struct dbg_cmd_t *COMMANDS[NUM_TOP_LEVEL_COMMANDS];

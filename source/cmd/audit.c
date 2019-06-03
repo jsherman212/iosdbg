@@ -11,7 +11,7 @@
 #include "../queue.h"
 #include "../strext.h"
 
-static void dispose_on_failure(int argcount, ...){
+static void free_on_failure(int argcount, ...){
     va_list args;
     va_start(args, argcount);
 
@@ -39,47 +39,68 @@ static void repair_cmd_args(struct cmd_args_t *_args, int argcount, ...){
     va_end(args);
 }
 
-void audit_aslr(struct cmd_args_t *args, char **error){
+static void repair_cmd_args2(struct cmd_args_t *_args, int unlim,
+        const char **groupnames, int argcount, ...){
+    va_list args;
+    va_start(args, argcount);
+
+    if(unlim)
+        argcount--;
+
+    for(int i=0; i<argcount; i++){
+        char *arg = va_arg(args, char *);
+
+        if(arg){
+            argins(_args, groupnames[i], arg);
+        }
+    }
+
+    if(unlim){
+        char *arg = va_arg(args, char *);
+
+        while(arg){
+            if(arg){
+                argins(_args, groupnames[argcount - 1], arg);
+            }
+
+            arg = va_arg(args, char *);
+        }
+    }
+
+    va_end(args);
+}
+
+void audit_aslr(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_attach(struct cmd_args_t *args, char **error){
-    char *arg1 = argnext(args);
+void audit_attach(struct cmd_args_t *args, const char **groupnames,
+        char **error){
+    char *target = argcopy(args, groupnames[1]);
 
-    if(!arg1){
+    if(!target){
         concat(error, "no target");
-        dispose_on_failure(1, arg1);
+        free_on_failure(1, target);
         return;
     }
 
-    char *arg2 = argnext(args);
-    char *target = arg1;
+    char *waitfor = argcopy(args, groupnames[0]);
 
-    /* arg1 could be '--waitfor' or the target. 
-     * If it is '--waitfor', the target should follow.
-     */
-    if(strcmp(arg1, "--waitfor") == 0){
-        if(!arg2){
-            concat(error, "missing target for --waitfor");
-            dispose_on_failure(2, arg1, arg2);
-            return;
-        }
+    printf("%s: got waitfor '%s' target '%s'\n",
+            __func__, waitfor ? waitfor : "NULL", target);
 
-        /* We cannot wait for PIDs. */
-        if(is_number_fast(arg2)){
-            concat(error, "cannot wait for PIDs");
-            dispose_on_failure(2, arg1, arg2);
-            return;
-        }
-
-        target = arg2;
+    if(waitfor && is_number_fast(target)){
+        concat(error, "cannot wait for PIDs");
+        free_on_failure(2, waitfor, target);
+        return;
     }
 
     /* We cannot debug the kernel. */
     if(strcmp(target, "0") == 0 || strcmp(target, "kernel_task") == 0){
         concat(error, "cannot debug the kernel");
-        dispose_on_failure(2, arg1, arg2);
+        free_on_failure(2, waitfor, target);
         return;
     }
 
@@ -87,198 +108,147 @@ void audit_attach(struct cmd_args_t *args, char **error){
 
     /* We cannot debug ourselves. */
     if(strcmp(target, "iosdbg") == 0 || target_pid == getpid()){
-        concat(error, "cannot attach to myself");
-        dispose_on_failure(2, arg1, arg2);
+        concat(error, "cannot attach to myself! Use another iosdbg instance");
+        free_on_failure(2, waitfor, target);
         return;
     }
 
-    repair_cmd_args(args, 2, arg1, arg2);
+    repair_cmd_args2(args, 0, groupnames, 2, waitfor, target);
 }
 
-void audit_backtrace(struct cmd_args_t *args, char **error){
+void audit_backtrace(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_breakpoint_set(struct cmd_args_t *args, char **error){
+void audit_breakpoint_set(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     // XXX if I allow setting breakpoints before attaching and resolving them
     // later, this will cause problems
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_continue(struct cmd_args_t *args, char **error){
+void audit_continue(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_delete(struct cmd_args_t *args, char **error){
+void audit_detach(struct cmd_args_t *args, const char **groupnames,
+        char **error){
+    if(debuggee->pid == -1)
+        concat(error, "no debuggee");
+}
+
+void audit_disassemble(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
         return;
     }
 
-    /* First argument is the type. */
-    char *arg1 = argnext(args);
+    char *location = argcopy(args, groupnames[0]);
 
-    if(!arg1){
-        concat(error, "need type");
-        dispose_on_failure(1, arg1);
-        return;
-    }
-
-    if(strcmp(arg1, "b") != 0 && strcmp(arg1, "w") != 0){
-        concat(error, "unknown type '%s'", arg1);
-        dispose_on_failure(1, arg1);
-        return;
-    }
-
-    char *arg2 = argnext(args);
-
-    repair_cmd_args(args, 2, arg1, arg2);
-}
-
-void audit_detach(struct cmd_args_t *args, char **error){
-    if(debuggee->pid == -1)
-        concat(error, "no debuggee");
-}
-
-void audit_disassemble(struct cmd_args_t *args, char **error){
-    if(debuggee->pid == -1){
-        concat(error, "no debuggee");
-        return;
-    }
-
-    /* First argument is the location. */
-    char *arg1 = argnext(args);
-
-    if(!arg1){
+    if(!location){
         concat(error, "need location");
-        dispose_on_failure(1, arg1);
+        free_on_failure(1, location);
         return;
     }
 
-    /* Next argument is the amount of instructions to disassemble. */
-    char *arg2 = argnext(args);
+    char *count = argcopy(args, groupnames[1]);
 
-    if(!arg2){
-        concat(error, "need amount");
-        dispose_on_failure(2, arg1, arg2);
+    if(!count){
+        concat(error, "need count");
+        free_on_failure(2, location, count);
         return;
     }
 
-    int amount = (int)strtol_err(arg2, error);
+    int amount = (int)strtol_err(count, error);
 
     if(*error){
-        dispose_on_failure(2, arg1, arg2);
+        free_on_failure(2, location, count);
         return;
     }
 
-    repair_cmd_args(args, 2, arg1, arg2);
+    repair_cmd_args2(args, 0, groupnames, 2, location, count);
 }
 
-void audit_examine(struct cmd_args_t *args, char **error){
+void audit_examine(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
         return;
     }
 
-    /* First argument is the location. */
-    char *arg1 = argnext(args);
+    char *location = argcopy(args, groupnames[0]);
 
-    if(!arg1){
+    if(!location){
         concat(error, "need location");
-        dispose_on_failure(1, arg1);
+        free_on_failure(1, location);
         return;
     }
 
     /* Next argument is the amount of bytes to display. */
-    char *arg2 = argnext(args);
+    char *count = argcopy(args, groupnames[1]);
 
-    if(!arg2){
+    if(!count){
         concat(error, "need amount");
-        dispose_on_failure(2, arg1, arg2);
+        free_on_failure(2, location, count);
         return;
     }
 
-    repair_cmd_args(args, 2, arg1, arg2);
+    repair_cmd_args2(args, 0, groupnames, 2, location, count);
 }
 
-void audit_kill(struct cmd_args_t *args, char **error){
+void audit_kill(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-static void _audit_memory_find_final_args(char *arg1, char *arg2,
+void audit_memory_find(struct cmd_args_t *args, const char **groupnames,
         char **error){
-    if(strcmp(arg1, "--s") == 0){
-        if(!arg2){
+    if(debuggee->pid == -1)
+        concat(error, "no debuggee");
+
+    char *start = argcopy(args, groupnames[0]);
+    char *count = argcopy(args, groupnames[1]);
+    char *type = argcopy(args, groupnames[2]);
+    char *target = argcopy(args, groupnames[3]);
+
+    if(strcmp(type, "--s") == 0){
+        if(!target){
             concat(error, "attempt to search for empty string");
+            free_on_failure(4, start, count, type, target);
             return;
         }
     }
 
     /* Check if this is a valid floating point number. */
-    if(strcmp(arg1, "--f") == 0 ||
-            strcmp(arg1, "--fd") == 0 ||
-            strcmp(arg1, "--fld") == 0)
-        strtold_err(arg2, error);
-}
-
-void audit_memory_find(struct cmd_args_t *args, char **error){
-    if(debuggee->pid == -1)
-        concat(error, "no debuggee");
-
-    /* First argument is the start, nothing to do. */
-    char *arg1 = argnext(args);
-
-    /* Second argument could be count or the type. */
-    char *arg2 = argnext(args);
-
-    if(!arg2){
-        concat(error, "no count or no type");
-        dispose_on_failure(2, arg1, arg2);
-        return;
-    }
-
-    /* If arg2 is the count, then the next argument will be the type. */
-    if(is_number_fast(arg2)){
-        /* In this case, the third argument is the type. */
-        char *arg3 = argnext(args);
-
-        /* The fourth argument is the target. */
-        char *arg4 = argnext(args);
-
-        _audit_memory_find_final_args(arg3, arg4, error);
+    if(strcmp(type, "--f") == 0 ||
+            strcmp(type, "--fd") == 0 ||
+            strcmp(type, "--fld") == 0){
+        strtold_err(target, error);
 
         if(*error){
-            dispose_on_failure(4, arg1, arg2, arg3, arg4);
+            free_on_failure(4, start, count, type, target);
             return;
         }
-
-        repair_cmd_args(args, 4, arg1, arg2, arg3, arg4);
-        return;
     }
 
-    /* Otherwise, arg2 is the type and arg3 is the target. */
-    char *arg3 = argnext(args);
-
-    _audit_memory_find_final_args(arg2, arg3, error);
-
-    if(*error){
-        dispose_on_failure(3, arg1, arg2, arg3);
-        return;
-    }
-
-    repair_cmd_args(args, 3, arg1, arg2, arg3);
+    repair_cmd_args2(args, 0, groupnames, 4, start, count, type, target);
 }
 
-void audit_memory_write(struct cmd_args_t *args, char **error){
+void audit_memory_write(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_register_float(struct cmd_args_t *args, char **error){
+void audit_register_float(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
         return;
@@ -288,22 +258,26 @@ void audit_register_float(struct cmd_args_t *args, char **error){
         concat(error, "need a register");
 }
 
-void audit_register_gen(struct cmd_args_t *args, char **error){
+void audit_register_gen(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_register_write(struct cmd_args_t *args, char **error){
+void audit_register_write(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_stepi(struct cmd_args_t *args, char **error){
+void audit_stepi(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_thread_list(struct cmd_args_t *args, char **error){
+void audit_thread_list(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
         return;
@@ -313,7 +287,8 @@ void audit_thread_list(struct cmd_args_t *args, char **error){
         concat(error, "no threads");
 }
 
-void audit_thread_select(struct cmd_args_t *args, char **error){
+void audit_thread_select(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
         return;
@@ -324,74 +299,47 @@ void audit_thread_select(struct cmd_args_t *args, char **error){
         return;
     }
 
-    /* First argument is the thread ID. */
-    char *arg1 = argnext(args);
+    char *tid = argcopy(args, groupnames[0]);
 
-    if(!arg1){
+    if(!tid){
         concat(error, "need thread ID");
-        dispose_on_failure(1, arg1);
+        free_on_failure(1, tid);
         return;
     }
 
-    repair_cmd_args(args, 1, arg1);
+    repair_cmd_args2(args, 0, groupnames, 1, tid);
 }
 
-void audit_watchpoint_set(struct cmd_args_t *args, char **error){
+void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
+        char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
         return;
     }
 
-    /* First argument is the watchpoint type or the location. */
-    char *arg1 = argnext(args);
+    char *type = argcopy(args, groupnames[0]);
 
-    if(!arg1){
-        concat(error, "need type or location");
-        dispose_on_failure(1, arg1);
+    if(!type || (strcmp(type, "--r") != 0 &&
+            strcmp(type, "--w") != 0 &&
+            strcmp(type, "--rw") != 0)){
+        concat(error, "invalid watchpoint type");
+        free_on_failure(1, type);
         return;
     }
 
-    /* The argument is the watchpoint type. */
-    if(!is_number_slow(arg1)){
-        if(strcmp(arg1, "--r") != 0 &&
-                strcmp(arg1, "--w") != 0 &&
-                strcmp(arg1, "--rw") != 0){
-            concat(error, "invalid watchpoint type '%s'", arg1);
-            dispose_on_failure(1, arg1);
-            return;
-        }
+    char *location = argcopy(args, groupnames[1]);
 
-        /* The watchpoint location should follow. */
-        char *arg2 = argnext(args);
-
-        if(!arg2){
-            concat(error, "need location");
-            dispose_on_failure(2, arg1, arg2);
-            return;
-        }
-
-        /* Finally, the size of the data we're watching. */
-        char *arg3 = argnext(args);
-
-        if(!arg3){
-            concat(error, "missing data size");
-            dispose_on_failure(3, arg1, arg2, arg3);
-            return;
-        }
-
-        repair_cmd_args(args, 3, arg1, arg2, arg3);
-
-        return;
+    if(!location){
+        concat(error, "need location");
+        free_on_failure(2, type, location);
     }
 
-    /* In this case, the data size follows. */
-    char *arg2 = argnext(args);
+    char *size = argcopy(args, groupnames[2]);
 
-    if(!arg2){
+    if(!size){
         concat(error, "missing data size");
-        dispose_on_failure(2, arg1, arg2);
-        return;
+        free_on_failure(3, type, location, size);
     }
 
-    repair_cmd_args(args, 2, arg1, arg2);
+    repair_cmd_args2(args, 0, groupnames, 3, type, location, size);
 }

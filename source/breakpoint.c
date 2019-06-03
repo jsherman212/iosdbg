@@ -220,8 +220,19 @@ void breakpoint_at_address(unsigned long address, int temporary,
 
     linkedlist_add(debuggee->breakpoints, bp);
 
-    if(!temporary)
-        printf("Breakpoint %d at %#lx\n", bp->id, bp->location);
+    if(!temporary){
+        printf("Breakpoint %d at %#lx", bp->id, bp->location);
+
+        struct machthread *bpthread = machthread_find(bp->thread);
+
+        if(bp->thread != BP_ALL_THREADS){
+            printf(", for thread #%d (tid: %#llx), '%s'\n",
+                    bp->thread, bpthread->tid, bpthread->tname);
+        }
+        else{
+            putchar('\n');
+        }
+    }
 
     /* If we ran out of hardware breakpoints, set a software breakpoint
      * by writing BRK #0 to bp->location.

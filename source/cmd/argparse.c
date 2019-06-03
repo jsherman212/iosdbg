@@ -21,6 +21,7 @@ struct cmd_args_t *parse_and_create_args(char *_args,
 
     arguments->argqueue = queue_new();
     arguments->num_args = 0;
+    arguments->argmaps = linkedlist_new();
 
     if(!_args)
         return arguments;
@@ -79,7 +80,7 @@ struct cmd_args_t *parse_and_create_args(char *_args,
      * Normally we'd just loop through the groupnames array,
      * but in this case, we have to do that but exclude the
      * last group name. Then we have to keep matching for that
-     * group name in another loop.
+     * group in another loop.
      */
     int idx_limit = num_groups;
 
@@ -100,8 +101,8 @@ struct cmd_args_t *parse_and_create_args(char *_args,
                     &substr_buf,
                     &substr_buf_len);
 
-            if(copybyname_rc < 0)
-                continue;
+            //if(copybyname_rc < 0)
+           //     continue;
         }
         else{
             int substr_rc = pcre2_substring_get_bynumber(match_data,
@@ -110,18 +111,35 @@ struct cmd_args_t *parse_and_create_args(char *_args,
                     &substr_buf_len);
 
             /* It is fine if this substring wasn't found. */
-            if(substr_rc < 0)
-                continue;
+            //if(substr_rc < 0)
+            //    continue;
         }
 
-        char *arg = strdup((char *)substr_buf);
+        printf("%s: not unlimited: current group: '%s', arg for it is '%s'\n",
+                __func__, current_group, substr_buf ? substr_buf : "NULL");
 
-        if(strlen(arg) > 0){
+        char *argument = NULL;
+
+        if(substr_buf){
             arguments->num_args++;
-            enqueue(arguments->argqueue, arg);
+
+            argument = strdup((char *)substr_buf);
         }
-        else
-            free(arg);
+
+        argins(arguments, (const char *)current_group, argument);
+        
+
+        if(substr_buf){
+            char *arg = strdup((char *)substr_buf);
+
+            if(strlen(arg) > 0){
+                //arguments->num_args++;
+                enqueue(arguments->argqueue, arg);
+            }
+            else{
+                free(arg);
+            }
+        }
     }
 
     if(!unk_amount_of_args){
@@ -165,14 +183,27 @@ struct cmd_args_t *parse_and_create_args(char *_args,
                 break;
         }
 
+        printf("%s: unlimited: current group: '%s', arg for it is '%s'\n",
+                __func__, current_group, substr_buf ? substr_buf : "NULL");
+
+        char *argument = NULL;
+
+        if(substr_buf){
+            arguments->num_args++;
+            argument = strdup((char *)substr_buf);
+        }
+
+        argins(arguments, (const char *)current_group, argument);
+
         char *arg = strdup((char *)substr_buf);
 
         if(strlen(arg) > 0){
             arguments->num_args++;
             enqueue(arguments->argqueue, arg);
         }
-        else
+        else{
             free(arg);
+        }
 
         PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
         PCRE2_SIZE start_offset = ovector[1];
@@ -192,6 +223,56 @@ struct cmd_args_t *parse_and_create_args(char *_args,
     free(args);
 
     return arguments;
+}
+
+void argins(struct cmd_args_t *args, const char *arggroup, char *argval){
+    if(!args || !arggroup)
+        return;
+
+    for(struct node_t *current = args->argmaps->front;
+            current;
+            current = current->next){
+        struct argmap *map = current->data;
+
+        if(strcmp(map->arggroup, arggroup) == 0){
+            printf("%s: existing argmap: enqueueing '%s' for group '%s'\n",
+                    __func__, argval ? argval : "NULL", arggroup);
+            enqueue(map->argvals, argval);
+            return;
+        }
+    }
+
+    struct argmap *map = malloc(sizeof(struct argmap));
+    map->arggroup = strdup(arggroup);
+    map->argvals = queue_new();
+
+    if(argval)
+        enqueue(map->argvals, argval);
+    else
+        enqueue(map->argvals, NULL);
+    printf("%s: new argmap: creating linkedlist: adding '%s' for group '%s'\n",
+            __func__, argval ? argval : "NULL", arggroup);
+
+    linkedlist_add(args->argmaps, map);
+}
+
+char *argcopy(struct cmd_args_t *args, const char *group){
+    if(!args || !group)
+        return NULL;
+
+    if(!args->argmaps)
+        return NULL;
+
+    for(struct node_t *current = args->argmaps->front;
+            current;
+            current = current->next){
+        struct argmap *map = current->data;
+
+        if(map->arggroup && strcmp(map->arggroup, group) == 0)
+            return dequeue(map->argvals);
+    }
+
+    return NULL;
 }
 
 char *argnext(struct cmd_args_t *args){
@@ -216,5 +297,23 @@ void argfree(struct cmd_args_t *args){
     }
 
     queue_free(args->argqueue);
+    
+    for(struct node_t *current = args->argmaps->front;
+            current;
+            current = current->next){
+        struct argmap *map = current->data;
+        free(map->arggroup);
+
+        char *arg = dequeue(map->argvals);
+
+        while(arg){
+            free(arg);
+            arg = dequeue(map->argvals);
+        }
+
+        linkedlist_delete(args->argmaps, map);
+    }
+
+    linkedlist_free(args->argmaps);
     free(args);
 }

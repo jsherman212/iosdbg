@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "argparse.h"
+#include "wpcmd.h"
 
 #include "../debuggee.h"
 #include "../expr.h"
@@ -97,40 +98,30 @@ enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args, 
         int arg1, char **error){
-    /* Current argument: watchpoint type or location. */
-    char *curarg = argnext(args);
+    char *type_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[0]);
     int LSC = WP_WRITE;
 
-    /* Check if the user specified a watchpoint type. If they didn't,
-     * this watchpoint will match on reads and writes.
-     */
-    if(!is_number_slow(curarg)){
-        if(strcmp(curarg, "--r") == 0)
-            LSC = WP_READ;
-        else if(strcmp(curarg, "--w") == 0)
-            LSC = WP_WRITE;
-        else if(strcmp(curarg, "--rw") == 0)
-            LSC = WP_READ_WRITE;
+    if(strcmp(type_str, "--r") == 0)
+        LSC = WP_READ;
+    else if(strcmp(type_str, "--w") == 0)
+        LSC = WP_WRITE;
+    else if(strcmp(type_str, "--rw") == 0)
+        LSC = WP_READ_WRITE;
 
-        /* If we had a type before the location, we need to get the next
-         * argument. After that, current argument is the location to watch.
-         */
-        free(curarg);
-        curarg = argnext(args);
-    }
+    free(type_str);
 
-    long location = eval_expr(curarg, error);
+    char *location_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[1]);
+    long location = eval_expr(location_str, error);
 
-    free(curarg);
+    free(location_str);
 
     if(*error)
         return CMD_FAILURE;
 
-    /* Current argument: size of data we're watching. */
-    curarg = argnext(args);
-    int data_len = (int)strtol_err(curarg, error);
+    char *data_len_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[2]);
+    int data_len = (int)strtol_err(data_len_str, error);
 
-    free(curarg);
+    free(data_len_str);
 
     if(*error)
         return CMD_FAILURE;

@@ -1,3 +1,7 @@
+6-3-19
+- implementing new map-based argument system, will allow for freeform
+arguments
+
 6-2-19
 - fix software breakpoint bug - setting two at the same spot would cause the
 second one to pick up BRK #0 as the original instruction

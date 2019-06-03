@@ -61,11 +61,13 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
     /* These audit functions perform checks that don't need to be inside
      * of their corresponding cmdfuncs.
      */
-    void (*audit_function)(struct cmd_args_t *, char **) =
+    void (*audit_function)(struct cmd_args_t *, const char **, char **) =
         CURRENT_MATCH_INFO.audit_function;
     
-    if(audit_function)
-        audit_function(parsed_args, error);
+    if(audit_function){
+        audit_function(parsed_args,
+                (const char **)(CURRENT_MATCH_INFO.rinfo.groupnames), error);
+    }
 
     if(*error){
         documentation_for_cmd(CURRENT_MATCH_INFO.cmd);

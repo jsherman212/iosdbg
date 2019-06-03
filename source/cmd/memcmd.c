@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include "argparse.h"
+#include "memcmd.h"
 
 #include "../debuggee.h"
 #include "../expr.h"
@@ -11,7 +12,7 @@
 
 enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
         int arg1, char **error){
-    char *location_str = argnext(args);
+    char *location_str = argcopy(args, DISASSEMBLE_COMMAND_REGEX_GROUPS[0]);
     long location = eval_expr(location_str, error);
 
     free(location_str);
@@ -19,7 +20,7 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
 
-    char *amount_str = argnext(args);
+    char *amount_str = argcopy(args, DISASSEMBLE_COMMAND_REGEX_GROUPS[1]);
     int amount = (int)strtol_err(amount_str, error);
 
     free(amount_str);
@@ -45,7 +46,7 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
         int arg1, char **error){
-    char *location_str = argnext(args);
+    char *location_str = argcopy(args, EXAMINE_COMMAND_REGEX_GROUPS[0]);
     long location = eval_expr(location_str, error);
 
     free(location_str);
@@ -54,10 +55,10 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
         return CMD_FAILURE;
 
     /* Next, however many bytes are wanted. */
-    char *size = argnext(args);
-    int amount = (int)strtol_err(size, error);
+    char *amount_str = argcopy(args, EXAMINE_COMMAND_REGEX_GROUPS[1]);
+    int amount = (int)strtol_err(amount_str, error);
 
-    free(size);
+    free(amount_str);
 
     if(*error)
         return CMD_FAILURE;
@@ -77,10 +78,10 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
 
     return CMD_SUCCESS;
 }
-#include <math.h>
+
 enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
         int arg1, char **error){
-    char *start_str = argnext(args);
+    char *start_str = argcopy(args, MEMORY_FIND_COMMAND_REGEX_GROUPS[0]);
     long start = eval_expr(start_str, error);
 
     free(start_str);
@@ -95,29 +96,23 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    /* The next argument could be the count or the type. */
-    char *arg2 = argnext(args);
-
-    char *type_str = NULL;
+    char *count_str = argcopy(args, MEMORY_FIND_COMMAND_REGEX_GROUPS[1]);
     long count = LONG_MIN;
 
-    if(is_number_fast(arg2)){
-        count = strtol_err(arg2, error);
-        free(arg2);
+    if(count_str){
+        count = strtol_err(count_str, error);
+        free(count_str);
 
         if(*error)
             return CMD_FAILURE;
-
-        type_str = argnext(args);
-    }
-    else{
-        type_str = arg2;
     }
 
-    char *target_str = argnext(args);
+    char *type_str = argcopy(args, MEMORY_FIND_COMMAND_REGEX_GROUPS[2]);
+    char *target_str = argcopy(args, MEMORY_FIND_COMMAND_REGEX_GROUPS[3]);
+   
     int target_len = -1;
     void *target = NULL;
-
+    
     if(strcmp(type_str, "--s") == 0){
         target = target_str;
         target_len = strlen(target_str);
@@ -183,10 +178,11 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
     }
 
     free(type_str);
-    free(target_str);
 
-    if(*error)
+    if(*error){
+        free(target_str);
         return CMD_FAILURE;
+    }
 
     /* If count wasn't given, search until read_memory_at_location
      * returns an error.
@@ -232,6 +228,8 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
     }
 
     printf("\n%d result(s)\n", results_cnt);
+
+    free(target_str);
 
     return CMD_SUCCESS;
 }
