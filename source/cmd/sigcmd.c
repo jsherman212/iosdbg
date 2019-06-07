@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "argparse.h"
+#include "sigcmd.h"
 
 #include "../dbgops.h"
 #include "../sigsupport.h"
@@ -57,10 +57,10 @@ static int preference(char *str){
 
 enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args, 
         int arg1, char **error){
-    char *signals = argnext(args);
-    char *notify_str = argnext(args);
-    char *pass_str = argnext(args);
-    char *stop_str = argnext(args);
+    char *signals = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[0]);
+    char *notify_str = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[1]);
+    char *pass_str = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[2]);
+    char *stop_str = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[3]);
     
     /* If no arguments were given, the user wants to see settings. */
     if(!signals || !notify_str || !pass_str || !stop_str){

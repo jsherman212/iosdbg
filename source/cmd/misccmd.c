@@ -88,17 +88,20 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         printf("Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", 
                 target);
 
+        char *e = NULL;
+
         /* If we're waiting for something to launch, it will not exist,
          * so don't return on error.
          */
-        target_pid = parse_pid(target, error);
+        target_pid = parse_pid(target, &e);
     
         KEEP_CHECKING_FOR_PROCESS = 1;
 
         while(target_pid == -1 && KEEP_CHECKING_FOR_PROCESS){
-            target_pid = parse_pid(target, error);
+            target_pid = parse_pid(target, &e);
 
-            *error = NULL;
+            free(e);
+            e = NULL;
 
             usleep(400);
         }
@@ -190,10 +193,6 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     /* Have Unix signals be sent as Mach exceptions. */
     ptrace(PT_ATTACHEXC, debuggee->pid, 0, 0);
 
-    pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-    pthread_cond_signal(&EXCEPTION_SERVER_IS_DETACHING_COND);
-    pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-
     void_convvar("$_exitcode");
     void_convvar("$_exitsignal");
 
@@ -263,8 +262,8 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int do_not_print_msg, char **error){
-    if(!debuggee->interrupted)
-        return CMD_FAILURE;
+//    if(!debuggee->interrupted)
+  //      return CMD_FAILURE;
 
     ops_resume();
 
@@ -305,7 +304,7 @@ enum cmd_error_t cmdfunc_help(struct cmd_args_t *args,
         return CMD_SUCCESS;
     }
 
-    char *cmd = argnext(args);
+    char *cmd = argcopy(args, HELP_COMMAND_REGEX_GROUPS[0]);
     documentation_for_cmdname(cmd, error);
 
     free(cmd);

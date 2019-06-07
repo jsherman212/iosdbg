@@ -182,7 +182,7 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
          * it's an unknown command.
          */
         if(first_match && !completions){
-            concat(error, "undefined command \"%s\".  Try \"help\".",
+            concat(error, "undefined command \"%s\". Try \"help\".",
                     usercommandcpy);
 
             result = CMD_FAILURE;

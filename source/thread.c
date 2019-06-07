@@ -53,6 +53,8 @@ static struct machthread *find_with_cond(enum comparison compway,
             cond = t->ID == *(int *)comparingwith;
         else if(compway == FOCUSED)
             cond = t->focused;
+        else if(compway == TID)
+            cond = t->tid = *(unsigned long long *)comparingwith;
 
         if(cond)
             return t;
@@ -85,6 +87,17 @@ struct machthread *machthread_find(int ID){
     struct machthread *ret = find_with_cond(IDS, IDptr);
 
     free(IDptr);
+
+    return ret;
+}
+
+struct machthread *machthread_find_via_tid(unsigned long long tid){
+    unsigned long long *tid_ptr = malloc(sizeof(unsigned long long));
+    *tid_ptr = tid;
+
+    struct machthread *ret = find_with_cond(TID, tid_ptr);
+
+    free(tid_ptr);
 
     return ret;
 }

@@ -31,7 +31,8 @@ unsigned long long CFSwapInt64(unsigned long long arg){
     return result.sv;
 }
 
-kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
+kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
+        char **outbuffer){
     unsigned long current_location = location;
 
     char *locstr = NULL;
@@ -94,9 +95,17 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs){
             return KERN_FAILURE;
         }
 
-        printf("%s%#lx:  %s\n",
-                focused->thread_state.__pc == current_location
-                ? "->  " : "    ", current_location, disassembled);
+        if(!outbuffer){
+            printf("%s%#lx:  %s\n",
+                    focused->thread_state.__pc == current_location
+                    ? "->  " : "    ", current_location, disassembled);
+        }
+
+        if(outbuffer){
+            concat(outbuffer, "%s%#lx:  %s\n",
+                    focused->thread_state.__pc == current_location
+                    ? "->  " : "    ", current_location, disassembled);
+        }
 
         free(disassembled);
 
@@ -134,13 +143,11 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount){
         for(int i=0; i<current_row_length; i++)
             printf("%02x ", (uint8_t)(*(membuffer + i)));
 
-        if(current_row_length < row_size){
-            /* Print filler spaces.
-             * Two spaces for would be '%02x', one more for the space after.
-             */
-            for(int i=current_row_length; i<row_size; i++)
-                printf("   ");
-        }
+        /* Print filler spaces.
+         * Two spaces for would be '%02x', one more for the space after.
+         */
+        for(int i=current_row_length; i<row_size; i++)
+            printf("   ");
         
         printf("  ");
 

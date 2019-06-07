@@ -59,59 +59,6 @@ void ops_printsiginfo(void){
 }
 
 void ops_detach(int from_death){
-    if(!from_death){
-        pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-
-        debuggee->want_detach = 1;
-
-        /* Boot exception_server out of mach_msg. SIGCONT was an arbitrary choice.
-         * We have to do this first so this SIGCONT doesn't get handled.
-         */
-        kill(debuggee->pid, SIGCONT);
-
-        pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-
-        pthread_mutex_lock(&HAS_REPLIED_MUTEX);
-
-        HAS_REPLIED_TO_LATEST_EXCEPTION = 1;
-        
-        /* If exception_server wasn't in mach_msg, we need to tell it to move
-         * on and wait for EXCEPTION_SERVER_IS_DETACHING_COND to get signaled.
-         */
-        pthread_cond_signal(&MAIN_THREAD_CHANGED_REPLIED_VAR_COND);
-
-        pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
-
-        pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-
-        /* Wait for exception_server to tell us it's ready to collect
-         * the remaining exceptions.
-         */
-        pthread_cond_wait(&WAIT_TO_SIGNAL_EXCEPTION_SERVER_IS_DETACHING_COND,
-                &EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-
-        /* Reply to the latest exception before we collect the rest. */
-        void *request = dequeue(debuggee->exc_requests);
-
-        if(request)
-            reply_to_exception(request, KERN_SUCCESS);
-
-        /* We're good to go, tell exception_server to collect the remaining
-         * exceptions for the debuggee.
-         */    
-        pthread_cond_signal(&EXCEPTION_SERVER_IS_DETACHING_COND);
-
-        /* Wait for exception_server to be done. */
-        pthread_cond_wait(&IS_DONE_HANDLING_EXCEPTIONS_BEFORE_DETACH_COND,
-                &EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-
-        debuggee->want_detach = 0;
-
-        pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-    }
-
-    pthread_mutex_lock(&HAS_REPLIED_MUTEX);
-
     debuggee->suspend();
     debuggee->interrupted = 1;  
 
@@ -175,7 +122,6 @@ void ops_detach(int from_death){
     debuggee->last_hit_wp_PC = 0;
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
-    debuggee->num_watchpoints = 0;
     debuggee->pid = -1;
 
     free(debuggee->debuggee_name);
@@ -187,27 +133,19 @@ void ops_detach(int from_death){
 
     debuggee->resume();
     debuggee->interrupted = 0;
-
-    pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
 }
 
 void ops_resume(void){
-    pthread_mutex_lock(&HAS_REPLIED_MUTEX);
-
+    /*
     void *request = dequeue(debuggee->exc_requests);
 
     if(request){
         reply_to_exception(request, KERN_SUCCESS);
         HAS_REPLIED_TO_LATEST_EXCEPTION = 1;
     }
-
-    /* Wake up the exception thread. */
-    pthread_cond_signal(&MAIN_THREAD_CHANGED_REPLIED_VAR_COND);
-
+    */
     debuggee->resume();
     debuggee->interrupted = 0;
-
-    pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
 }
 
 void ops_threadupdate(void){
@@ -226,4 +164,56 @@ void ops_threadupdate(void){
 
     if(focused)
         machthread_updatestate(focused);
+#if 0
+    /* Check if a thread belonging to a breakpoint went away or was re-ordered. */
+    for(struct node_t *current = debuggee->breakpoints->front;
+            current;
+            current = current->next){
+        struct breakpoint *bp = current->data;
+
+        if(!bp->hw){
+            printf("%s: bailing for now\n", __func__);
+            continue;
+        }
+
+        if(bp->threadinfo.all)
+            continue;
+
+        struct machthread *bpthread = machthread_find(bp->threadinfo.iosdbg_tid);
+
+        if(!bpthread || bpthread->tid != bp->threadinfo.real_tid){
+            if(bpthread && bp->hw){
+                get_debug_state(bpthread);
+
+                bpthread->debug_state.__bcr[bp->hw_bp_reg] = 0;
+                bpthread->debug_state.__bvr[bp->hw_bp_reg] = 0;
+
+                set_debug_state(bpthread);
+            }
+
+            /* Find the thread this breakpoint is supposed to be focused on. */
+            struct machthread *updated_thread = machthread_find_via_tid(
+                    bp->threadinfo.real_tid);
+
+            /* This thread is no longer with us, delete the breakpoint. */
+            if(!updated_thread){
+                printf("notice: breakpoint %d's target thread is gone,"
+                        " deleting it.\n", bp->id);
+                breakpoint_delete(bp->id, NULL);
+                continue;
+            }
+
+            /* Otherwise, assign the updated thread to this breakpoint. */
+            get_debug_state(updated_thread);
+
+            updated_thread->debug_state.__bcr[bp->hw_bp_reg] = bp->bcr;
+            updated_thread->debug_state.__bvr[bp->hw_bp_reg] = bp->bvr;
+
+            set_debug_state(updated_thread);
+
+            bp->threadinfo.iosdbg_tid = updated_thread->ID;
+            bp->threadinfo.real_tid = updated_thread->tid;
+        }
+    }
+#endif
 }

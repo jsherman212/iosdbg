@@ -56,10 +56,31 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     
     struct breakpoint *bp = malloc(sizeof(struct breakpoint));
 
-    bp->thread = thread;
+    if(thread == BP_ALL_THREADS){
+        bp->threadinfo.all = 1;
+        bp->threadinfo.iosdbg_tid = 0;
+        bp->threadinfo.real_tid = 0;
+    }
+    else{
+        bp->threadinfo.all = 0;
+        bp->threadinfo.iosdbg_tid = thread;
+
+        struct machthread *target = machthread_find(bp->threadinfo.iosdbg_tid);
+
+        if(!target){
+            concat(error, "no such thread with ID %d", bp->threadinfo.iosdbg_tid);
+            free(bp);
+            return NULL;
+        }
+
+        bp->threadinfo.real_tid = target->tid;
+    }
 
     bp->hw = 0;
     bp->hw_bp_reg = -1;
+
+    bp->bcr = 0;
+    bp->bvr = 0;
 
     int available_bp_reg = find_ready_bp_reg();
 
@@ -84,8 +105,11 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
          * is mis-aligned, so clear those bits in the location.
          */
         __uint64_t bvr = (location & ~0x3);
-      
-        if(bp->thread == BP_ALL_THREADS){
+
+        bp->bcr = bcr;
+        bp->bvr = bvr;
+
+        if(bp->threadinfo.all){
             for(struct node_t *current = debuggee->threads->front;
                     current;
                     current = current->next){
@@ -100,7 +124,14 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
             }
         }
         else{
-            // XXX struct machthread *target = find_with_id etc etc
+            struct machthread *target = machthread_find(bp->threadinfo.iosdbg_tid);
+
+            get_debug_state(target);
+
+            target->debug_state.__bcr[available_bp_reg] = bcr;
+            target->debug_state.__bvr[available_bp_reg] = bvr;
+
+            set_debug_state(target);
         }
     }
     
@@ -146,7 +177,7 @@ static void enable_hw_bp(struct breakpoint *bp){
     __uint64_t bcr = (BT | BAS | PMC | E);
     __uint64_t bvr = (bp->location & ~0x3);
 
-    if(bp->thread == BP_ALL_THREADS){
+    if(bp->threadinfo.all){
         for(struct node_t *current = debuggee->threads->front;
                 current;
                 current = current->next){
@@ -161,12 +192,19 @@ static void enable_hw_bp(struct breakpoint *bp){
         }
     }
     else{
-        // XXX struct machthread *target = find_with_id etc etc
+        struct machthread *target = machthread_find(bp->threadinfo.iosdbg_tid);
+
+        get_debug_state(target);
+
+        target->debug_state.__bcr[bp->hw_bp_reg] = bcr;
+        target->debug_state.__bvr[bp->hw_bp_reg] = bvr;
+
+        set_debug_state(target);
     }
 }
 
 static void disable_hw_bp(struct breakpoint *bp){
-    if(bp->thread == BP_ALL_THREADS){
+    if(bp->threadinfo.all){
         for(struct node_t *current = debuggee->threads->front;
                 current;
                 current = current->next){
@@ -180,7 +218,13 @@ static void disable_hw_bp(struct breakpoint *bp){
         }
     }
     else{
-        // XXX struct machthread *target = find_with_id etc etc
+        struct machthread *target = machthread_find(bp->threadinfo.iosdbg_tid);
+
+        get_debug_state(target);
+
+        target->debug_state.__bcr[bp->hw_bp_reg] = 0;
+
+        set_debug_state(target);
     }
 }
 
@@ -223,11 +267,11 @@ void breakpoint_at_address(unsigned long address, int temporary,
     if(!temporary){
         printf("Breakpoint %d at %#lx", bp->id, bp->location);
 
-        struct machthread *bpthread = machthread_find(bp->thread);
+        struct machthread *bpthread = machthread_find(bp->threadinfo.iosdbg_tid);
 
-        if(bp->thread != BP_ALL_THREADS){
+        if(bpthread && bp->threadinfo.all){
             printf(", for thread #%d (tid: %#llx), '%s'\n",
-                    bp->thread, bpthread->tid, bpthread->tname);
+                    bp->threadinfo.iosdbg_tid, bpthread->tid, bpthread->tname);
         }
         else{
             putchar('\n');

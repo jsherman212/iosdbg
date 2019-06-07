@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "argparse.h"
+#include "regcmd.h"
 
 #include "../debuggee.h"
 #include "../strext.h"
@@ -11,7 +11,7 @@
 enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args, 
         int arg1, char **error){
     /* Iterate through and show all the registers the user asked for. */
-    char *curreg = argnext(args);
+    char *curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
 
     while(curreg){
         struct machthread *focused = machthread_getfocused();
@@ -25,13 +25,13 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
 
         if(strcmp(curreg, "fpsr") == 0){
             free(curreg);
-            curreg = argnext(args);
+            curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
             printf("%10s = 0x%8.8x\n", "fpsr", focused->neon_state.__fpsr);
             continue;
         }
         else if(strcmp(curreg, "fpcr") == 0){
             free(curreg);
-            curreg = argnext(args);
+            curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
             printf("%10s = 0x%8.8x\n", "fpcr", focused->neon_state.__fpcr);
             continue;
         }
@@ -57,7 +57,7 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
         if(!good_reg_num || !good_reg_type){
             printf("%8sInvalid register\n", "");
             free(curreg);
-            curreg = argnext(args);
+            curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
             continue;
         }
         /* Quadword */
@@ -77,13 +77,15 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
                     *(uint8_t *)((uint8_t *)(&hi) + (sizeof(long) - 1)));
         }
         /* Doubleword */
-        else if(reg_type == 'd')
+        else if(reg_type == 'd'){
             concat(&regstr, "d%d = %.15g", reg_num, 
                     *(double *)&focused->neon_state.__v[reg_num]);
+        }
         /* Word */
-        else if(reg_type == 's')
+        else if(reg_type == 's'){
             concat(&regstr, "s%d = %g", reg_num, 
                     *(float *)&focused->neon_state.__v[reg_num]);
+        }
 
         /* Figure out how many bytes the register takes up in the string. */
         char *space = strchr(regstr, ' ');
@@ -96,7 +98,7 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
             free(regstr);    
 
         free(curreg);
-        curreg = argnext(args);
+        curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
     }
 
     return CMD_SUCCESS;
@@ -130,7 +132,7 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
     }
 
     /* Otherwise, print every register they asked for. */
-    char *curreg = argnext(args);
+    char *curreg = argcopy(args, REGISTER_GEN_COMMAND_REGEX_GROUPS[0]);
 
     while(curreg){
         const size_t curreg_len = strlen(curreg);
@@ -155,7 +157,7 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
                 printf("Invalid register\n");
 
             free(curreg);
-            curreg = argnext(args);
+            curreg = argcopy(args, REGISTER_GEN_COMMAND_REGEX_GROUPS[0]);
 
             continue;
         }
@@ -172,24 +174,26 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
         
         if(reg_num < 0 || reg_num > 29){
             free(curreg);
-            curreg = argnext(args);
+            curreg = argcopy(args, REGISTER_GEN_COMMAND_REGEX_GROUPS[0]);
             continue;
         }
 
         char *regstr = NULL;
         concat(&regstr, "%c%d", reg_type, reg_num);
 
-        if(reg_type == 'x')
+        if(reg_type == 'x'){
             printf("%8s = 0x%16.16llx\n", regstr,
                     focused->thread_state.__x[reg_num]);
-        else
+        }
+        else{
             printf("%8s = 0x%8.8x\n", regstr, 
                     (int)focused->thread_state.__x[reg_num]);
+        }
 
         free(regstr);
         free(curreg);
 
-        curreg = argnext(args);
+        curreg = argcopy(args, REGISTER_GEN_COMMAND_REGEX_GROUPS[0]);
     }
     
     return CMD_SUCCESS;
@@ -197,8 +201,8 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
         int arg1, char **error){
-    char *target_str = argnext(args);
-    char *value_str = argnext(args);
+    char *target_str = argcopy(args, REGISTER_WRITE_COMMAND_REGEX_GROUPS[0]);
+    char *value_str = argcopy(args, REGISTER_WRITE_COMMAND_REGEX_GROUPS[1]);
 
     size_t target_str_len = strlen(target_str);
 

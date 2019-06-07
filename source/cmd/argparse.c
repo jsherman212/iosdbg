@@ -19,7 +19,6 @@ struct cmd_args_t *parse_and_create_args(char *_args,
         char **error){
     struct cmd_args_t *arguments = malloc(sizeof(struct cmd_args_t));
 
-    arguments->argqueue = queue_new();
     arguments->num_args = 0;
     arguments->argmaps = linkedlist_new();
 
@@ -100,46 +99,22 @@ struct cmd_args_t *parse_and_create_args(char *_args,
                     current_group,
                     &substr_buf,
                     &substr_buf_len);
-
-            //if(copybyname_rc < 0)
-           //     continue;
         }
         else{
             int substr_rc = pcre2_substring_get_bynumber(match_data,
                     substr_idx,
                     &substr_buf,
                     &substr_buf_len);
-
-            /* It is fine if this substring wasn't found. */
-            //if(substr_rc < 0)
-            //    continue;
         }
-
-        printf("%s: not unlimited: current group: '%s', arg for it is '%s'\n",
-                __func__, current_group, substr_buf ? substr_buf : "NULL");
 
         char *argument = NULL;
 
         if(substr_buf){
             arguments->num_args++;
-
             argument = strdup((char *)substr_buf);
         }
 
         argins(arguments, (const char *)current_group, argument);
-        
-
-        if(substr_buf){
-            char *arg = strdup((char *)substr_buf);
-
-            if(strlen(arg) > 0){
-                //arguments->num_args++;
-                enqueue(arguments->argqueue, arg);
-            }
-            else{
-                free(arg);
-            }
-        }
     }
 
     if(!unk_amount_of_args){
@@ -183,9 +158,6 @@ struct cmd_args_t *parse_and_create_args(char *_args,
                 break;
         }
 
-        printf("%s: unlimited: current group: '%s', arg for it is '%s'\n",
-                __func__, current_group, substr_buf ? substr_buf : "NULL");
-
         char *argument = NULL;
 
         if(substr_buf){
@@ -194,16 +166,6 @@ struct cmd_args_t *parse_and_create_args(char *_args,
         }
 
         argins(arguments, (const char *)current_group, argument);
-
-        char *arg = strdup((char *)substr_buf);
-
-        if(strlen(arg) > 0){
-            arguments->num_args++;
-            enqueue(arguments->argqueue, arg);
-        }
-        else{
-            free(arg);
-        }
 
         PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
         PCRE2_SIZE start_offset = ovector[1];
@@ -235,8 +197,6 @@ void argins(struct cmd_args_t *args, const char *arggroup, char *argval){
         struct argmap *map = current->data;
 
         if(strcmp(map->arggroup, arggroup) == 0){
-            printf("%s: existing argmap: enqueueing '%s' for group '%s'\n",
-                    __func__, argval ? argval : "NULL", arggroup);
             enqueue(map->argvals, argval);
             return;
         }
@@ -250,8 +210,6 @@ void argins(struct cmd_args_t *args, const char *arggroup, char *argval){
         enqueue(map->argvals, argval);
     else
         enqueue(map->argvals, NULL);
-    printf("%s: new argmap: creating linkedlist: adding '%s' for group '%s'\n",
-            __func__, argval ? argval : "NULL", arggroup);
 
     linkedlist_add(args->argmaps, map);
 }
@@ -275,29 +233,10 @@ char *argcopy(struct cmd_args_t *args, const char *group){
     return NULL;
 }
 
-char *argnext(struct cmd_args_t *args){
-    if(!args)
-        return NULL;
-
-    if(!args->argqueue)
-        return NULL;
-
-    return dequeue(args->argqueue);
-}
-
 void argfree(struct cmd_args_t *args){
     if(!args)
         return;
 
-    char *arg = argnext(args);
-
-    while(arg){
-        free(arg);
-        arg = argnext(args);
-    }
-
-    queue_free(args->argqueue);
-    
     for(struct node_t *current = args->argmaps->front;
             current;
             current = current->next){

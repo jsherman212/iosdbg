@@ -10,7 +10,15 @@ struct breakpoint {
     int temporary;
     int hw;
     int hw_bp_reg;
-    int thread;
+
+    struct {
+        int all;
+        int iosdbg_tid;
+        unsigned long long real_tid;
+    } threadinfo;
+
+    __uint64_t bcr;
+    __uint64_t bvr;
 };
 
 #define BP_ALL_THREADS (-1)

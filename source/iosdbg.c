@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/sysctl.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -41,20 +43,24 @@ int bsd_syscalls_arr_len;
 int mach_traps_arr_len;
 int mach_messages_arr_len;
 
-pthread_mutex_t REPROMPT_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t HAS_REPLIED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t DEATH_SERVER_DETACHED_MUTEX  = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t EXCEPTION_SERVER_IS_DETACHING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-
-pthread_cond_t REPROMPT_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t MAIN_THREAD_CHANGED_REPLIED_VAR_COND = PTHREAD_COND_INITIALIZER;
 pthread_cond_t DEATH_SERVER_DETACHED_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t EXCEPTION_SERVER_IS_DETACHING_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t IS_DONE_HANDLING_EXCEPTIONS_BEFORE_DETACH_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t WAIT_TO_SIGNAL_EXCEPTION_SERVER_IS_DETACHING_COND = PTHREAD_COND_INITIALIZER;
 
-int HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
-int HANDLING_EXCEPTION = 0;
+pthread_mutex_t EXCEPTION_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t REPROMPT_COND = PTHREAD_COND_INITIALIZER;
+pthread_cond_t RESTART_COND = PTHREAD_COND_INITIALIZER;
+pthread_cond_t MAIN_THREAD_READY_COND = PTHREAD_COND_INITIALIZER;
+
+int NUM_EXCEPTIONS, AUTO_RESUME, HANDLING_EXCEPTIONS = 0;
+int KICK_MAIN_THREAD_OUT_OF_READLINE = 0;
+int SAVED_RL_INSTREAM = -1;
+int WAIT_FOR_MAIN_THREAD = 0;
+int IN_READLINE = 0;
+
+pthread_t MAIN_THREAD_TID;
+
+pthread_mutex_t STUFF_CHAR_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+int GOT_NEWLINE_STUFFED = 0;
 
 static void interrupt(int x1){
     if(KEEP_CHECKING_FOR_PROCESS)
@@ -78,8 +84,47 @@ static void install_handlers(void){
     debuggee->get_threads = &get_threads;
 }
 
+// XXX XXX XXX as long as the call to readline happens while the mutex is locked,
+// we own it in this function
 static int _rl_getc(FILE *stream){
+    /*
+    fd_set rfds;
+    struct timeval tv;
+
+    FD_ZERO(&rfds);
+    FD_SET(fileno(stream), &rfds);
+
+    tv.tv_sec = 0;
+    tv.tv_usec = 100;
+
+    //while(1){
+        int ret = select(fileno(stream), &rfds, NULL, NULL, &tv);
+        printf("%s: ret %d\n", __func__, ret);
+
+        if(ret){
+            printf("%s: there is data, stuffing it"
+                    " into rl_line_buffer...\n", __func__);
+
+            char in = fgetc(rl_instream);
+
+            printf("%s: %c (%#x) was entered\n", __func__, in, in);
+            
+        }
+        else{
+            printf("%s: no data after 2 secs,"
+                    " should start from beginning to signal"
+                    " MAIN_THREAD_READY_COND? %d\n",
+                    __func__, KICK_MAIN_THREAD_OUT_OF_READLINE);
+            // XXX start from the beginning
+            //line = NULL;
+            //break;
+        //    continue;
+        }
+    //}
+    */
+
     int gotc = rl_getc(stream);
+    //printf("%s: gotc %c (%#x)\n", __func__, gotc, gotc);
 
     if(gotc == '\t'){
         int len = 0;
@@ -101,6 +146,14 @@ static int _rl_getc(FILE *stream){
     return gotc;
 }
 
+static int _rl_event_hook(void){
+    //printf("%s: hi\n", __func__);
+
+    //return 0;
+    //
+    return -1;
+}
+
 static void initialize_readline(void){
     rl_catch_signals = 0;
 
@@ -111,6 +164,8 @@ static void initialize_readline(void){
      * the user types something.
      */
     rl_getc_function = _rl_getc;
+
+  //  rl_event_hook = _rl_event_hook;
 }
 
 static void get_code_and_event_from_line(char *line,
@@ -691,19 +746,49 @@ static void inputloop(void){
 
     static const char *prompt = "\033[2m(iosdbg) \033[0m";
 
+    NUM_EXCEPTIONS = 0;
+    AUTO_RESUME = 1;
+
     while(1){
-        pthread_mutex_lock(&HAS_REPLIED_MUTEX);
+        pthread_mutex_lock(&EXCEPTION_MUTEX);
 
-        while(HANDLING_EXCEPTION)
-            pthread_cond_wait(&REPROMPT_COND, &HAS_REPLIED_MUTEX);
+        //printf("%s: telling exception server we're ready...\n", __func__);
 
-        pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
+        WAIT_FOR_MAIN_THREAD = 0;
 
+        pthread_cond_signal(&MAIN_THREAD_READY_COND);
+
+        while(HANDLING_EXCEPTIONS){//NUM_EXCEPTIONS > 0){
+            printf("%s: waiting for okay to reprompt\n", __func__);
+            pthread_cond_wait(&REPROMPT_COND, &EXCEPTION_MUTEX);
+
+        }
+
+        //printf("%s: reprompting!\n", __func__);
+   //     printf("\033[2m(iosdbg) \033[0m");
+       // IN_READLINE = 1;
         line = readline(prompt);
+        //IN_READLINE = 0;
+        WAIT_FOR_MAIN_THREAD = 1;
+        pthread_mutex_unlock(&EXCEPTION_MUTEX);
 
+        //printf("%s: reprompting\n", __func__);
+//        line = readline(prompt);
+     //   line = readline("");
         if(!line)
             break;
 
+        /*
+        pthread_mutex_lock(&STUFF_CHAR_MUTEX);
+
+        printf("%s: newline was stuffed? %d\n", __func__, GOT_NEWLINE_STUFFED);
+        if(GOT_NEWLINE_STUFFED){
+            line[strlen(line) - 2] = '\0';
+            GOT_NEWLINE_STUFFED = 0;
+        }
+
+        pthread_mutex_unlock(&STUFF_CHAR_MUTEX);
+        */
         size_t linelen = strlen(line);
 
         /* If the user hits enter, repeat the last command,
@@ -722,6 +807,8 @@ static void inputloop(void){
                 (!prevline || (prevline && strcmp(line, prevline) != 0))){
             add_history(line);
         }
+
+        threadupdate();
 
         char *linecpy = NULL, *error = NULL;
         enum cmd_error_t result = do_cmdline_command(line, &linecpy, 1, &error);
@@ -754,6 +841,7 @@ static void inputloop(void){
         }
 
         free(line);
+        line = NULL;
     }
 
     printf("readline returned NULL... please file an issue on Github\n");
@@ -780,6 +868,7 @@ static void early_configuration(void){
 }
 
 int main(int argc, char **argv, const char **envp){
+    MAIN_THREAD_TID = pthread_self();
     pthread_setname_np("iosdbg main thread");
 
     early_configuration();

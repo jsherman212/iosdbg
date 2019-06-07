@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <readline/readline.h>
-
-#include "argparse.h"
 #include "bpcmd.h"
 
 #include "../breakpoint.h"
@@ -20,9 +17,9 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    char *cur_id = argnext(args);
+    char *ids = argcopy(args, BREAKPOINT_DELETE_COMMAND_REGEX_GROUPS[0]);
 
-    if(!cur_id){
+    if(!ids){
         char ans = answer("Delete all breakpoints? (y/n) ");
 
         if(ans == 'n'){
@@ -40,11 +37,13 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
     }
 
     int len = 0;
-    char **ids = token_array(cur_id, " ", &len);
+    char **all_ids = token_array(ids, " ", &len);
+
+    free(ids);
 
     for(int i=0; i<len; i++){
         char *e = NULL;
-        int id = (int)strtol_err(ids[i], &e);
+        int id = (int)strtol_err(all_ids[i], &e);
 
         if(e){
             free(e);
@@ -62,7 +61,7 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
         }
     }
 
-    token_array_free(ids, len);
+    token_array_free(all_ids, len);
     
     return CMD_SUCCESS;
 }
@@ -126,7 +125,6 @@ enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args,
         if(e){
             printf("warning: could not set breakpoint: %s\n", e);
             free(e);
-            e = NULL;
         }
         else{
             breakpoint_at_address(location, BP_NO_TEMP, thread, &e);

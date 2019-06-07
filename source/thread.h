@@ -38,11 +38,13 @@ struct machthread {
 enum comparison {
     PORTS,
     IDS,
-    FOCUSED
+    FOCUSED,
+    TID
 };
 
 struct machthread *machthread_fromport(mach_port_t);
 struct machthread *machthread_find(int);
+struct machthread *machthread_find_via_tid(unsigned long long);
 struct machthread *machthread_getfocused(void);
 
 /* For clarity. This is only used with the functions below. */

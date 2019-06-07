@@ -1,3 +1,10 @@
+6-5-19
+- rewriting exception & mutex logic
+
+6-4-19
+- finished implementing new map-based argument system
+- working on thread-specific breakpoints
+
 6-3-19
 - implementing new map-based argument system, will allow for freeform
 arguments

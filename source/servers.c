@@ -21,57 +21,22 @@
 #include "cmd/cmd.h"
 #include "cmd/misccmd.h"
 
+#include <signal.h>
 static void *exception_server(void *arg){
     pthread_setname_np("exception thread");
 
-    struct {
+    struct req {
         mach_msg_header_t hdr;
         char data[256];
-    } req;
+    };
+
+    NUM_EXCEPTIONS = 0;
+    AUTO_RESUME = 1;
 
     while(MACH_PORT_VALID(debuggee->exception_port)){ 
-        pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-
-        /* Tell the main thread we're ready to collect the remaining exceptions. */
-        pthread_cond_signal(&WAIT_TO_SIGNAL_EXCEPTION_SERVER_IS_DETACHING_COND);
-
-        if(debuggee->want_detach){
-            /* Even though we're ready, the main thread might not be. Wait for it
-             * to tell us we're good to go.
-             */
-            pthread_cond_wait(&EXCEPTION_SERVER_IS_DETACHING_COND,
-                    &EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-
-            kern_return_t err = KERN_SUCCESS;
-
-            /* Gather the remaining exceptions. */
-            while(err != MACH_RCV_TIMED_OUT){
-                err = mach_msg(&req.hdr,
-                        MACH_RCV_MSG | MACH_RCV_TIMEOUT,
-                        0,
-                        sizeof(req),
-                        debuggee->exception_port,
-                        0,
-                        MACH_PORT_NULL);
-
-                Request *request = (Request *)&req;
-
-                if(request){
-                    enqueue(debuggee->exc_requests, request);
-                    debuggee->pending_exceptions++;
-                }
-            }
-
-            /* Tell the main thread we're done. */
-            pthread_cond_signal(&IS_DONE_HANDLING_EXCEPTIONS_BEFORE_DETACH_COND);
-
-            pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-
-            pthread_exit(NULL);
-        }
-
-        pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
-        
+        // pthread_testcancel
+        struct req req;
+        //printf("%s: waiting for an exception\n", __func__);
         mach_msg(&req.hdr,
                 MACH_RCV_MSG,
                 0,
@@ -80,58 +45,134 @@ static void *exception_server(void *arg){
                 MACH_MSG_TIMEOUT_NONE,
                 MACH_PORT_NULL);
 
-        pthread_mutex_lock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+        //printf("%s: got an exception, would kick main thread out of readline\n", __func__);
+        //pthread_kill(MAIN_THREAD_TID, SIGINT);
 
-        if(debuggee->want_detach){
-            Request *request = (Request *)&req;
-            
-            /* Reply to the SIGCONT that was sent by ops_detach. */
-            if(request)
-                reply_to_exception(request, KERN_SUCCESS);
+        /*
+        pthread_mutex_lock(&STUFF_CHAR_MUTEX);
+        printf("%s: stuffing newline\n", __func__);
+        rl_stuff_char('\r');
+        GOT_NEWLINE_STUFFED = 1;
+        pthread_mutex_unlock(&STUFF_CHAR_MUTEX);
+        */
+        pthread_mutex_lock(&EXCEPTION_MUTEX);
 
-            pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+        //rl_clear_visible_line();
+        //rl_redisplay();
 
-            continue;
-        }
+        //printf("%s: locked!\n", __func__);
+        //rl_already_prompted = 1;
+        HANDLING_EXCEPTIONS = 1;
 
-        pthread_mutex_unlock(&EXCEPTION_SERVER_IS_DETACHING_MUTEX);
+        task_suspend(debuggee->task);
 
-        pthread_mutex_lock(&HAS_REPLIED_MUTEX);
+        //debuggee->suspend();
+        //debuggee->interrupted = 1;
 
         Request *request = (Request *)&req;
+        enqueue(debuggee->exc_requests, request);
 
-        if(request){
-            /* Get rid of duplicate (iosdbg) prompts. */
-            rl_clear_visible_line();
-            rl_redisplay();
+        NUM_EXCEPTIONS++;
 
-            HANDLING_EXCEPTION = 1;
+        kern_return_t err = KERN_SUCCESS;
 
-            enqueue(debuggee->exc_requests, request);
-            debuggee->pending_exceptions++;
+        /* Gather up any more exceptions. */
+        while(err != MACH_RCV_TIMED_OUT){
+            struct req req2;
+            err = mach_msg(&req2.hdr,
+                    MACH_RCV_MSG | MACH_RCV_TIMEOUT,
+                    0,
+                    sizeof(req2),
+                    debuggee->exception_port,
+                    0,
+                    MACH_PORT_NULL);
 
-            handle_exception(request);
+            //printf("%s: err with timeout: '%s'\n", __func__, mach_error_string(err));
+            Request *request = (Request *)&req2;
 
-            HANDLING_EXCEPTION = 0;
-
-            rl_already_prompted = 0;
-            safe_reprompt();
-
-            /* Wake up the main thread for user input. */
-            pthread_cond_signal(&REPROMPT_COND);
-
-            while(!HAS_REPLIED_TO_LATEST_EXCEPTION){
-                /* Wait until the user has continued execution, which will reply
-                 * to the latest exception.
-                 */
-                pthread_cond_wait(&MAIN_THREAD_CHANGED_REPLIED_VAR_COND,
-                        &HAS_REPLIED_MUTEX);
+            if(request && err == KERN_SUCCESS){
+                enqueue(debuggee->exc_requests, request);
+                NUM_EXCEPTIONS++;
             }
-
-            HAS_REPLIED_TO_LATEST_EXCEPTION = 0;
         }
 
-        pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
+        //printf("%s: in total, we got %d exceptions\n", __func__, NUM_EXCEPTIONS);
+
+        AUTO_RESUME = 1;
+
+        /* Display and reply to what we gathered. */
+        while(NUM_EXCEPTIONS > 0){
+            Request *r = dequeue(debuggee->exc_requests);
+
+            int should_auto_resume = 1, should_print = 1;
+            char *what = NULL;
+
+            handle_exception(r,
+                    &should_auto_resume,
+                    &should_print,
+                    &what);
+
+            if(AUTO_RESUME && !should_auto_resume){
+                AUTO_RESUME = 0;
+            }
+
+            if(should_print){
+                printf("%s", what);
+                free(what);
+            }
+
+            reply_to_exception(r, KERN_SUCCESS);
+
+            NUM_EXCEPTIONS--;
+        }
+        //printf("%s: AUTO_RESUME %d\n", __func__, AUTO_RESUME);
+        if(AUTO_RESUME)
+            task_resume(debuggee->task);
+
+        KICK_MAIN_THREAD_OUT_OF_READLINE = 1;
+
+        //SAVED_RL_INSTREAM = dup(fileno(rl_instream));
+
+        //close(fileno(rl_instream));
+        //close(STDIN_FILENO);
+
+
+        //kill(getpid(), SIGINT);
+        
+        /*printf("%s: waiting for the main thread to be ready...\n", __func__);
+        printf("%s: wait for main thread? %d\n",
+                __func__, WAIT_FOR_MAIN_THREAD);
+                */
+        //while(WAIT_FOR_MAIN_THREAD){
+          //  pthread_cond_wait(&MAIN_THREAD_READY_COND, &EXCEPTION_MUTEX);
+        //}
+
+        //printf("%s: signaling for reprompt\n", __func__);
+
+        HANDLING_EXCEPTIONS = 0;
+        //AUTO_RESUME = 1;
+
+        //rl_already_prompted = 0;
+       pthread_cond_signal(&REPROMPT_COND); 
+        //HANDLING_EXCEPTIONS = 0;
+        //printf("\033[2m(iosdbg) \033[0m");
+        
+        //printf("%s: waiting for the okay to wait indefinitely...\n", __func__);
+        //pthread_cond_wait(&RESTART_COND, &EXCEPTION_MUTEX);
+
+        //task_resume(debuggee->task);
+
+        //HANDLING_EXCEPTIONS = 0;
+
+        //if(AUTO_RESUME)
+            //ops_resume();
+        
+        //printf("\033[2m(iosdbg) \033[0m");
+        //rl_already_prompted = 1;
+
+        pthread_mutex_unlock(&EXCEPTION_MUTEX);
+
+        //printf("%s: unlocked!\n", __func__);
     }
 
     return NULL;

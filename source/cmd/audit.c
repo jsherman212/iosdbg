@@ -25,21 +25,7 @@ static void free_on_failure(int argcount, ...){
     va_end(args);
 }
 
-static void repair_cmd_args(struct cmd_args_t *_args, int argcount, ...){
-    va_list args;
-    va_start(args, argcount);
-
-    for(int i=0; i<argcount; i++){
-        char *arg = va_arg(args, char *);
-
-        if(arg)
-            enqueue(_args->argqueue, arg);
-    }
-
-    va_end(args);
-}
-
-static void repair_cmd_args2(struct cmd_args_t *_args, int unlim,
+static void repair_cmd_args(struct cmd_args_t *_args, int unlim,
         const char **groupnames, int argcount, ...){
     va_list args;
     va_start(args, argcount);
@@ -88,9 +74,6 @@ void audit_attach(struct cmd_args_t *args, const char **groupnames,
 
     char *waitfor = argcopy(args, groupnames[0]);
 
-    printf("%s: got waitfor '%s' target '%s'\n",
-            __func__, waitfor ? waitfor : "NULL", target);
-
     if(waitfor && is_number_fast(target)){
         concat(error, "cannot wait for PIDs");
         free_on_failure(2, waitfor, target);
@@ -113,7 +96,7 @@ void audit_attach(struct cmd_args_t *args, const char **groupnames,
         return;
     }
 
-    repair_cmd_args2(args, 0, groupnames, 2, waitfor, target);
+    repair_cmd_args(args, 0, groupnames, 2, waitfor, target);
 }
 
 void audit_backtrace(struct cmd_args_t *args, const char **groupnames,
@@ -172,7 +155,7 @@ void audit_disassemble(struct cmd_args_t *args, const char **groupnames,
         return;
     }
 
-    repair_cmd_args2(args, 0, groupnames, 2, location, count);
+    repair_cmd_args(args, 0, groupnames, 2, location, count);
 }
 
 void audit_examine(struct cmd_args_t *args, const char **groupnames,
@@ -199,7 +182,7 @@ void audit_examine(struct cmd_args_t *args, const char **groupnames,
         return;
     }
 
-    repair_cmd_args2(args, 0, groupnames, 2, location, count);
+    repair_cmd_args(args, 0, groupnames, 2, location, count);
 }
 
 void audit_kill(struct cmd_args_t *args, const char **groupnames,
@@ -238,7 +221,7 @@ void audit_memory_find(struct cmd_args_t *args, const char **groupnames,
         }
     }
 
-    repair_cmd_args2(args, 0, groupnames, 4, start, count, type, target);
+    repair_cmd_args(args, 0, groupnames, 4, start, count, type, target);
 }
 
 void audit_memory_write(struct cmd_args_t *args, const char **groupnames,
@@ -307,7 +290,7 @@ void audit_thread_select(struct cmd_args_t *args, const char **groupnames,
         return;
     }
 
-    repair_cmd_args2(args, 0, groupnames, 1, tid);
+    repair_cmd_args(args, 0, groupnames, 1, tid);
 }
 
 void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
@@ -341,5 +324,5 @@ void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
         free_on_failure(3, type, location, size);
     }
 
-    repair_cmd_args2(args, 0, groupnames, 3, type, location, size);
+    repair_cmd_args(args, 0, groupnames, 3, type, location, size);
 }

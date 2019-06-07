@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "argparse.h"
 #include "memcmd.h"
 
 #include "../debuggee.h"
@@ -20,24 +19,24 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
 
-    char *amount_str = argcopy(args, DISASSEMBLE_COMMAND_REGEX_GROUPS[1]);
-    int amount = (int)strtol_err(amount_str, error);
+    char *count_str = argcopy(args, DISASSEMBLE_COMMAND_REGEX_GROUPS[1]);
+    int count = (int)strtol_err(count_str, error);
 
-    free(amount_str);
+    free(count_str);
 
     if(*error)
         return CMD_FAILURE;
 
-    if(amount <= 0){
-        concat(error, "bad amount %d", amount);
+    if(count < 0){
+        concat(error, "bad count %d", count);
         return CMD_FAILURE;
     }
 
-    kern_return_t err = disassemble_at_location(location, amount);
+    kern_return_t err = disassemble_at_location(location, count, NULL);
 
     if(err){
         concat(error, "could not disassemble from %#lx to %#lx: %s", 
-                location, location + amount, mach_error_string(err));
+                location, location + count, mach_error_string(err));
         return CMD_FAILURE;
     }
     
@@ -55,24 +54,24 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
         return CMD_FAILURE;
 
     /* Next, however many bytes are wanted. */
-    char *amount_str = argcopy(args, EXAMINE_COMMAND_REGEX_GROUPS[1]);
-    int amount = (int)strtol_err(amount_str, error);
+    char *count_str = argcopy(args, EXAMINE_COMMAND_REGEX_GROUPS[1]);
+    int count = (int)strtol_err(count_str, error);
 
-    free(amount_str);
+    free(count_str);
 
     if(*error)
         return CMD_FAILURE;
     
-    if(amount < 0){
-        concat(error, "negative amount");
+    if(count < 0){
+        concat(error, "negative count");
         return CMD_FAILURE;
     }
 
-    kern_return_t err = dump_memory(location, amount);
+    kern_return_t err = dump_memory(location, count);
 
     if(err){
         concat(error, "could not dump memory from %#lx to %#lx: %s", 
-                location, location + amount, mach_error_string(err));
+                location, location + count, mach_error_string(err));
         return CMD_FAILURE;
     }
 
@@ -236,7 +235,7 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *args, 
         int arg1, char **error){
-    char *location_str = argnext(args);
+    char *location_str = argcopy(args, MEMORY_WRITE_COMMAND_REGEX_GROUPS[0]);
     long location = eval_expr(location_str, error);
 
     free(location_str);
@@ -244,7 +243,7 @@ enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
 
-    char *data_str = argnext(args);
+    char *data_str = argcopy(args, MEMORY_WRITE_COMMAND_REGEX_GROUPS[1]);
     long data = eval_expr(data_str, error);
 
     free(data_str);
@@ -252,7 +251,7 @@ enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
 
-    char *size_str = argnext(args);
+    char *size_str = argcopy(args, MEMORY_WRITE_COMMAND_REGEX_GROUPS[2]);
     int size = (int)strtol_err(size_str, error);
 
     free(size_str);

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "argparse.h"
+#include "varcmd.h"
 
 #include "../convvar.h"
 
@@ -13,12 +13,12 @@ enum cmd_error_t cmdfunc_variable_print(struct cmd_args_t *args,
         return CMD_SUCCESS;
     }
 
-    char *cur_convvar = argnext(args);
+    char *cur_convvar = argcopy(args, VARIABLE_PRINT_COMMAND_REGEX_GROUPS[0]);
 
     while(cur_convvar){
         p_convvar(cur_convvar);
         free(cur_convvar);
-        cur_convvar = argnext(args);
+        cur_convvar = argcopy(args, VARIABLE_PRINT_COMMAND_REGEX_GROUPS[0]);
     }
 
     return CMD_SUCCESS;
@@ -26,8 +26,8 @@ enum cmd_error_t cmdfunc_variable_print(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_variable_set(struct cmd_args_t *args,
         int arg1, char **error){
-    char *var = argnext(args);
-    char *value = argnext(args);
+    char *var = argcopy(args, VARIABLE_SET_COMMAND_REGEX_GROUPS[0]);
+    char *value = argcopy(args, VARIABLE_SET_COMMAND_REGEX_GROUPS[1]);
 
     set_convvar(var, value, error);
 
@@ -39,7 +39,7 @@ enum cmd_error_t cmdfunc_variable_set(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_variable_unset(struct cmd_args_t *args,
         int arg1, char **error){
-    char *var = argnext(args);
+    char *var = argcopy(args, VARIABLE_UNSET_COMMAND_REGEX_GROUPS[0]);
 
     void_convvar(var);
 
