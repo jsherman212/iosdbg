@@ -15,6 +15,7 @@
 #include "handlers.h"
 #include "linkedlist.h"
 #include "memutils.h"
+#include "printutils.h"
 #include "rlext.h"
 #include "sigsupport.h"
 #include "strext.h"
@@ -46,21 +47,7 @@ int mach_messages_arr_len;
 pthread_mutex_t DEATH_SERVER_DETACHED_MUTEX  = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t DEATH_SERVER_DETACHED_COND = PTHREAD_COND_INITIALIZER;
 
-pthread_mutex_t EXCEPTION_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t REPROMPT_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t RESTART_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t MAIN_THREAD_READY_COND = PTHREAD_COND_INITIALIZER;
-
-int NUM_EXCEPTIONS, AUTO_RESUME, HANDLING_EXCEPTIONS = 0;
-int KICK_MAIN_THREAD_OUT_OF_READLINE = 0;
-int SAVED_RL_INSTREAM = -1;
-int WAIT_FOR_MAIN_THREAD = 0;
-int IN_READLINE = 0;
-
-pthread_t MAIN_THREAD_TID;
-
-pthread_mutex_t STUFF_CHAR_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-int GOT_NEWLINE_STUFFED = 0;
+int NUM_EXCEPTIONS, AUTO_RESUME;
 
 static void interrupt(int x1){
     if(KEEP_CHECKING_FOR_PROCESS)
@@ -746,49 +733,12 @@ static void inputloop(void){
 
     static const char *prompt = "\033[2m(iosdbg) \033[0m";
 
-    NUM_EXCEPTIONS = 0;
-    AUTO_RESUME = 1;
-
     while(1){
-        pthread_mutex_lock(&EXCEPTION_MUTEX);
-
-        //printf("%s: telling exception server we're ready...\n", __func__);
-
-        WAIT_FOR_MAIN_THREAD = 0;
-
-        pthread_cond_signal(&MAIN_THREAD_READY_COND);
-
-        while(HANDLING_EXCEPTIONS){//NUM_EXCEPTIONS > 0){
-            printf("%s: waiting for okay to reprompt\n", __func__);
-            pthread_cond_wait(&REPROMPT_COND, &EXCEPTION_MUTEX);
-
-        }
-
-        //printf("%s: reprompting!\n", __func__);
-   //     printf("\033[2m(iosdbg) \033[0m");
-       // IN_READLINE = 1;
         line = readline(prompt);
-        //IN_READLINE = 0;
-        WAIT_FOR_MAIN_THREAD = 1;
-        pthread_mutex_unlock(&EXCEPTION_MUTEX);
 
-        //printf("%s: reprompting\n", __func__);
-//        line = readline(prompt);
-     //   line = readline("");
         if(!line)
             break;
 
-        /*
-        pthread_mutex_lock(&STUFF_CHAR_MUTEX);
-
-        printf("%s: newline was stuffed? %d\n", __func__, GOT_NEWLINE_STUFFED);
-        if(GOT_NEWLINE_STUFFED){
-            line[strlen(line) - 2] = '\0';
-            GOT_NEWLINE_STUFFED = 0;
-        }
-
-        pthread_mutex_unlock(&STUFF_CHAR_MUTEX);
-        */
         size_t linelen = strlen(line);
 
         /* If the user hits enter, repeat the last command,
@@ -841,10 +791,7 @@ static void inputloop(void){
         }
 
         free(line);
-        line = NULL;
     }
-
-    printf("readline returned NULL... please file an issue on Github\n");
 }
 
 static void early_configuration(void){
@@ -865,10 +812,22 @@ static void early_configuration(void){
         printf("error: %s\n", error);
         free(error);
     }
+
+    MESSAGE_BUFFER = NULL;
+    EXCEPTION_BUFFER = NULL;
+
+    /*
+    pthread_t stdout_thread_;
+    pthread_create(&stdout_thread_, NULL, stdout_thread, NULL);
+    */
+
+    pthread_t ebuf, mbuf;
+    pthread_create(&ebuf, NULL, exception_buffer_thread, NULL);
+    pthread_create(&mbuf, NULL, message_buffer_thread, NULL);
 }
 
 int main(int argc, char **argv, const char **envp){
-    MAIN_THREAD_TID = pthread_self();
+    //MAIN_THREAD_TID = pthread_self();
     pthread_setname_np("iosdbg main thread");
 
     early_configuration();

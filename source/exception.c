@@ -307,7 +307,7 @@ void handle_exception(Request *request, int *should_auto_resume,
             // XXX should print, should not auto resume
             *should_auto_resume = 0;
             
-            concat(desc, "%#llx in debuggee.\n", focused->thread_state.__pc);
+            concat(desc, "%#llx in debuggee.", focused->thread_state.__pc);
         }
         else{
             concat(desc, "Resuming execution.");
