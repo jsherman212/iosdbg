@@ -102,7 +102,7 @@ enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args,
             return CMD_FAILURE;
         }
 
-        if(!debuggee->interrupted){
+        if(!debuggee->suspended()){
             int len = (int)strlen("warning: ");
 
             printf("warning: debuggee is not stopped"

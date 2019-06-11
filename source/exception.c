@@ -279,7 +279,7 @@ void handle_exception(Request *request, int *should_auto_resume,
     get_thread_state(focused);
 
     //char *desc = NULL;
-    concat(desc, "\n * Thread #%d (tid = %#llx)", focused->ID, focused->tid);
+    concat(desc, " * Thread #%d (tid = %#llx)", focused->ID, focused->tid);
 
     /* A number of things could have happened to cause an exception:
      *      - hardware breakpoint

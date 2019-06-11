@@ -60,7 +60,6 @@ void ops_printsiginfo(void){
 
 void ops_detach(int from_death){
     debuggee->suspend();
-    debuggee->interrupted = 1;  
 
     breakpoint_delete_all();
     watchpoint_delete_all();
@@ -116,7 +115,6 @@ void ops_detach(int from_death){
     debuggee->threads = NULL;
     debuggee->watchpoints = NULL;
 
-    debuggee->interrupted = 0;
     debuggee->last_hit_bkpt_ID = 0;
     debuggee->last_hit_wp_loc = 0;
     debuggee->last_hit_wp_PC = 0;
@@ -132,7 +130,6 @@ void ops_detach(int from_death){
     void_convvar("$ASLR");
 
     debuggee->resume();
-    debuggee->interrupted = 0;
 }
 
 void ops_resume(void){
@@ -145,7 +142,6 @@ void ops_resume(void){
     }
     */
     debuggee->resume();
-    debuggee->interrupted = 0;
 }
 
 void ops_threadupdate(void){

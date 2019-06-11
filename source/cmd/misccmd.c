@@ -19,6 +19,7 @@
 #include "../interaction.h"
 #include "../linkedlist.h"
 #include "../memutils.h"
+#include "../printutils.h"
 #include "../procutils.h"
 #include "../ptrace.h"
 #include "../servers.h"
@@ -37,7 +38,7 @@ static pid_t parse_pid(char *pidstr, char **error){
 
 enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
         int arg1, char **error){
-    printf("%7s%#lx\n", "", debuggee->aslr_slide);
+    WriteMessageBuffer("%4s%#lx\n", "", debuggee->aslr_slide);
     return CMD_SUCCESS;
 }
 
@@ -141,7 +142,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     debuggee->aslr_slide = debuggee->find_slide();
 
     if(debuggee->aslr_slide == -1)
-        printf("warning: couldn't find debuggee's ASLR slide\n");
+        WriteMessageBuffer("warning: couldn't find debuggee's ASLR slide\n");
 
     debuggee->pid = target_pid;
 
@@ -187,7 +188,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     debuggee->want_detach = 0;
 
-    printf("Attached to %s (pid: %d), slide: %#lx.\n",
+    WriteMessageBuffer("Attached to %s (pid: %d), slide: %#lx.\n",
             debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
     /* Have Unix signals be sent as Mach exceptions. */
@@ -203,7 +204,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     set_convvar("$ASLR", aslr, &e);
 
     if(e){
-        printf("warning: %s\n", e);
+        WriteMessageBuffer("warning: %s\n", e);
         free(e);
     }
 
@@ -223,8 +224,8 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
     get_thread_state(focused);
 
-    printf("  * frame #0: 0x%16.16llx\n", focused->thread_state.__pc);
-    printf("    frame #1: 0x%16.16llx\n", focused->thread_state.__lr);
+    WriteMessageBuffer("  * frame #0: 0x%16.16llx\n", focused->thread_state.__pc);
+    WriteMessageBuffer("    frame #1: 0x%16.16llx\n", focused->thread_state.__lr);
 
     /* There's a linked list of frame pointers. */
     struct frame_t {
@@ -245,7 +246,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     int frame_counter = 2;
 
     while(current_frame->next){
-        printf("%4sframe #%d: 0x%16.16lx\n", "", frame_counter, 
+        WriteMessageBuffer("%4sframe #%d: 0x%16.16lx\n", "", frame_counter,
                 current_frame->frame);
 
         read_memory_at_location((void *)current_frame->next, 
@@ -253,7 +254,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
         frame_counter++;
     }
 
-    printf(" - cannot unwind past frame %d -\n", frame_counter - 1);
+    WriteMessageBuffer(" - cannot unwind past frame %d -\n", frame_counter - 1);
 
     free(current_frame);
 
@@ -262,9 +263,11 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int do_not_print_msg, char **error){
-//    if(!debuggee->interrupted)
-  //      return CMD_FAILURE;
+    //if(!debuggee->interrupted)
+      //  return CMD_FAILURE;
 
+    if(!debuggee->suspended())
+        return CMD_FAILURE;
     ops_resume();
 
     if(!do_not_print_msg)

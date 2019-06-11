@@ -1,3 +1,8 @@
+6-11-19
+- check if debuggee is suspended based on suspend count instead of manually
+flipping a flag
+- making output nicer
+
 6-5-19
 - rewriting exception & mutex logic
 

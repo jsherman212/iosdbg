@@ -12,4 +12,6 @@ kern_return_t deallocate_ports(void);
 kern_return_t suspend(void);
 kern_return_t get_threads(thread_act_port_array_t *);
 
+int suspended(void);
+
 #endif

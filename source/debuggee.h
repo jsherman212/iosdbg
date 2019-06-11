@@ -23,9 +23,6 @@ struct debuggee {
     /* Whether or not we are currently tracing. */
     int currently_tracing;
 
-    /* Whether execution has been suspended or not. */
-    int interrupted;
-
     /* Keeps track of the ID of the last breakpoint that hit. */
     int last_hit_bkpt_ID;
 
@@ -103,6 +100,9 @@ struct debuggee {
 
     /* The function pointer to update the list of the debuggee's threads. */
     kern_return_t (*get_threads)(thread_act_port_array_t *);
+
+    /* The function pointer to figure out if the debuggee is currently suspended. */
+    int (*suspended)(void);
 };
 
 /* This structure represents what we are currently debugging. */

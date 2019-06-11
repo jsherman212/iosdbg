@@ -69,6 +69,7 @@ static void install_handlers(void){
     debuggee->deallocate_ports = &deallocate_ports;
     debuggee->suspend = &suspend;
     debuggee->get_threads = &get_threads;
+    debuggee->suspended = &suspended;
 }
 
 // XXX XXX XXX as long as the call to readline happens while the mutex is locked,
@@ -336,7 +337,6 @@ static void setup_initial_debuggee(void){
 
     /* If we aren't attached to anything, debuggee's pid is -1. */
     debuggee->pid = -1;
-    debuggee->interrupted = 0;
 
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
@@ -764,22 +764,27 @@ static void inputloop(void){
         enum cmd_error_t result = do_cmdline_command(line, &linecpy, 1, &error);
 
         if(result == CMD_FAILURE && error){
-            printf("error: %s\n", error);
+            WriteErrorBuffer("error: %s\n", error);
             free(error);
+            PrintErrorBuffer();
         }
-        else if(result == CMD_QUIT){
-            if(linecpy)
-                free(linecpy);
+        else{
+            PrintMessageBuffer();
 
-            if(prevline)
-                free(prevline);
+            if(result == CMD_QUIT){
+                if(linecpy)
+                    free(linecpy);
 
-            if(error)
-                free(error);
+                if(prevline)
+                    free(prevline);
 
-            free(line);
+                if(error)
+                    free(error);
 
-            return;
+                free(line);
+
+                return;
+            }
         }
 
         if(linecpy){
@@ -815,15 +820,17 @@ static void early_configuration(void){
 
     MESSAGE_BUFFER = NULL;
     EXCEPTION_BUFFER = NULL;
+    ERROR_BUFFER = NULL;
 
     /*
     pthread_t stdout_thread_;
     pthread_create(&stdout_thread_, NULL, stdout_thread, NULL);
     */
 
-    pthread_t ebuf, mbuf;
-    pthread_create(&ebuf, NULL, exception_buffer_thread, NULL);
+    pthread_t exbuf, mbuf, errbuf;
+    pthread_create(&exbuf, NULL, exception_buffer_thread, NULL);
     pthread_create(&mbuf, NULL, message_buffer_thread, NULL);
+    pthread_create(&errbuf, NULL, error_buffer_thread, NULL);
 }
 
 int main(int argc, char **argv, const char **envp){

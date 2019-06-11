@@ -176,7 +176,7 @@ static void *trace(void *arg){
 
         for(int i=0; i<numbuffers; i++){
             /* Wait until we're not suspended to continue printing. */
-            while(debuggee->interrupted)
+            while(debuggee->suspended())
                 usleep(400);
             
             kd_buf current = kdbuf[i];
@@ -279,7 +279,7 @@ void start_trace(void){
         safe_reprompt();
     }
 
-    if(debuggee->interrupted)
+    if(debuggee->suspended())
         printf("Warning: debuggee is currently suspended,"
                 " type c and hit enter to continue\n");
 
