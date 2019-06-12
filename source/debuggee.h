@@ -26,12 +26,6 @@ struct debuggee {
     /* Keeps track of the ID of the last breakpoint that hit. */
     int last_hit_bkpt_ID;
 
-    /* Keeps track of the location of the data in the last watchpoint hit. */
-    unsigned long last_hit_wp_loc;
-
-    /* Keeps track of where the last watchpoint hit. */
-    unsigned long last_hit_wp_PC;
-
     /* How many breakpoints are set. */
     int num_breakpoints;
 

@@ -16,6 +16,9 @@ void WriteErrorBuffer(const char *, ...);
 void PrintExceptionBuffer(void);
 void PrintMessageBuffer(void);
 void PrintErrorBuffer(void);
+void ClearExceptionBuffer(void);
+void ClearMessageBuffer(void);
+void ClearErrorBuffer(void);
 void safe_reprompt(void);
 
 #endif

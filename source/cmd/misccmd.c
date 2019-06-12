@@ -263,10 +263,10 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int arg1, char **error){
-    printf("%s: debuggee->suspended() %d\n", __func__,
-            debuggee->suspended());
-    //if(!debuggee->suspended())
-      //  return CMD_FAILURE;
+    //printf("%s: debuggee->suspended() %d\n", __func__,
+      //      debuggee->suspended());
+    if(!debuggee->suspended())
+        return CMD_FAILURE;
 
     ops_resume();
 
@@ -361,19 +361,10 @@ enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
 
     kill(debuggee->pid, SIGKILL);
 
-    ops_resume();
+    int status;
+    waitpid(debuggee->pid, &status, 0);
 
-    /* We're gonna eventually detach, so wait until that happens before
-     * we revert the settings back for SIGKILL.
-     */
-    pthread_mutex_lock(&DEATH_SERVER_DETACHED_MUTEX);
-
-    while(debuggee->pid != -1){
-        pthread_cond_wait(&DEATH_SERVER_DETACHED_COND,
-                &DEATH_SERVER_DETACHED_MUTEX);
-    }
-
-    pthread_mutex_unlock(&DEATH_SERVER_DETACHED_MUTEX);
+    ops_detach(0);
 
     sigsettings(SIGKILL, &notify_backup, &pass_backup, &stop_backup, 1, error);
 
@@ -384,7 +375,6 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
         int arg1, char **error){
     if(debuggee->pid != -1)
         ops_detach(0);
-        //cmdfunc_detach(NULL, 0, error);
 
     /* Free the arrays made from the trace.codes file. */
     if(!debuggee->tracing_disabled){

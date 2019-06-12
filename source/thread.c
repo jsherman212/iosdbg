@@ -32,6 +32,9 @@ static struct machthread *machthread_new(mach_port_t thread_port){
     mt->just_hit_breakpoint = 0;
     mt->just_hit_sw_breakpoint = 0;
 
+    mt->last_hit_wp_loc = 0;
+    mt->last_hit_wp_PC = 0;
+
     return mt;  
 }
 

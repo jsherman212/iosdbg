@@ -44,11 +44,6 @@ int bsd_syscalls_arr_len;
 int mach_traps_arr_len;
 int mach_messages_arr_len;
 
-pthread_mutex_t DEATH_SERVER_DETACHED_MUTEX  = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t DEATH_SERVER_DETACHED_COND = PTHREAD_COND_INITIALIZER;
-
-int NUM_EXCEPTIONS, AUTO_RESUME;
-
 static void interrupt(int x1){
     if(KEEP_CHECKING_FOR_PROCESS)
         printf("\n");
@@ -72,47 +67,8 @@ static void install_handlers(void){
     debuggee->suspended = &suspended;
 }
 
-// XXX XXX XXX as long as the call to readline happens while the mutex is locked,
-// we own it in this function
 static int _rl_getc(FILE *stream){
-    /*
-    fd_set rfds;
-    struct timeval tv;
-
-    FD_ZERO(&rfds);
-    FD_SET(fileno(stream), &rfds);
-
-    tv.tv_sec = 0;
-    tv.tv_usec = 100;
-
-    //while(1){
-        int ret = select(fileno(stream), &rfds, NULL, NULL, &tv);
-        printf("%s: ret %d\n", __func__, ret);
-
-        if(ret){
-            printf("%s: there is data, stuffing it"
-                    " into rl_line_buffer...\n", __func__);
-
-            char in = fgetc(rl_instream);
-
-            printf("%s: %c (%#x) was entered\n", __func__, in, in);
-            
-        }
-        else{
-            printf("%s: no data after 2 secs,"
-                    " should start from beginning to signal"
-                    " MAIN_THREAD_READY_COND? %d\n",
-                    __func__, KICK_MAIN_THREAD_OUT_OF_READLINE);
-            // XXX start from the beginning
-            //line = NULL;
-            //break;
-        //    continue;
-        }
-    //}
-    */
-
     int gotc = rl_getc(stream);
-    //printf("%s: gotc %c (%#x)\n", __func__, gotc, gotc);
 
     if(gotc == '\t'){
         int len = 0;
@@ -134,14 +90,6 @@ static int _rl_getc(FILE *stream){
     return gotc;
 }
 
-static int _rl_event_hook(void){
-    //printf("%s: hi\n", __func__);
-
-    //return 0;
-    //
-    return -1;
-}
-
 static void initialize_readline(void){
     rl_catch_signals = 0;
 
@@ -152,8 +100,6 @@ static void initialize_readline(void){
      * the user types something.
      */
     rl_getc_function = _rl_getc;
-
-  //  rl_event_hook = _rl_event_hook;
 }
 
 static void get_code_and_event_from_line(char *line,
@@ -754,6 +700,7 @@ static void inputloop(void){
         }
 
         threadupdate();
+        PrintMessageBuffer();
 
         char *linecpy = NULL, *error = NULL;
         enum cmd_error_t result = do_cmdline_command(line, &linecpy, 1, &error);
@@ -791,6 +738,8 @@ static void inputloop(void){
         }
 
         free(line);
+
+        ClearMessageBuffer();
     }
 }
 
@@ -813,14 +762,10 @@ static void early_configuration(void){
         free(error);
     }
 
+    // XXX move these calls somewhere else later
     MESSAGE_BUFFER = NULL;
     EXCEPTION_BUFFER = NULL;
     ERROR_BUFFER = NULL;
-
-    /*
-    pthread_t stdout_thread_;
-    pthread_create(&stdout_thread_, NULL, stdout_thread, NULL);
-    */
 
     pthread_t exbuf, mbuf, errbuf;
     pthread_create(&exbuf, NULL, exception_buffer_thread, NULL);
@@ -829,7 +774,6 @@ static void early_configuration(void){
 }
 
 int main(int argc, char **argv, const char **envp){
-    //MAIN_THREAD_TID = pthread_self();
     pthread_setname_np("iosdbg main thread");
 
     early_configuration();

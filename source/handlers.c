@@ -169,9 +169,6 @@ int suspended(void){
             (task_info_t)&info,
             &count);
 
-    printf("%s: %s suspend count %d\n", __func__, mach_error_string(err),
-            info.suspend_count);
-
     if(err)
         return 0;
 

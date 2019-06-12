@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <readline/readline.h>
-
 #include "documentation.h"
 
 #include "../printing.h"
@@ -98,7 +96,7 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
         queue_free(cmdqueue);
 
         if(cmd->alias)
-            WriteMessageBuffer("\nThis command has an alias: '%s'\n\n", cmd->alias);
+            WriteMessageBuffer("\nThis command has an alias: '%s'\n", cmd->alias);
         
         return;
     }
@@ -106,7 +104,7 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
     WriteMessageBuffer("%s", cmd->documentation);
 
     if(cmd->alias)
-        WriteMessageBuffer("This command has an alias: '%s'\n\n", cmd->alias);
+        WriteMessageBuffer("This command has an alias: '%s'\n", cmd->alias);
 }
 
 void documentation_for_cmdname(char *_name, char **error){

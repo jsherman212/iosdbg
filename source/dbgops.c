@@ -14,6 +14,7 @@
 #include "printing.h"
 #include "ptrace.h"
 #include "queue.h"
+#include "servers.h"
 #include "sigsupport.h"
 #include "strext.h"
 #include "thread.h"
@@ -73,10 +74,13 @@ void ops_detach(int from_death){
         set_debug_state(t);
     }
 
+    void *request = dequeue(debuggee->exc_requests);
+    
     /* Reply to any exceptions. */
-    while(debuggee->pending_exceptions > 0){
-        void *request = dequeue(debuggee->exc_requests);
+    while(request){
         reply_to_exception(request, KERN_SUCCESS);
+        free(request);
+        request = dequeue(debuggee->exc_requests);
     }
 
     debuggee->deallocate_ports();
@@ -114,8 +118,6 @@ void ops_detach(int from_death){
     debuggee->watchpoints = NULL;
 
     debuggee->last_hit_bkpt_ID = 0;
-    debuggee->last_hit_wp_loc = 0;
-    debuggee->last_hit_wp_PC = 0;
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
     debuggee->pid = -1;

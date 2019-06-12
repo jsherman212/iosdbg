@@ -217,6 +217,27 @@ void PrintErrorBuffer(void){
     pthread_mutex_unlock(&ERROR_BUF_MUTEX);
 }
 
+void ClearExceptionBuffer(void){
+    pthread_mutex_lock(&EXCEPTION_BUF_MUTEX);
+    free(EXCEPTION_BUFFER);
+    EXCEPTION_BUFFER = NULL;
+    pthread_mutex_unlock(&EXCEPTION_BUF_MUTEX);
+}
+
+void ClearMessageBuffer(void){
+    pthread_mutex_lock(&MESSAGE_BUF_MUTEX);
+    free(MESSAGE_BUFFER);
+    MESSAGE_BUFFER = NULL;
+    pthread_mutex_unlock(&MESSAGE_BUF_MUTEX);
+}
+
+void ClearErrorBuffer(void){
+    pthread_mutex_lock(&ERROR_BUF_MUTEX);
+    free(ERROR_BUFFER);
+    ERROR_BUFFER = NULL;
+    pthread_mutex_unlock(&ERROR_BUF_MUTEX);
+}
+
 /* Prevent double reprompts. */
 void safe_reprompt(void){
     char *linecopy = rl_copy_text(0, rl_end);

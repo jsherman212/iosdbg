@@ -33,6 +33,12 @@ struct machthread {
     int just_hit_watchpoint;
     int just_hit_breakpoint;
     int just_hit_sw_breakpoint;
+    
+    /* Keeps track of the location of the data in the last hit watchpoint. */
+    unsigned long last_hit_wp_loc;
+
+    /* Keeps track of where the last watchpoint hit. */
+    unsigned long last_hit_wp_PC;
 };
 
 enum comparison {

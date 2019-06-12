@@ -55,8 +55,6 @@ static const char *exc_str(exception_type_t exception){
 }
 
 static void set_single_step(struct machthread *t, int enabled){
-    //printf("%s: setting single step for thread %d, enabled? %d\n",
-      //      __func__, t->ID, enabled);
     get_debug_state(t);
 
     if(enabled)
@@ -124,7 +122,6 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
 
 // XXX remove later
 static void resume_after_exception(void){
-    //ops_resume();
     if(debuggee->currently_tracing){
         rl_already_prompted = 1;
         putchar('\n');
@@ -132,14 +129,12 @@ static void resume_after_exception(void){
 }
 
 static void handle_hit_watchpoint(struct machthread *t, char **desc){
-    struct watchpoint *hit = find_wp_with_address(debuggee->last_hit_wp_loc);
+    struct watchpoint *hit = find_wp_with_address(t->last_hit_wp_loc);
 
     watchpoint_hit(hit);
 
-    if(!hit){
-        resume_after_exception();
+    if(!hit)
         return;
-    }
 
     unsigned int sz = hit->data_len;
 
@@ -153,12 +148,12 @@ static void handle_hit_watchpoint(struct machthread *t, char **desc){
             t->tname, hit->id, hit->user_location, hit->hit_count);
 
     describe_hit_watchpoint(prev_data, hit->data, sz, desc);
-    disassemble_at_location(debuggee->last_hit_wp_PC + 4, 4, desc);
+    disassemble_at_location(t->last_hit_wp_PC + 4, 4, desc);
 
     free(prev_data);
     
-    debuggee->last_hit_wp_loc = 0;
-    debuggee->last_hit_wp_PC = 0;
+    t->last_hit_wp_loc = 0;
+    t->last_hit_wp_PC = 0;
 }
 
 static void handle_single_step(struct machthread *t, int *should_auto_resume,
@@ -183,8 +178,8 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
          * right after a breakpoint hit, just print the disassembly.
          */
         if(!debuggee->is_single_stepping){
-            *should_print = 0;
             // XXX should not print, should auto resume
+            *should_print = 0;
             resume_after_exception();
         }
         else{
@@ -200,7 +195,6 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         return;
     }
 
-   // putchar('\n');
     concat(desc, "\n");
     disassemble_at_location(t->thread_state.__pc, 4, desc);
     set_single_step(t, 0);
@@ -249,8 +243,6 @@ void handle_exception(Request *request, int *should_auto_resume,
     long code = ((long *)request->code)[0];
     long subcode = ((long *)request->code)[1];
 
-    //printf("%s: exc '%s', code %#lx, subcode %#lx\n", __func__, exc, code, subcode);
-
     /* Give focus to whatever caused this exception. */
     struct machthread *focused = machthread_getfocused();
 
@@ -293,22 +285,14 @@ void handle_exception(Request *request, int *should_auto_resume,
             concat(desc, "Resuming execution.");
 
             // XXX should print, should auto resume
-
-            /*pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
-            ops_resume();
-            pthread_mutex_lock(&HAS_REPLIED_MUTEX);
-            */
         }
         
         /* Don't print any of this if we're detaching. */
         if(notify && !debuggee->want_detach){
-            //printf("%s", desc);
-
             concat(desc, "\n");
 
-            if(stop){
+            if(stop)
                 disassemble_at_location(focused->thread_state.__pc, 4, desc);
-            }
 
             // XXX should print, should not auto resume
             *should_auto_resume = 0;
@@ -318,8 +302,6 @@ void handle_exception(Request *request, int *should_auto_resume,
             *should_auto_resume = 0;
             *should_print = 0;
         }
-
-        //free(desc);
     }
     /* A hardware watchpoint hit. However, we need to single step in 
      * order for the CPU to execute the instruction at this address
@@ -328,8 +310,8 @@ void handle_exception(Request *request, int *should_auto_resume,
     else if(code == EXC_ARM_DA_DEBUG){
         focused->just_hit_watchpoint = 1;
 
-        debuggee->last_hit_wp_loc = subcode;
-        debuggee->last_hit_wp_PC = focused->thread_state.__pc;
+        focused->last_hit_wp_loc = subcode;
+        focused->last_hit_wp_PC = focused->thread_state.__pc;
 
         set_single_step(focused, 1);
         
@@ -338,9 +320,6 @@ void handle_exception(Request *request, int *should_auto_resume,
         
         // XXX should not print, should auto resume
         *should_print = 0;
-        
-
-        //free(desc);
     }
     /* A hardware/software breakpoint hit, or the software step
      * exception has occured.
@@ -350,8 +329,6 @@ void handle_exception(Request *request, int *should_auto_resume,
             if(focused->just_hit_watchpoint){
                 handle_hit_watchpoint(focused, desc);
                 focused->just_hit_watchpoint = 0;
-
-                //free(desc);
 
                 // XXX should print, should not auto resume
                 *should_auto_resume = 0;
@@ -370,18 +347,12 @@ void handle_exception(Request *request, int *should_auto_resume,
 
                 concat(desc, ": '%s': breakpoint %d at %#lx hit %d time(s).\n",
                         focused->tname, hit->id, hit->location, hit->hit_count);
-
-                //printf("%s", desc);
             }
             else{
                 concat(desc, ": '%s': single step.\n", focused->tname);
             }
     
             handle_single_step(focused, should_auto_resume, should_print, desc);
-            //free(desc);
-
-            // XXX should print, should not auto resume
-            //*should_auto_resume = 0; XXX handled in handle_single_step
 
             return;
         }
@@ -390,11 +361,6 @@ void handle_exception(Request *request, int *should_auto_resume,
 
         concat(desc, ": '%s':", focused->tname);
         handle_hit_breakpoint(focused, subcode, desc);
-
-        //printf("%s", desc);
-
-        //free(desc);
-
         disassemble_at_location(focused->thread_state.__pc, 4, desc);
         set_single_step(focused, 1);
 
