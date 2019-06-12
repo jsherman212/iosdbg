@@ -5,24 +5,24 @@
 
 #include <readline/readline.h>
 
-#include "printutils.h"
+#include "printing.h"
 #include "strext.h"
 
-pthread_mutex_t MESSAGE_BUF_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t EXCEPTION_BUF_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t ERROR_BUF_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t MESSAGE_BUF_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t EXCEPTION_BUF_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t ERROR_BUF_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
-pthread_cond_t MESSAGE_BUF_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t EXCEPTION_BUF_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t ERROR_BUF_COND = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t MESSAGE_BUF_COND = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t EXCEPTION_BUF_COND = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t ERROR_BUF_COND = PTHREAD_COND_INITIALIZER;
 
-pthread_cond_t DONE_PRINTING_MESSAGE_BUF_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t DONE_PRINTING_EXCEPTION_BUF_COND = PTHREAD_COND_INITIALIZER;
-pthread_cond_t DONE_PRINTING_ERROR_BUF_COND = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t DONE_PRINTING_MESSAGE_BUF_COND = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t DONE_PRINTING_EXCEPTION_BUF_COND = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t DONE_PRINTING_ERROR_BUF_COND = PTHREAD_COND_INITIALIZER;
 
 char *MESSAGE_BUFFER, *EXCEPTION_BUFFER, *ERROR_BUFFER;
 
-int FLUSH_MESSAGE_BUFFER, FLUSH_EXCEPTION_BUFFER, FLUSH_ERROR_BUFFER;
+static int FLUSH_MESSAGE_BUFFER, FLUSH_EXCEPTION_BUFFER, FLUSH_ERROR_BUFFER;
 
 #define PROMPT "\033[2m(iosdbg) \033[0m"
 
@@ -92,7 +92,6 @@ void *exception_buffer_thread(void *arg){
 
     while(1){
         pthread_mutex_lock(&EXCEPTION_BUF_MUTEX); 
-        //printf("%s: waiting...\n", __func__);
 
         pthread_cond_wait(&EXCEPTION_BUF_COND, &EXCEPTION_BUF_MUTEX);
 
@@ -153,15 +152,12 @@ enum {
 };
 
 static void write_buffer(int which, const char *msg, va_list args){
-    if(which == EXCEPTION){
+    if(which == EXCEPTION)
         vconcat(&EXCEPTION_BUFFER, msg, args);
-    }
-    else if(which == MESSAGE){
+    else if(which == MESSAGE)
         vconcat(&MESSAGE_BUFFER, msg, args);
-    }
-    else{
+    else
         vconcat(&ERROR_BUFFER, msg, args);
-    }
 }
 
 void WriteExceptionBuffer(const char *msg, ...){

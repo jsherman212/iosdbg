@@ -88,10 +88,8 @@ enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args,
         char *e = NULL;
         sigsettings(sig, &notify, &pass, &stop, 1, &e);
 
-        if(e){
-            printf("error: %s\n", e);
+        if(e)
             free(e);
-        }
     }
 
     free(signals);

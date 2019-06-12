@@ -9,6 +9,7 @@
 #include "debuggee.h"
 #include "convvar.h"
 #include "memutils.h"
+#include "printing.h"
 #include "strext.h"
 #include "thread.h"
 
@@ -96,7 +97,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
         }
 
         if(!outbuffer){
-            printf("%s%#lx:  %s\n",
+            WriteMessageBuffer("%s%#lx:  %s\n",
                     focused->thread_state.__pc == current_location
                     ? "->  " : "    ", current_location, disassembled);
         }
@@ -138,29 +139,29 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount){
         if(current_row_length >= row_size)
             current_row_length = row_size;
 
-        printf("  %#lx: ", current_location);
+        WriteMessageBuffer("  %#lx: ", current_location);
 
         for(int i=0; i<current_row_length; i++)
-            printf("%02x ", (uint8_t)(*(membuffer + i)));
+            WriteMessageBuffer("%02x ", (uint8_t)(*(membuffer + i)));
 
         /* Print filler spaces.
          * Two spaces for would be '%02x', one more for the space after.
          */
         for(int i=current_row_length; i<row_size; i++)
-            printf("   ");
+            WriteMessageBuffer("   ");
         
-        printf("  ");
+        WriteMessageBuffer("  ");
 
         for(int i=0; i<current_row_length; i++){
             uint8_t cur_char = *(membuffer + i);
 
             if(isgraph(cur_char))
-                putchar(cur_char);
+                WriteMessageBuffer("%c", cur_char);
             else
-                putchar('.');
+                WriteMessageBuffer(".");
         }
 
-        putchar('\n');
+        WriteMessageBuffer("\n");
 
         amount_dumped += row_size;
         current_location += row_size;

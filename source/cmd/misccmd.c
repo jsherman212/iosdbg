@@ -19,7 +19,7 @@
 #include "../interaction.h"
 #include "../linkedlist.h"
 #include "../memutils.h"
-#include "../printutils.h"
+#include "../printing.h"
 #include "../procutils.h"
 #include "../ptrace.h"
 #include "../servers.h"
@@ -262,21 +262,20 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
-        int do_not_print_msg, char **error){
-    //if(!debuggee->interrupted)
+        int arg1, char **error){
+    printf("%s: debuggee->suspended() %d\n", __func__,
+            debuggee->suspended());
+    //if(!debuggee->suspended())
       //  return CMD_FAILURE;
 
-    if(!debuggee->suspended())
-        return CMD_FAILURE;
     ops_resume();
 
-    if(!do_not_print_msg)
-        printf("Process %d resuming\n", debuggee->pid);
+    WriteMessageBuffer("Process %d resuming\n", debuggee->pid);
 
     /* Make output look nicer. */
     if(debuggee->currently_tracing){
         rl_already_prompted = 1;
-        printf("\n");
+        WriteMessageBuffer("\n");
     }
 
     return CMD_SUCCESS;
@@ -293,7 +292,7 @@ enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
     ops_detach(from_death);
 
     if(!from_death)
-        printf("Detached from %s (%d)\n", n, p);
+        WriteMessageBuffer("Detached from %s (%d)\n", n, p);
 
     free(n);
 
@@ -319,6 +318,18 @@ enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args,
         int arg1, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
+
+    for(struct node_t *current = debuggee->threads->front;
+            current;
+            current = current->next){
+        struct machthread *t = current->data;
+
+        get_debug_state(t);
+
+        t->debug_state.__mdscr_el1 = 0;
+
+        set_debug_state(t);
+    }
 
     kill(debuggee->pid, SIGSTOP);
 
@@ -372,7 +383,8 @@ enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
 enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
         int arg1, char **error){
     if(debuggee->pid != -1)
-        cmdfunc_detach(NULL, 0, error);
+        ops_detach(0);
+        //cmdfunc_detach(NULL, 0, error);
 
     /* Free the arrays made from the trace.codes file. */
     if(!debuggee->tracing_disabled){
@@ -420,8 +432,6 @@ enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
     set_debug_state(focused);
 
     debuggee->is_single_stepping = 1;
-
-    rl_already_prompted = 1;
 
     ops_resume();
 

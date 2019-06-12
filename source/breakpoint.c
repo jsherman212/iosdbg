@@ -6,6 +6,7 @@
 #include "debuggee.h"
 #include "linkedlist.h"
 #include "memutils.h"
+#include "printing.h"
 #include "strext.h"
 #include "thread.h"
 
@@ -265,16 +266,16 @@ void breakpoint_at_address(unsigned long address, int temporary,
     linkedlist_add(debuggee->breakpoints, bp);
 
     if(!temporary){
-        printf("Breakpoint %d at %#lx", bp->id, bp->location);
+        WriteMessageBuffer("Breakpoint %d at %#lx", bp->id, bp->location);
 
         struct machthread *bpthread = machthread_find(bp->threadinfo.iosdbg_tid);
 
         if(bpthread && bp->threadinfo.all){
-            printf(", for thread #%d (tid: %#llx), '%s'\n",
+            WriteMessageBuffer(", for thread #%d (tid: %#llx), '%s'\n",
                     bp->threadinfo.iosdbg_tid, bpthread->tid, bpthread->tname);
         }
         else{
-            putchar('\n');
+            WriteMessageBuffer("\n");
         }
     }
 

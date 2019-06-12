@@ -11,7 +11,7 @@
 #include "exception.h"
 #include "linkedlist.h"
 #include "memutils.h"
-#include "printutils.h"
+#include "printing.h"
 #include "ptrace.h"
 #include "queue.h"
 #include "sigsupport.h"
@@ -21,8 +21,8 @@
 #include "watchpoint.h"
 
 void ops_printsiginfo(void){
-    printf("%-11s %-5s %-5s %-6s\n", "NAME", "PASS", "STOP", "NOTIFY");
-    printf("=========== ===== ===== ======\n");
+    WriteMessageBuffer("%-11s %-5s %-5s %-6s\n", "NAME", "PASS", "STOP", "NOTIFY");
+    WriteMessageBuffer("=========== ===== ===== ======\n");
 
     int signo = 0;
 
@@ -32,10 +32,8 @@ void ops_printsiginfo(void){
 
         sigsettings(signo, &notify, &pass, &stop, 0, &e);
 
-        if(e){
-            printf("error: %s\n", e);
+        if(e)
             free(e);
-        }
 
         char *sigstr = strdup(sys_signame[signo]);
         size_t sigstrlen = strlen(sigstr);
@@ -51,7 +49,7 @@ void ops_printsiginfo(void){
         const char *pass_str = pass ? "true" : "false";
         const char *stop_str = stop ? "true" : "false";
 
-        printf("%-11s %-5s %-5s %-6s\n",
+        WriteMessageBuffer("%-11s %-5s %-5s %-6s\n",
                 fullsig, pass_str, stop_str, notify_str);
 
         free(fullsig);
@@ -133,14 +131,6 @@ void ops_detach(int from_death){
 }
 
 void ops_resume(void){
-    /*
-    void *request = dequeue(debuggee->exc_requests);
-
-    if(request){
-        reply_to_exception(request, KERN_SUCCESS);
-        HAS_REPLIED_TO_LATEST_EXCEPTION = 1;
-    }
-    */
     debuggee->resume();
 }
 
@@ -153,7 +143,7 @@ void ops_threadupdate(void){
     struct machthread *focused = machthread_getfocused();
 
     if(!focused){
-        printf("[Previously selected thread dead, selecting thread #1]\n\n");
+        WriteMessageBuffer("[Previously selected thread dead, selecting thread #1]\n\n");
         machthread_setfocused(threads[0]);
         focused = machthread_getfocused();
     }

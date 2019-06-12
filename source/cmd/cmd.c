@@ -10,6 +10,7 @@
 #include "cmd.h"
 #include "completer.h"
 
+#include "../printing.h"
 #include "../strext.h"
 
 static void expand_aliases(char **command){
@@ -109,7 +110,7 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
         execute_shell_cmd(shell_cmd, &exit_reason, &error);
 
         if(exit_reason){
-            printf("%s\n", exit_reason);
+            WriteMessageBuffer("%s\n", exit_reason);
             free(exit_reason);
         }
         

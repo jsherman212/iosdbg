@@ -5,6 +5,7 @@
 #include "debuggee.h"
 #include "linkedlist.h"
 #include "memutils.h"
+#include "printing.h"
 #include "strext.h"
 #include "thread.h"
 #include "watchpoint.h"
@@ -207,7 +208,7 @@ void watchpoint_at_address(unsigned long location, unsigned int data_len,
     else if(LSC == WP_READ_WRITE)
         type = "rw";
 
-    printf("Watchpoint %d: addr = %#lx size = %d type = %s\n",
+    WriteMessageBuffer("Watchpoint %d: addr = %#lx size = %d type = %s\n",
             wp->id, wp->user_location, wp->data_len, type);
     
     debuggee->num_watchpoints++;

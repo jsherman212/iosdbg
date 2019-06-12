@@ -7,6 +7,7 @@
 #include "../debuggee.h"
 #include "../expr.h"
 #include "../memutils.h"
+#include "../printing.h"
 #include "../strext.h"
 
 enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
@@ -204,12 +205,12 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
     if(limit == LONG_MAX)
         end = LONG_MAX;
 
-    printf("Searching from %#lx", start);
+    WriteMessageBuffer("Searching from %#lx", start);
 
     if(end == LONG_MAX)
-        printf(" without a limit... (aborting on error)\n");
+        WriteMessageBuffer(" without a limit... (aborting on error)\n");
     else
-        printf(" to %#lx...\n", end);
+        WriteMessageBuffer(" to %#lx...\n", end);
     
     int results_cnt = 0;
     const int dump_len = 0x10;
@@ -226,7 +227,7 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
         start++;
     }
 
-    printf("\n%d result(s)\n", results_cnt);
+    WriteMessageBuffer("\n%d result(s)\n", results_cnt);
 
     free(target_str);
 

@@ -6,16 +6,16 @@
 
 #include "documentation.h"
 
+#include "../printing.h"
 #include "../queue.h"
 #include "../strext.h"
 
 void show_all_top_level_cmds(void){
-    printf("List of top level commands:\n");
+    WriteMessageBuffer("List of top level commands:\n");
 
     int len = 1;
     char **cmds = malloc(sizeof(char *) * len);
 
-    /* First string has to be empty for rl_display_match_list. */
     cmds[0] = strdup("");
 
     int idx = 0;
@@ -37,7 +37,9 @@ void show_all_top_level_cmds(void){
         }
     }
 
-    rl_display_match_list(cmds, len, largest_cmd_len);
+    for(int i=1; i<len; i++)
+        WriteMessageBuffer("%d. %s\n", i, cmds[i]);
+    
     token_array_free(cmds, len);
 }
 
@@ -47,13 +49,12 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
      * "cmdfuncs".
      */
     if(!cmd->cmd_function){
-        printf("%s", cmd->documentation);
-        printf("This command has the following subcommands:\n");
+        WriteMessageBuffer("%s", cmd->documentation);
+        WriteMessageBuffer("This command has the following subcommands:\n");
 
         int subcmdnum = 1;
         char **subcmds = malloc(sizeof(char *) * subcmdnum);
 
-        /* First string has to be empty for rl_display_match_list. */
         subcmds[0] = strdup("");
 
         struct queue_t *cmdqueue = queue_new();
@@ -90,25 +91,22 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
                 enqueue(cmdqueue, cursubcmd);
         }
         
-        rl_display_match_list(subcmds, subcmdnum, largest_subcmd_len);
+        for(int i=1; i<subcmdnum; i++)
+            WriteMessageBuffer("%d. %s\n", i, subcmds[i]);
 
-        for(int i=0; i<(subcmdnum); i++)
-            free(subcmds[i]);
-
-        free(subcmds);
-
+        token_array_free(subcmds, subcmdnum);
         queue_free(cmdqueue);
 
         if(cmd->alias)
-            printf("\nThis command has an alias: '%s'\n\n", cmd->alias);
+            WriteMessageBuffer("\nThis command has an alias: '%s'\n\n", cmd->alias);
         
         return;
     }
 
-    printf("%s", cmd->documentation);
+    WriteMessageBuffer("%s", cmd->documentation);
 
     if(cmd->alias)
-        printf("This command has an alias: '%s'\n\n", cmd->alias);
+        WriteMessageBuffer("This command has an alias: '%s'\n\n", cmd->alias);
 }
 
 void documentation_for_cmdname(char *_name, char **error){

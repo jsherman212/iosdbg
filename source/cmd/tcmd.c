@@ -5,6 +5,7 @@
 
 #include "../debuggee.h"
 #include "../linkedlist.h"
+#include "../printing.h"
 #include "../strext.h"
 #include "../thread.h"
 
@@ -15,7 +16,7 @@ enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args,
             current = current->next){
         struct machthread *t = current->data;
 
-        printf("\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", 
+        WriteMessageBuffer("\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", 
                 t->focused ? "* " : "", t->ID, t->tid, t->tname, 
                 t->thread_state.__pc);
     }
@@ -46,7 +47,7 @@ enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    printf("Selected thread #%d\n", thread_id);
+    WriteMessageBuffer("Selected thread #%d\n", thread_id);
     
     return CMD_SUCCESS;
 }

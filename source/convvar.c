@@ -6,6 +6,7 @@
 
 #include "convvar.h"
 #include "linkedlist.h"
+#include "printing.h"
 #include "strext.h"
 
 static struct linkedlist *vars;
@@ -325,12 +326,12 @@ void p_convvar(char *name){
     char *error = NULL;
     char *sval = convvar_strval(name, &error);
 
-    printf("%8s", "");
+    WriteMessageBuffer("%8s", "");
 
     if(error)
-        printf("failed to show convenience variable '%s': %s\n", name, error);
+        WriteMessageBuffer("failed to show convenience variable '%s': %s\n", name, error);
     else
-        printf("%s = %s\n", name, sval);
+        WriteMessageBuffer("%s = %s\n", name, sval);
 
     free(sval);
 }
@@ -354,7 +355,8 @@ void desc_auto_convvar_error_if_needed(char *var, char *e){
     if(!e || !var)
         return;
 
-    printf("could not automatically update the convenience variable '%s': %s\n",
+    WriteMessageBuffer("could not automatically update the"
+            "convenience variable '%s': %s\n",
             var, e);
 }
 

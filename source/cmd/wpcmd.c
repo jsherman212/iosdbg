@@ -8,6 +8,7 @@
 #include "../expr.h"
 #include "../interaction.h"
 #include "../linkedlist.h"
+#include "../printing.h"
 #include "../strext.h"
 #include "../watchpoint.h"
 
@@ -24,7 +25,7 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
         char ans = answer("Delete all watchpoints? (y/n) ");
 
         if(ans == 'n'){
-            printf("Nothing deleted.\n");
+            WriteMessageBuffer("Nothing deleted.\n");
             return CMD_SUCCESS;
         }
 
@@ -32,7 +33,7 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
 
         watchpoint_delete_all();
 
-        printf("All watchpoint(s) removed. (%d watchpoint(s))\n", num_deleted);
+        WriteMessageBuffer("All watchpoint(s) removed. (%d watchpoint(s))\n", num_deleted);
 
         return CMD_SUCCESS;
     }
@@ -54,11 +55,11 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
         watchpoint_delete(id, &e);
 
         if(e){
-            printf("%s\n", e);
+            WriteMessageBuffer("%s\n", e);
             free(e);
         }
         else{
-            printf("Watchpoint %d deleted\n", id);
+            WriteMessageBuffer("Watchpoint %d deleted\n", id);
         }
     }
 
@@ -74,14 +75,14 @@ enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    printf("Current watchpoints:\n");
+    WriteMessageBuffer("Current watchpoints:\n");
 
     for(struct node_t *current = debuggee->watchpoints->front;
             current;
             current = current->next){
         struct watchpoint *w = current->data;
 
-        printf("%4s%d: address = %-16.16lx, hit count = %d, size = %d",
+        WriteMessageBuffer("%4s%d: address = %-16.16lx, hit count = %d, size = %d",
                 "", w->id, w->user_location, w->hit_count, w->data_len);
 
         const char *type = "r";
@@ -91,7 +92,7 @@ enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
         else if(w->LSC == WP_READ_WRITE)
             type = "rw";
 
-        printf(", type = %s\n", type);
+        WriteMessageBuffer(", type = %s\n", type);
     }
     
     return CMD_SUCCESS;

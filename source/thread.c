@@ -3,6 +3,7 @@
 
 #include "debuggee.h"
 #include "linkedlist.h"
+#include "printing.h"
 #include "thread.h"
 
 static struct machthread *machthread_new(mach_port_t thread_port){
@@ -121,15 +122,10 @@ kern_return_t get_thread_state(struct machthread *thread){
             current = current->next){
         struct machthread *t = current->data;
 
-        kern_return_t kret = thread_get_state(t->port,
+        thread_get_state(t->port,
                 ARM_THREAD_STATE64,
                 (thread_state_t)&t->thread_state,
                 &count);
-
-        if(kret){
-            printf("warning: couldn't update thread state for thread %d: %s\n",
-                    t->ID, mach_error_string(kret));
-        }
     }
 
     return KERN_SUCCESS;
@@ -150,15 +146,10 @@ kern_return_t set_thread_state(struct machthread *thread){
             current = current->next){
         struct machthread *t = current->data;
 
-        kern_return_t kret = thread_set_state(t->port,
+        thread_set_state(t->port,
                 ARM_THREAD_STATE64,
                 (thread_state_t)&t->thread_state,
                 count);
-
-        if(kret){
-            printf("warning: couldn't set thread state for thread %d: %s\n",
-                    t->ID, mach_error_string(kret));
-        }
     }
 
     return KERN_SUCCESS;
@@ -179,15 +170,10 @@ kern_return_t get_debug_state(struct machthread *thread){
             current = current->next){
         struct machthread *t = current->data;
 
-        kern_return_t kret = thread_get_state(t->port,
+        thread_get_state(t->port,
                 ARM_DEBUG_STATE64,
                 (thread_state_t)&t->debug_state,
                 &count);
-
-        if(kret){
-            printf("warning: couldn't update debug state for thread %d: %s\n",
-                    t->ID, mach_error_string(kret));
-        }
     }
 
     return KERN_SUCCESS;
@@ -208,15 +194,10 @@ kern_return_t set_debug_state(struct machthread *thread){
             current = current->next){
         struct machthread *t = current->data;
 
-        kern_return_t kret = thread_set_state(t->port,
+        thread_set_state(t->port,
                 ARM_DEBUG_STATE64,
                 (thread_state_t)&t->debug_state,
                 count);
-
-        if(kret){
-            printf("warning: couldn't set debug state for thread %d: %s\n",
-                    t->ID, mach_error_string(kret));
-        }
     }
 
     return KERN_SUCCESS;
@@ -237,15 +218,10 @@ kern_return_t get_neon_state(struct machthread *thread){
             current = current->next){
         struct machthread *t = current->data;
 
-        kern_return_t kret = thread_get_state(t->port,
+        thread_get_state(t->port,
                 ARM_NEON_STATE64,
                 (thread_state_t)&t->neon_state,
                 &count);
-
-        if(kret){
-            printf("warning: couldn't update neon state for thread %d: %s\n",
-                    t->ID, mach_error_string(kret));
-        }
     }
 
     return KERN_SUCCESS;
@@ -266,15 +242,10 @@ kern_return_t set_neon_state(struct machthread *thread){
             current = current->next){
         struct machthread *t = current->data;
 
-        kern_return_t kret = thread_set_state(t->port,
+        thread_set_state(t->port,
                 ARM_NEON_STATE64,
                 (thread_state_t)&t->neon_state,
                 count);
-
-        if(kret){
-            printf("warning: couldn't set neon state for thread %d: %s\n",
-                    t->ID, mach_error_string(kret));
-        }
     }
 
     return KERN_SUCCESS;

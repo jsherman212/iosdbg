@@ -55,6 +55,8 @@ static const char *exc_str(exception_type_t exception){
 }
 
 static void set_single_step(struct machthread *t, int enabled){
+    printf("%s: setting single step for thread %d, enabled? %d\n",
+            __func__, t->ID, enabled);
     get_debug_state(t);
 
     if(enabled)
@@ -120,15 +122,9 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
     ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
 }
 
+// XXX remove later
 static void resume_after_exception(void){
-    /*pthread_mutex_unlock(&HAS_REPLIED_MUTEX);
-    ops_resume();
-    pthread_mutex_lock(&HAS_REPLIED_MUTEX);
-    */
-   // ops_resume();
-
-    //printf("%s: not calling ops_resume, should_auto_resume should be 1\n", __func__);
-
+    //ops_resume();
     if(debuggee->currently_tracing){
         rl_already_prompted = 1;
         putchar('\n');
@@ -153,9 +149,8 @@ static void handle_hit_watchpoint(struct machthread *t, char **desc){
 
     read_memory_at_location((void *)hit->user_location, hit->data, sz);
     
-    concat(desc, ": '%s': watchpoint %d at %#lx hit %d time(s).\n",
+    concat(desc, ": '%s': watchpoint %d at %#lx hit %d time(s).\n\n",
             t->tname, hit->id, hit->user_location, hit->hit_count);
-    //printf("%s\n", desc);
 
     describe_hit_watchpoint(prev_data, hit->data, sz, desc);
     disassemble_at_location(debuggee->last_hit_wp_PC + 4, 4, desc);
@@ -188,7 +183,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
          * right after a breakpoint hit, just print the disassembly.
          */
         if(!debuggee->is_single_stepping){
-            *should_print = 0;
+           // *should_print = 0;
             // XXX should not print, should auto resume
             resume_after_exception();
         }
@@ -242,22 +237,10 @@ static void handle_hit_breakpoint(struct machthread *t,
 
 void handle_exception(Request *request, int *should_auto_resume,
         int *should_print, char **desc){
-    /* When an exception occurs, there is a left over (iosdbg) prompt,
-     * and this gets rid of it.
-     */
-    //rl_clear_visible_line();
-    //rl_already_prompted = 1;
-
     /* Finish printing everything while tracing so
      * we don't get caught in the middle of it.
      */
     wait_for_trace();
-
-    /* 
-    if(!debuggee->interrupted){
-        debuggee->suspend();
-        debuggee->interrupted = 1;
-    }*/
 
     mach_port_t task = request->task.name;
     mach_port_t thread = request->thread.name;
@@ -266,7 +249,7 @@ void handle_exception(Request *request, int *should_auto_resume,
     long code = ((long *)request->code)[0];
     long subcode = ((long *)request->code)[1];
 
-    //printf("%s: exc '%s', code %#lx, subcode %#lx\n", __func__, exc, code, subcode);
+    printf("%s: exc '%s', code %#lx, subcode %#lx\n", __func__, exc, code, subcode);
 
     /* Give focus to whatever caused this exception. */
     struct machthread *focused = machthread_getfocused();
@@ -278,8 +261,7 @@ void handle_exception(Request *request, int *should_auto_resume,
 
     get_thread_state(focused);
 
-    //char *desc = NULL;
-    concat(desc, " * Thread #%d (tid = %#llx)", focused->ID, focused->tid);
+    concat(desc, "\n * Thread #%d (tid = %#llx)", focused->ID, focused->tid);
 
     /* A number of things could have happened to cause an exception:
      *      - hardware breakpoint
@@ -295,10 +277,8 @@ void handle_exception(Request *request, int *should_auto_resume,
 
         sigsettings(subcode, &notify, &pass, &stop, 0, &error);
 
-        if(error){
-            printf("error: %s\n", error);
+        if(error)
             free(error);
-        }
         
         concat(desc, ", '%s' received signal ", focused->tname);
         handle_soft_signal(focused->port, subcode, desc, notify, pass, stop);
@@ -392,6 +372,9 @@ void handle_exception(Request *request, int *should_auto_resume,
                         focused->tname, hit->id, hit->location, hit->hit_count);
 
                 //printf("%s", desc);
+            }
+            else{
+                concat(desc, ": '%s': single step.\n", focused->tname);
             }
     
             handle_single_step(focused, should_auto_resume, should_print, desc);

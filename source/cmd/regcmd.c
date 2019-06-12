@@ -5,6 +5,7 @@
 #include "regcmd.h"
 
 #include "../debuggee.h"
+#include "../printing.h"
 #include "../strext.h"
 #include "../thread.h"
 
@@ -26,13 +27,13 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
         if(strcmp(curreg, "fpsr") == 0){
             free(curreg);
             curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
-            printf("%10s = 0x%8.8x\n", "fpsr", focused->neon_state.__fpsr);
+            WriteMessageBuffer("%10s = 0x%8.8x\n", "fpsr", focused->neon_state.__fpsr);
             continue;
         }
         else if(strcmp(curreg, "fpcr") == 0){
             free(curreg);
             curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
-            printf("%10s = 0x%8.8x\n", "fpcr", focused->neon_state.__fpcr);
+            WriteMessageBuffer("%10s = 0x%8.8x\n", "fpcr", focused->neon_state.__fpcr);
             continue;
         }
         
@@ -55,7 +56,7 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
                 || reg_type == 'd' || reg_type == 's');
 
         if(!good_reg_num || !good_reg_type){
-            printf("%8sInvalid register\n", "");
+            WriteMessageBuffer("%8sInvalid register\n", "");
             free(curreg);
             curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
             continue;
@@ -92,7 +93,7 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
         int bytes = space - regstr;
         int add = 8 - bytes;
         
-        printf("%*s\n", (int)(strlen(regstr) + add), regstr);
+        WriteMessageBuffer("%*s\n", (int)(strlen(regstr) + add), regstr);
     
         if(regstr)
             free(regstr);    
@@ -116,17 +117,17 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
             char *regstr = NULL;
             concat(&regstr, "x%d", i);
 
-            printf("%10s = 0x%16.16llx\n", regstr, 
+            WriteMessageBuffer("%10s = 0x%16.16llx\n", regstr, 
                     focused->thread_state.__x[i]);
 
             free(regstr);
         }
         
-        printf("%10s = 0x%16.16llx\n", "fp", focused->thread_state.__fp);
-        printf("%10s = 0x%16.16llx\n", "lr", focused->thread_state.__lr);
-        printf("%10s = 0x%16.16llx\n", "sp", focused->thread_state.__sp);
-        printf("%10s = 0x%16.16llx\n", "pc", focused->thread_state.__pc);
-        printf("%10s = 0x%8.8x\n", "cpsr", focused->thread_state.__cpsr);
+        WriteMessageBuffer("%10s = 0x%16.16llx\n", "fp", focused->thread_state.__fp);
+        WriteMessageBuffer("%10s = 0x%16.16llx\n", "lr", focused->thread_state.__lr);
+        WriteMessageBuffer("%10s = 0x%16.16llx\n", "sp", focused->thread_state.__sp);
+        WriteMessageBuffer("%10s = 0x%16.16llx\n", "pc", focused->thread_state.__pc);
+        WriteMessageBuffer("%10s = 0x%8.8x\n", "cpsr", focused->thread_state.__cpsr);
 
         return CMD_SUCCESS;
     }
@@ -144,17 +145,17 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
 
         if(reg_type != 'x' && reg_type != 'w'){
             if(strcmp(curreg, "fp") == 0)
-                printf("%8s = 0x%16.16llx\n", "fp", focused->thread_state.__fp);
+                WriteMessageBuffer("%8s = 0x%16.16llx\n", "fp", focused->thread_state.__fp);
             else if(strcmp(curreg, "lr") == 0)
-                printf("%8s = 0x%16.16llx\n", "lr", focused->thread_state.__lr);
+                WriteMessageBuffer("%8s = 0x%16.16llx\n", "lr", focused->thread_state.__lr);
             else if(strcmp(curreg, "sp") == 0)
-                printf("%8s = 0x%16.16llx\n", "sp", focused->thread_state.__sp);
+                WriteMessageBuffer("%8s = 0x%16.16llx\n", "sp", focused->thread_state.__sp);
             else if(strcmp(curreg, "pc") == 0)
-                printf("%8s = 0x%16.16llx\n", "pc", focused->thread_state.__pc);
+                WriteMessageBuffer("%8s = 0x%16.16llx\n", "pc", focused->thread_state.__pc);
             else if(strcmp(curreg, "cpsr") == 0)
-                printf("%8s = 0x%8.8x\n", "cpsr", focused->thread_state.__cpsr);
+                WriteMessageBuffer("%8s = 0x%8.8x\n", "cpsr", focused->thread_state.__cpsr);
             else
-                printf("Invalid register\n");
+                WriteMessageBuffer("Invalid register\n");
 
             free(curreg);
             curreg = argcopy(args, REGISTER_GEN_COMMAND_REGEX_GROUPS[0]);
@@ -182,11 +183,11 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
         concat(&regstr, "%c%d", reg_type, reg_num);
 
         if(reg_type == 'x'){
-            printf("%8s = 0x%16.16llx\n", regstr,
+            WriteMessageBuffer("%8s = 0x%16.16llx\n", regstr,
                     focused->thread_state.__x[reg_num]);
         }
         else{
-            printf("%8s = 0x%8.8x\n", regstr, 
+            WriteMessageBuffer("%8s = 0x%8.8x\n", regstr, 
                     (int)focused->thread_state.__x[reg_num]);
         }
 

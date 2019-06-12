@@ -13,7 +13,7 @@
 #include "debuggee.h"
 #include "exception.h"
 #include "linkedlist.h"
-#include "printutils.h"
+#include "printing.h"
 #include "queue.h"
 #include "strext.h"
 #include "trace.h"
@@ -21,7 +21,7 @@
 #include "cmd/cmd.h"
 #include "cmd/misccmd.h"
 
-#include <signal.h>
+#include "handlers.h"
 static void *exception_server(void *arg){
     pthread_setname_np("exception thread");
 
@@ -36,7 +36,7 @@ static void *exception_server(void *arg){
     while(MACH_PORT_VALID(debuggee->exception_port)){ 
         // pthread_testcancel
         struct req req;
-        mach_msg(&req.hdr,
+        kern_return_t err = mach_msg(&req.hdr,
                 MACH_RCV_MSG,
                 0,
                 sizeof(req),
@@ -44,14 +44,17 @@ static void *exception_server(void *arg){
                 MACH_MSG_TIMEOUT_NONE,
                 MACH_PORT_NULL);
 
-        task_suspend(debuggee->task);
+        /* We got something, suspend debuggee execution. */
+        debuggee->suspend();
 
         Request *request = (Request *)&req;
+        printf("%s: request %p err %s\n",
+                __func__, request, mach_error_string(err));
         enqueue(debuggee->exc_requests, request);
 
         NUM_EXCEPTIONS++;
 
-        kern_return_t err = KERN_SUCCESS;
+        err = KERN_SUCCESS;
 
         /* Gather up any more exceptions. */
         while(err != MACH_RCV_TIMED_OUT){
@@ -65,6 +68,8 @@ static void *exception_server(void *arg){
                     MACH_PORT_NULL);
 
             Request *request = (Request *)&req2;
+            printf("%s: in loop: request %p err %s\n",
+                    __func__, request, mach_error_string(err));
 
             if(request && err == KERN_SUCCESS){
                 enqueue(debuggee->exc_requests, request);
@@ -77,6 +82,7 @@ static void *exception_server(void *arg){
         /* Display and reply to what we gathered. */
         while(NUM_EXCEPTIONS > 0){
             Request *r = dequeue(debuggee->exc_requests);
+            printf("%s: dequeueing exception %p\n", __func__, r);
 
             int should_auto_resume = 1, should_print = 1;
             char *what = NULL;
@@ -86,12 +92,10 @@ static void *exception_server(void *arg){
                     &should_print,
                     &what);
 
-            if(AUTO_RESUME && !should_auto_resume){
+            if(AUTO_RESUME && !should_auto_resume)
                 AUTO_RESUME = 0;
-            }
 
             if(should_print){
-                //printf("%s", what);
                 WriteExceptionBuffer("%s", what);
                 free(what);
             }
@@ -101,8 +105,12 @@ static void *exception_server(void *arg){
             NUM_EXCEPTIONS--;
         }
 
+        printf("%s: auto resume %d, anything more? %p\n", __func__, AUTO_RESUME,
+            queue_peek(debuggee->exc_requests));
+        printf("%s: debuggee suspend count %d\n", __func__, sus_count());
+
         if(AUTO_RESUME)
-            task_resume(debuggee->task);
+            debuggee->resume();
 
         PrintExceptionBuffer();
     }

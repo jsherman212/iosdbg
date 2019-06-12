@@ -15,7 +15,7 @@
 #include "handlers.h"
 #include "linkedlist.h"
 #include "memutils.h"
-#include "printutils.h"
+#include "printing.h"
 #include "rlext.h"
 #include "sigsupport.h"
 #include "strext.h"
@@ -340,16 +340,11 @@ static void setup_initial_debuggee(void){
 
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
-
     debuggee->last_hit_bkpt_ID = 0;
-
     debuggee->is_single_stepping = 0;
-
     debuggee->want_detach = 0;
-
     debuggee->tracing_disabled = 0;
     debuggee->currently_tracing = 0;
-
     debuggee->pending_exceptions = 0;
 
     /* Figure out how many hardware breakpoints/watchpoints are supported. */
