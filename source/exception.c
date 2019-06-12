@@ -55,8 +55,8 @@ static const char *exc_str(exception_type_t exception){
 }
 
 static void set_single_step(struct machthread *t, int enabled){
-    printf("%s: setting single step for thread %d, enabled? %d\n",
-            __func__, t->ID, enabled);
+    //printf("%s: setting single step for thread %d, enabled? %d\n",
+      //      __func__, t->ID, enabled);
     get_debug_state(t);
 
     if(enabled)
@@ -183,7 +183,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
          * right after a breakpoint hit, just print the disassembly.
          */
         if(!debuggee->is_single_stepping){
-           // *should_print = 0;
+            *should_print = 0;
             // XXX should not print, should auto resume
             resume_after_exception();
         }
@@ -249,7 +249,7 @@ void handle_exception(Request *request, int *should_auto_resume,
     long code = ((long *)request->code)[0];
     long subcode = ((long *)request->code)[1];
 
-    printf("%s: exc '%s', code %#lx, subcode %#lx\n", __func__, exc, code, subcode);
+    //printf("%s: exc '%s', code %#lx, subcode %#lx\n", __func__, exc, code, subcode);
 
     /* Give focus to whatever caused this exception. */
     struct machthread *focused = machthread_getfocused();

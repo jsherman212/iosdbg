@@ -35,11 +35,14 @@ static void *exception_server(void *arg){
 
     while(MACH_PORT_VALID(debuggee->exception_port)){ 
         // pthread_testcancel
-        struct req req;
-        kern_return_t err = mach_msg(&req.hdr,
+        //struct req req;
+        //memset(&req, 0, sizeof(req));
+        struct req *req = malloc(sizeof(struct req));
+        
+        kern_return_t err = mach_msg(&(req->hdr),//&req.hdr,
                 MACH_RCV_MSG,
                 0,
-                sizeof(req),
+                sizeof(struct req),
                 debuggee->exception_port,
                 MACH_MSG_TIMEOUT_NONE,
                 MACH_PORT_NULL);
@@ -47,9 +50,10 @@ static void *exception_server(void *arg){
         /* We got something, suspend debuggee execution. */
         debuggee->suspend();
 
-        Request *request = (Request *)&req;
-        printf("%s: request %p err %s\n",
-                __func__, request, mach_error_string(err));
+        //Request *request = (Request *)&req;
+        Request *request = (Request *)req;
+        //printf("%s: request %p err %s\n",
+          //      __func__, request, mach_error_string(err));
         enqueue(debuggee->exc_requests, request);
 
         NUM_EXCEPTIONS++;
@@ -58,18 +62,21 @@ static void *exception_server(void *arg){
 
         /* Gather up any more exceptions. */
         while(err != MACH_RCV_TIMED_OUT){
-            struct req req2;
-            err = mach_msg(&req2.hdr,
+            //struct req req2;
+            struct req *req2 = malloc(sizeof(struct req));
+            //memset(&req2, 0, sizeof(req2));
+            err = mach_msg(&(req2->hdr),//&req2.hdr,
                     MACH_RCV_MSG | MACH_RCV_TIMEOUT,
                     0,
-                    sizeof(req2),
+                    sizeof(struct req),
                     debuggee->exception_port,
                     0,
                     MACH_PORT_NULL);
 
-            Request *request = (Request *)&req2;
-            printf("%s: in loop: request %p err %s\n",
-                    __func__, request, mach_error_string(err));
+            //Request *request = (Request *)&req2;
+            Request *request = (Request *)req2;
+            //printf("%s: in loop: request %p err %s\n",
+              //      __func__, request, mach_error_string(err));
 
             if(request && err == KERN_SUCCESS){
                 enqueue(debuggee->exc_requests, request);
@@ -82,7 +89,7 @@ static void *exception_server(void *arg){
         /* Display and reply to what we gathered. */
         while(NUM_EXCEPTIONS > 0){
             Request *r = dequeue(debuggee->exc_requests);
-            printf("%s: dequeueing exception %p\n", __func__, r);
+            //printf("%s: dequeueing exception %p\n", __func__, r);
 
             int should_auto_resume = 1, should_print = 1;
             char *what = NULL;
@@ -102,13 +109,15 @@ static void *exception_server(void *arg){
 
             reply_to_exception(r, KERN_SUCCESS);
 
+            free(r);
+
             NUM_EXCEPTIONS--;
         }
-
+/*
         printf("%s: auto resume %d, anything more? %p\n", __func__, AUTO_RESUME,
             queue_peek(debuggee->exc_requests));
         printf("%s: debuggee suspend count %d\n", __func__, sus_count());
-
+*/
         if(AUTO_RESUME)
             debuggee->resume();
 
