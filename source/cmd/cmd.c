@@ -148,8 +148,8 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
     char *randcommand = NULL;
 
     for(int i=0; i<num_tokens; i++){
-        char *rstr = strnran(RAND_PAD_LEN);
         char *token = strdup(tokens[i]);
+        char *rstr = strnran(RAND_PAD_LEN);
 
         concat(&token, "%s", rstr);
         concat(&randcommand, "%s ", token);

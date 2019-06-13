@@ -4,12 +4,6 @@
 #include <mach/mach.h>
 #include <pthread/pthread.h>
 
-//extern pthread_mutex_t DEATH_SERVER_DETACHED_MUTEX;
-//extern pthread_cond_t DEATH_SERVER_DETACHED_COND;
-
-//extern int AUTO_RESUME;
-//extern int NUM_EXCEPTIONS;
-
 typedef struct {
     mach_msg_header_t Head;
     /* start of the kernel processed data */

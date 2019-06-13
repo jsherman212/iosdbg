@@ -40,7 +40,7 @@ static void *exception_server(void *arg){
                 MACH_PORT_NULL);
 
         /* We got something, suspend debuggee execution. */
-        debuggee->suspend();
+        ops_suspend();
 
         Request *request = (Request *)req;
         enqueue(debuggee->exc_requests, request);
@@ -102,7 +102,7 @@ static void *exception_server(void *arg){
         }
 
         if(will_auto_resume)
-            debuggee->resume();
+            ops_resume();
 
         PrintExceptionBuffer();
     }

@@ -174,15 +174,3 @@ int suspended(void){
 
     return info.suspend_count == 1;
 }
-
-int sus_count(void){
-    struct task_basic_info_64 info = {0};
-    mach_msg_type_number_t count = TASK_BASIC_INFO_64_COUNT;
-
-    kern_return_t err = task_info(debuggee->task,
-            TASK_BASIC_INFO_64,
-            (task_info_t)&info,
-            &count);
-
-    return info.suspend_count;
-}

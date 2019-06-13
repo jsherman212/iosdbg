@@ -39,6 +39,9 @@ struct machthread {
 
     /* Keeps track of where the last watchpoint hit. */
     unsigned long last_hit_wp_PC;
+
+    /* Keeps track of the ID of the last breakpoint that hit on this thread. */
+    int last_hit_bkpt_ID;
 };
 
 enum comparison {

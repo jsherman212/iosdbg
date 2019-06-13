@@ -101,8 +101,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
                     focused->thread_state.__pc == current_location
                     ? "->  " : "    ", current_location, disassembled);
         }
-
-        if(outbuffer){
+        else{
             concat(outbuffer, "%s%#lx:  %s\n",
                     focused->thread_state.__pc == current_location
                     ? "->  " : "    ", current_location, disassembled);

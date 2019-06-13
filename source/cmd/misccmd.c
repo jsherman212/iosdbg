@@ -263,8 +263,6 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
         int arg1, char **error){
-    //printf("%s: debuggee->suspended() %d\n", __func__,
-      //      debuggee->suspended());
     if(!debuggee->suspended())
         return CMD_FAILURE;
 

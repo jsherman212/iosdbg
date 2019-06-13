@@ -1,3 +1,10 @@
+6-13-19
+- each thread has its own last_hit_bkpt_ID
+- get rid of resume_after_exception
+- use sigaction instead of signal 
+- call ops_suspend and ops_resume instead of debuggee->suspend() and
+debuggee->resume()
+
 6-12-19
 - detach before we send the kill signal for the kill command
 - don't use the same space on the stack for multiple exceptions, exception

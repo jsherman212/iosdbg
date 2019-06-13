@@ -13,6 +13,5 @@ kern_return_t suspend(void);
 kern_return_t get_threads(thread_act_port_array_t *);
 
 int suspended(void);
-int sus_count(void);
 
 #endif

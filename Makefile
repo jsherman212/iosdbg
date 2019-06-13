@@ -21,7 +21,7 @@ CMD_SOURCES = $(wildcard $(SRC)/cmd/*.c)
 
 cmds : $(CMD_SOURCES) $(CRITICAL_HEADER_FILES)
 	cd $(SRC)/cmd
-	$(MAKE)
+	$(MAKE) -B
 
 BUILD-DEVICE=iosdragon
 BUILD-PATH=/var/mobile/iosdbg-dev

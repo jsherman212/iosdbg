@@ -286,7 +286,6 @@ static void setup_initial_debuggee(void){
 
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
-    debuggee->last_hit_bkpt_ID = 0;
     debuggee->is_single_stepping = 0;
     debuggee->want_detach = 0;
     debuggee->tracing_disabled = 0;
@@ -674,12 +673,7 @@ static void inputloop(void){
 
     static const char *prompt = "\033[2m(iosdbg) \033[0m";
 
-    while(1){
-        line = readline(prompt);
-
-        if(!line)
-            break;
-
+    while((line = readline(prompt)) != NULL){
         size_t linelen = strlen(line);
 
         /* If the user hits enter, repeat the last command,
@@ -753,6 +747,7 @@ static void early_configuration(void){
     if(error){
         printf("error: %s\n", error);
         free(error);
+        error = NULL;
     }
 
     sigsettings(SIGTRAP, &notify, &pass, &stop, 1, &error);
@@ -762,15 +757,17 @@ static void early_configuration(void){
         free(error);
     }
 
-    // XXX move these calls somewhere else later
-    MESSAGE_BUFFER = NULL;
-    EXCEPTION_BUFFER = NULL;
     ERROR_BUFFER = NULL;
+    EXCEPTION_BUFFER = NULL;
+    MESSAGE_BUFFER = NULL;
 
-    pthread_t exbuf, mbuf, errbuf;
-    pthread_create(&exbuf, NULL, exception_buffer_thread, NULL);
-    pthread_create(&mbuf, NULL, message_buffer_thread, NULL);
-    pthread_create(&errbuf, NULL, error_buffer_thread, NULL);
+    pthread_t error_buffer_thread_,
+              exception_buffer_thread_,
+              message_buffer_thread_;
+
+    pthread_create(&error_buffer_thread_, NULL, error_buffer_thread, NULL);
+    pthread_create(&exception_buffer_thread_, NULL, exception_buffer_thread, NULL);
+    pthread_create(&message_buffer_thread_, NULL, message_buffer_thread, NULL);
 }
 
 int main(int argc, char **argv, const char **envp){
@@ -781,7 +778,15 @@ int main(int argc, char **argv, const char **envp){
     install_handlers();
     initialize_readline();
     initialize_commands();
-    signal(SIGINT, interrupt);
+    
+    struct sigaction sa = {0};
+    
+    sa.sa_handler = interrupt;
+    sa.sa_flags = 0;
+    
+    sigemptyset(&sa.sa_mask);
+
+    sigaction(SIGINT, &sa, NULL);
     
     bsd_syscalls = NULL;
     mach_traps = NULL;

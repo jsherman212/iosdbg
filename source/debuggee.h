@@ -23,9 +23,6 @@ struct debuggee {
     /* Whether or not we are currently tracing. */
     int currently_tracing;
 
-    /* Keeps track of the ID of the last breakpoint that hit. */
-    int last_hit_bkpt_ID;
-
     /* How many breakpoints are set. */
     int num_breakpoints;
 

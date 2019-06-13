@@ -4,10 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <readline/readline.h>
-
 #include "breakpoint.h"
-#include "dbgops.h"
 #include "debuggee.h"
 #include "exception.h"
 #include "linkedlist.h"
@@ -18,8 +15,6 @@
 #include "thread.h"
 #include "trace.h"
 #include "watchpoint.h"
-
-#include "cmd/misccmd.h"
 
 static const char *exc_str(exception_type_t exception){
     switch(exception){
@@ -120,14 +115,6 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
     ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
 }
 
-// XXX remove later
-static void resume_after_exception(void){
-    if(debuggee->currently_tracing){
-        rl_already_prompted = 1;
-        putchar('\n');
-    }
-}
-
 static void handle_hit_watchpoint(struct machthread *t, char **desc){
     struct watchpoint *hit = find_wp_with_address(t->last_hit_wp_loc);
 
@@ -167,7 +154,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
 
     if(t->just_hit_breakpoint){
         if(t->just_hit_sw_breakpoint){
-            breakpoint_enable(debuggee->last_hit_bkpt_ID, NULL);
+            breakpoint_enable(t->last_hit_bkpt_ID, NULL);
             t->just_hit_sw_breakpoint = 0;
         }
 
@@ -180,7 +167,6 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         if(!debuggee->is_single_stepping){
             // XXX should not print, should auto resume
             *should_print = 0;
-            resume_after_exception();
         }
         else{
             // XXX should print, should not auto resume
@@ -226,7 +212,7 @@ static void handle_hit_breakpoint(struct machthread *t,
         breakpoint_disable(hit->id, NULL);
     }
 
-    debuggee->last_hit_bkpt_ID = hit->id;
+    t->last_hit_bkpt_ID = hit->id;
 }
 
 void handle_exception(Request *request, int *should_auto_resume,
@@ -313,10 +299,10 @@ void handle_exception(Request *request, int *should_auto_resume,
         focused->last_hit_wp_loc = subcode;
         focused->last_hit_wp_PC = focused->thread_state.__pc;
 
+        /* The software step exception will occur after the user
+         * resumes the debuggee.
+         */
         set_single_step(focused, 1);
-        
-        /* Continue execution so the software step exception occurs. */
-        resume_after_exception();
         
         // XXX should not print, should auto resume
         *should_print = 0;

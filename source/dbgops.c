@@ -58,7 +58,7 @@ void ops_printsiginfo(void){
 }
 
 void ops_detach(int from_death){
-    debuggee->suspend();
+    ops_suspend();
 
     breakpoint_delete_all();
     watchpoint_delete_all();
@@ -117,7 +117,6 @@ void ops_detach(int from_death){
     debuggee->threads = NULL;
     debuggee->watchpoints = NULL;
 
-    debuggee->last_hit_bkpt_ID = 0;
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
     debuggee->pid = -1;
@@ -129,11 +128,15 @@ void ops_detach(int from_death){
     void_convvar("$__");
     void_convvar("$ASLR");
 
-    debuggee->resume();
+    ops_resume();
 }
 
 void ops_resume(void){
     debuggee->resume();
+}
+
+void ops_suspend(void){
+    debuggee->suspend();
 }
 
 void ops_threadupdate(void){
@@ -152,56 +155,4 @@ void ops_threadupdate(void){
 
     if(focused)
         machthread_updatestate(focused);
-#if 0
-    /* Check if a thread belonging to a breakpoint went away or was re-ordered. */
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
-        struct breakpoint *bp = current->data;
-
-        if(!bp->hw){
-            printf("%s: bailing for now\n", __func__);
-            continue;
-        }
-
-        if(bp->threadinfo.all)
-            continue;
-
-        struct machthread *bpthread = machthread_find(bp->threadinfo.iosdbg_tid);
-
-        if(!bpthread || bpthread->tid != bp->threadinfo.real_tid){
-            if(bpthread && bp->hw){
-                get_debug_state(bpthread);
-
-                bpthread->debug_state.__bcr[bp->hw_bp_reg] = 0;
-                bpthread->debug_state.__bvr[bp->hw_bp_reg] = 0;
-
-                set_debug_state(bpthread);
-            }
-
-            /* Find the thread this breakpoint is supposed to be focused on. */
-            struct machthread *updated_thread = machthread_find_via_tid(
-                    bp->threadinfo.real_tid);
-
-            /* This thread is no longer with us, delete the breakpoint. */
-            if(!updated_thread){
-                printf("notice: breakpoint %d's target thread is gone,"
-                        " deleting it.\n", bp->id);
-                breakpoint_delete(bp->id, NULL);
-                continue;
-            }
-
-            /* Otherwise, assign the updated thread to this breakpoint. */
-            get_debug_state(updated_thread);
-
-            updated_thread->debug_state.__bcr[bp->hw_bp_reg] = bp->bcr;
-            updated_thread->debug_state.__bvr[bp->hw_bp_reg] = bp->bvr;
-
-            set_debug_state(updated_thread);
-
-            bp->threadinfo.iosdbg_tid = updated_thread->ID;
-            bp->threadinfo.real_tid = updated_thread->tid;
-        }
-    }
-#endif
 }

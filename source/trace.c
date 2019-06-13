@@ -276,7 +276,7 @@ void start_trace(void){
         
         /* Bring back the prompt so user knows to attach to something. */
         rl_already_prompted = 0;
-        safe_reprompt();
+        //safe_reprompt();
     }
 
     if(debuggee->suspended())
