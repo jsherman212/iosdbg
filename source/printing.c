@@ -1,3 +1,5 @@
+#include <mach/mach_time.h>
+#include <pthread/pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,204 +8,75 @@
 #include <readline/readline.h>
 
 #include "printing.h"
-#include "strext.h"
 
-static pthread_mutex_t ERROR_BUF_MUTEX = PTHREAD_MUTEX_INITIALIZER,
-                       EXCEPTION_BUF_MUTEX = PTHREAD_MUTEX_INITIALIZER,
-                       MESSAGE_BUF_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t printing_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static pthread_cond_t ERROR_BUF_COND = PTHREAD_COND_INITIALIZER,
-                      EXCEPTION_BUF_COND = PTHREAD_COND_INITIALIZER,
-                      MESSAGE_BUF_COND = PTHREAD_COND_INITIALIZER;
+int rl_printf(int setting, const char *msg, ...){
+    pthread_mutex_lock(&printing_mutex);
 
-static pthread_cond_t DONE_PRINTING_ERROR_BUF_COND = PTHREAD_COND_INITIALIZER,
-                      DONE_PRINTING_EXCEPTION_BUF_COND = PTHREAD_COND_INITIALIZER,
-                      DONE_PRINTING_MESSAGE_BUF_COND = PTHREAD_COND_INITIALIZER;
+    int adjust;
 
-char *ERROR_BUFFER, *EXCEPTION_BUFFER, *MESSAGE_BUFFER;
+    if(setting == WAIT_FOR_REPROMPT){
+        /* Wait until readline has reprompted us from the main thread
+         * in order to adjust the prompt and assure clean output if we're
+         * printing from another thread.
+         * For safety, include a timeout of five seconds.
+         */
+        mach_timebase_info_data_t info;
+        kern_return_t err = mach_timebase_info(&info);
 
-#define PROMPT "\033[2m(iosdbg) \033[0m"
+        if(err){
+            pthread_mutex_unlock(&printing_mutex);
+            return -1;
+        }
 
-static struct {
+        double timeout = 5.0;
+
+        uint64_t start = mach_absolute_time();
+        uint64_t end = start;
+
+        while(!(rl_readline_state & RL_STATE_READCMD)){
+            end = mach_absolute_time();
+
+            uint64_t elapsed = end - start;
+            uint64_t nanos = elapsed * (info.numer / info.denom);
+
+            if(((double)nanos / NSEC_PER_SEC) >= timeout)
+                break;
+        }
+
+        adjust = 1;
+    }
+    else{
+        adjust = rl_readline_state & RL_STATE_READCMD;
+    }
+
+    char *saved_line;
     int saved_point;
-    char *saved_content;
-} SAVED_PROMPT_DATA;
 
-static void remove_prompt(void){
-    SAVED_PROMPT_DATA.saved_point = rl_point;
-    SAVED_PROMPT_DATA.saved_content = rl_copy_text(0, rl_end);
-
-    rl_set_prompt("");
-    rl_replace_line("", 0);
-    rl_redisplay();
-}
-
-static void restore_prompt(void){
-    rl_set_prompt(PROMPT);
-    rl_replace_line(SAVED_PROMPT_DATA.saved_content, 0);
-    rl_point = SAVED_PROMPT_DATA.saved_point;
-    rl_redisplay();
-
-    free(SAVED_PROMPT_DATA.saved_content);
-    SAVED_PROMPT_DATA.saved_content = NULL;
-}
-
-void *error_buffer_thread(void *arg){
-    pthread_setname_np("error buffer thread");
-
-    while(1){
-        pthread_mutex_lock(&ERROR_BUF_MUTEX); 
-
-        pthread_cond_wait(&ERROR_BUF_COND, &ERROR_BUF_MUTEX);
-
-        if(ERROR_BUFFER){
-            printf("%s", ERROR_BUFFER);
-            free(ERROR_BUFFER);
-            ERROR_BUFFER = NULL;
-        }
-
-        pthread_cond_signal(&DONE_PRINTING_ERROR_BUF_COND);
-
-        pthread_mutex_unlock(&ERROR_BUF_MUTEX);
+    if(adjust){
+        saved_point = rl_point;
+        saved_line = rl_copy_text(0, rl_end);
+        rl_save_prompt();
+        rl_replace_line("", 0);
+        rl_redisplay();
     }
-
-    return NULL;
-}
-
-void *exception_buffer_thread(void *arg){
-    pthread_setname_np("exception buffer thread");
-
-    while(1){
-        pthread_mutex_lock(&EXCEPTION_BUF_MUTEX); 
-
-        pthread_cond_wait(&EXCEPTION_BUF_COND, &EXCEPTION_BUF_MUTEX);
-
-        if(EXCEPTION_BUFFER){
-            remove_prompt();
-
-            printf("%s", EXCEPTION_BUFFER);
-            free(EXCEPTION_BUFFER);
-            EXCEPTION_BUFFER = NULL;
-
-            restore_prompt();
-        }
-
-        pthread_cond_signal(&DONE_PRINTING_EXCEPTION_BUF_COND);
-
-        pthread_mutex_unlock(&EXCEPTION_BUF_MUTEX);
-    }
-
-    return NULL;
-}
-
-void *message_buffer_thread(void *arg){
-    pthread_setname_np("message buffer thread");
-
-    while(1){
-        pthread_mutex_lock(&MESSAGE_BUF_MUTEX); 
-
-        pthread_cond_wait(&MESSAGE_BUF_COND, &MESSAGE_BUF_MUTEX);
-
-        if(MESSAGE_BUFFER){
-            printf("%s", MESSAGE_BUFFER);
-            free(MESSAGE_BUFFER);
-            MESSAGE_BUFFER = NULL;
-        }
-
-        pthread_cond_signal(&DONE_PRINTING_MESSAGE_BUF_COND);
-
-        pthread_mutex_unlock(&MESSAGE_BUF_MUTEX);
-    }
-
-    return NULL;
-}
-
-enum {
-    ERROR,
-    EXCEPTION,
-    MESSAGE
-};
-
-static void write_buffer(int which, const char *msg, va_list args){
-    if(which == ERROR)
-        vconcat(&ERROR_BUFFER, msg, args);
-    else if(which == EXCEPTION)
-        vconcat(&EXCEPTION_BUFFER, msg, args);
-    else
-        vconcat(&MESSAGE_BUFFER, msg, args);
-}
-
-void WriteErrorBuffer(const char *msg, ...){
-    pthread_mutex_lock(&ERROR_BUF_MUTEX);
 
     va_list args;
     va_start(args, msg);
-    write_buffer(ERROR, msg, args);
+    int w = vprintf(msg, args);
     va_end(args);
 
-    pthread_mutex_unlock(&ERROR_BUF_MUTEX);
-}
+    if(adjust){
+        rl_restore_prompt();
+        rl_replace_line(saved_line, 0);
+        rl_point = saved_point;
+        rl_redisplay();
 
-void WriteExceptionBuffer(const char *msg, ...){
-    pthread_mutex_lock(&EXCEPTION_BUF_MUTEX);
+        free(saved_line);
+    }
 
-    va_list args;
-    va_start(args, msg);
-    write_buffer(EXCEPTION, msg, args);
-    va_end(args);
+    pthread_mutex_unlock(&printing_mutex);
 
-    pthread_mutex_unlock(&EXCEPTION_BUF_MUTEX);
-}
-
-void WriteMessageBuffer(const char *msg, ...){
-    pthread_mutex_lock(&MESSAGE_BUF_MUTEX);
-
-    va_list args;
-    va_start(args, msg);
-    write_buffer(MESSAGE, msg, args);
-    va_end(args);
-
-    pthread_mutex_unlock(&MESSAGE_BUF_MUTEX);
-}
-
-void PrintErrorBuffer(void){
-    pthread_mutex_lock(&ERROR_BUF_MUTEX);
-    pthread_cond_signal(&ERROR_BUF_COND);
-    pthread_cond_wait(&DONE_PRINTING_ERROR_BUF_COND, &ERROR_BUF_MUTEX);
-    pthread_mutex_unlock(&ERROR_BUF_MUTEX);
-}
-
-void PrintExceptionBuffer(void){
-    pthread_mutex_lock(&EXCEPTION_BUF_MUTEX);
-    pthread_cond_signal(&EXCEPTION_BUF_COND);
-    pthread_cond_wait(&DONE_PRINTING_EXCEPTION_BUF_COND, &EXCEPTION_BUF_MUTEX);
-    pthread_mutex_unlock(&EXCEPTION_BUF_MUTEX);
-}
-
-void PrintMessageBuffer(void){
-    pthread_mutex_lock(&MESSAGE_BUF_MUTEX);
-    pthread_cond_signal(&MESSAGE_BUF_COND);
-    pthread_cond_wait(&DONE_PRINTING_MESSAGE_BUF_COND, &MESSAGE_BUF_MUTEX);
-    pthread_mutex_unlock(&MESSAGE_BUF_MUTEX);
-}
-
-void ClearErrorBuffer(void){
-    pthread_mutex_lock(&ERROR_BUF_MUTEX);
-    free(ERROR_BUFFER);
-    ERROR_BUFFER = NULL;
-    pthread_mutex_unlock(&ERROR_BUF_MUTEX);
-}
-
-void ClearExceptionBuffer(void){
-    pthread_mutex_lock(&EXCEPTION_BUF_MUTEX);
-    free(EXCEPTION_BUFFER);
-    EXCEPTION_BUFFER = NULL;
-    pthread_mutex_unlock(&EXCEPTION_BUF_MUTEX);
-}
-
-void ClearMessageBuffer(void){
-    pthread_mutex_lock(&MESSAGE_BUF_MUTEX);
-    free(MESSAGE_BUFFER);
-    MESSAGE_BUFFER = NULL;
-    pthread_mutex_unlock(&MESSAGE_BUF_MUTEX);
+    return w;
 }

@@ -13,7 +13,7 @@
 #include "../watchpoint.h"
 
 enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     if(debuggee->num_watchpoints == 0){
         concat(error, "no watchpoints");
         return CMD_FAILURE;
@@ -25,7 +25,7 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
         char ans = answer("Delete all watchpoints? (y/n) ");
 
         if(ans == 'n'){
-            WriteMessageBuffer("Nothing deleted.\n");
+            concat(outbuffer, "Nothing deleted.\n");
             return CMD_SUCCESS;
         }
 
@@ -33,7 +33,7 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
 
         watchpoint_delete_all();
 
-        WriteMessageBuffer("All watchpoint(s) removed. (%d watchpoint(s))\n", num_deleted);
+        concat(outbuffer, "All watchpoint(s) removed. (%d watchpoint(s))\n", num_deleted);
 
         return CMD_SUCCESS;
     }
@@ -55,11 +55,11 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
         watchpoint_delete(id, &e);
 
         if(e){
-            WriteMessageBuffer("%s\n", e);
+            concat(outbuffer, "%s\n", e);
             free(e);
         }
         else{
-            WriteMessageBuffer("Watchpoint %d deleted\n", id);
+            concat(outbuffer, "Watchpoint %d deleted\n", id);
         }
     }
 
@@ -69,20 +69,20 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     if(debuggee->num_watchpoints == 0){
         concat(error, "no watchpoints");
         return CMD_FAILURE;
     }
 
-    WriteMessageBuffer("Current watchpoints:\n");
+    concat(outbuffer, "Current watchpoints:\n");
 
     for(struct node_t *current = debuggee->watchpoints->front;
             current;
             current = current->next){
         struct watchpoint *w = current->data;
 
-        WriteMessageBuffer("%4s%d: address = %-16.16lx, hit count = %d, size = %d",
+        concat(outbuffer, "%4s%d: address = %-16.16lx, hit count = %d, size = %d",
                 "", w->id, w->user_location, w->hit_count, w->data_len);
 
         const char *type = "r";
@@ -92,14 +92,14 @@ enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
         else if(w->LSC == WP_READ_WRITE)
             type = "rw";
 
-        WriteMessageBuffer(", type = %s\n", type);
+        concat(outbuffer, ", type = %s\n", type);
     }
     
     return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char *type_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[0]);
     int LSC = WP_WRITE;
 
@@ -128,7 +128,8 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
 
-    watchpoint_at_address(location, data_len, LSC, WP_ALL_THREADS, error);
+    watchpoint_at_address(location, data_len, LSC,
+            WP_ALL_THREADS, outbuffer, error);
 
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }

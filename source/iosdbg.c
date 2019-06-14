@@ -312,16 +312,16 @@ static void setup_initial_debuggee(void){
     set_convvar("$_exitsignal", "", &error);
 }
 
-static inline void threadupdate(void){
+static inline void threadupdate(char **outbuffer){
     if(debuggee->pid != -1)
-        ops_threadupdate();
+        ops_threadupdate(outbuffer);
 }
 
 static struct dbg_cmd_t *common_initialization(const char *name,
         const char *alias, const char *documentation, int level,
         const char *argregex, int num_groups, int unk_num_args,
         const char *groupnames[MAX_GROUPS],
-        enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **),
+        enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **, char **),
         void (*audit_function)(struct cmd_args_t *, const char **, char **)){
     struct dbg_cmd_t *c = malloc(sizeof(struct dbg_cmd_t));
 
@@ -356,7 +356,7 @@ static struct dbg_cmd_t *create_parent_cmd(const char *name,
         const char *alias, const char *documentation, int level,
         const char *argregex, int num_groups, int unk_num_args,
         const char *groupnames[MAX_GROUPS], int numsubcmds,
-        enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **),
+        enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **, char **),
         void (*audit_function)(struct cmd_args_t *, const char **, char **)){
     struct dbg_cmd_t *c = common_initialization(name,
             alias, documentation, level, argregex, num_groups,
@@ -374,7 +374,7 @@ static struct dbg_cmd_t *create_child_cmd(const char *name,
         const char *alias, const char *documentation, int level,
         const char *argregex, int num_groups, int unk_num_args,
         const char *groupnames[MAX_GROUPS],
-        enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **),
+        enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **, char **),
         void (*audit_function)(struct cmd_args_t *, const char **, char **)){
     struct dbg_cmd_t *c = common_initialization(name,
             alias, documentation, level, argregex, num_groups,
@@ -693,19 +693,28 @@ static void inputloop(void){
             add_history(line);
         }
 
-        threadupdate();
-        PrintMessageBuffer();
+        char *outbuffer = NULL;
+        threadupdate(&outbuffer);
+
+        if(outbuffer){
+            rl_printf(DONT_WAIT_FOR_REPROMPT, "%s", outbuffer);
+            free(outbuffer);
+            outbuffer = NULL;
+        }
 
         char *linecpy = NULL, *error = NULL;
-        enum cmd_error_t result = do_cmdline_command(line, &linecpy, 1, &error);
+        enum cmd_error_t result = do_cmdline_command(line,
+                &linecpy, 1, &outbuffer, &error);
 
         if(result == CMD_FAILURE && error){
-            WriteErrorBuffer("error: %s\n", error);
+            rl_printf(DONT_WAIT_FOR_REPROMPT, "error: %s\n", error);
             free(error);
-            PrintErrorBuffer();
         }
         else{
-            PrintMessageBuffer();
+            if(outbuffer){
+                rl_printf(DONT_WAIT_FOR_REPROMPT, "%s", outbuffer);
+                free(outbuffer);
+            }
 
             if(result == CMD_QUIT){
                 if(linecpy)
@@ -732,8 +741,6 @@ static void inputloop(void){
         }
 
         free(line);
-
-        ClearMessageBuffer();
     }
 }
 
@@ -756,18 +763,6 @@ static void early_configuration(void){
         printf("error: %s\n", error);
         free(error);
     }
-
-    ERROR_BUFFER = NULL;
-    EXCEPTION_BUFFER = NULL;
-    MESSAGE_BUFFER = NULL;
-
-    pthread_t error_buffer_thread_,
-              exception_buffer_thread_,
-              message_buffer_thread_;
-
-    pthread_create(&error_buffer_thread_, NULL, error_buffer_thread, NULL);
-    pthread_create(&exception_buffer_thread_, NULL, exception_buffer_thread, NULL);
-    pthread_create(&message_buffer_thread_, NULL, message_buffer_thread, NULL);
 }
 
 int main(int argc, char **argv, const char **envp){

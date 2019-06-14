@@ -257,7 +257,7 @@ static void bp_delete_internal(struct breakpoint *bp){
 }
 
 void breakpoint_at_address(unsigned long address, int temporary,
-        int thread, char **error){
+        int thread, char **outbuffer, char **error){
     struct breakpoint *bp = breakpoint_new(address, temporary, thread, error);
 
     if(!bp)
@@ -266,16 +266,16 @@ void breakpoint_at_address(unsigned long address, int temporary,
     linkedlist_add(debuggee->breakpoints, bp);
 
     if(!temporary){
-        WriteMessageBuffer("Breakpoint %d at %#lx", bp->id, bp->location);
+        concat(outbuffer, "Breakpoint %d at %#lx", bp->id, bp->location);
 
         struct machthread *bpthread = machthread_find(bp->threadinfo.iosdbg_tid);
 
         if(bpthread && bp->threadinfo.all){
-            WriteMessageBuffer(", for thread #%d (tid: %#llx), '%s'\n",
+            concat(outbuffer, ", for thread #%d (tid: %#llx), '%s'\n",
                     bp->threadinfo.iosdbg_tid, bpthread->tid, bpthread->tname);
         }
         else{
-            WriteMessageBuffer("\n");
+            concat(outbuffer, "\n");
         }
     }
 

@@ -81,16 +81,16 @@ struct debuggee {
     kern_return_t (*resume)(void);
 
     /* The function pointer to set up exception handling. */
-    kern_return_t (*setup_exception_handling)(void);
+    kern_return_t (*setup_exception_handling)(char **);
 
     /* The function pointer to deallocate needed ports on detach. */
-    kern_return_t (*deallocate_ports)(void);
+    kern_return_t (*deallocate_ports)(char **);
 
     /* The function pointer to task_suspend. */
     kern_return_t (*suspend)(void);
 
     /* The function pointer to update the list of the debuggee's threads. */
-    kern_return_t (*get_threads)(thread_act_port_array_t *);
+    kern_return_t (*get_threads)(thread_act_port_array_t *, char **);
 
     /* The function pointer to figure out if the debuggee is currently suspended. */
     int (*suspended)(void);

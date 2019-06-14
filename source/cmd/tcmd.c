@@ -10,13 +10,13 @@
 #include "../thread.h"
 
 enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     for(struct node_t *current = debuggee->threads->front;
             current;
             current = current->next){
         struct machthread *t = current->data;
 
-        WriteMessageBuffer("\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", 
+        concat(outbuffer, "\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", 
                 t->focused ? "* " : "", t->ID, t->tid, t->tname, 
                 t->thread_state.__pc);
     }
@@ -25,7 +25,7 @@ enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char *thread_id_str = argcopy(args, THREAD_SELECT_COMMAND_REGEX_GROUPS[0]);
     int thread_id = (int)strtol_err(thread_id_str, error);
 
@@ -47,7 +47,7 @@ enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    WriteMessageBuffer("Selected thread #%d\n", thread_id);
+    concat(outbuffer, "Selected thread #%d\n", thread_id);
     
     return CMD_SUCCESS;
 }

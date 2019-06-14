@@ -5,6 +5,7 @@
 #include "debuggee.h"
 #include "linkedlist.h"
 #include "memutils.h"
+#include "strext.h"
 
 unsigned long find_slide(void){
     kern_return_t err = KERN_SUCCESS;
@@ -86,10 +87,10 @@ kern_return_t resume(void){
     return task_resume(debuggee->task);
 }
 
-#define WARN_ON_MACH_ERR(err) if(err) \
-    printf("%s: %s\n", __func__, mach_error_string(err))
+#define WARN_ON_MACH_ERR(err) if(err && outbuffer && (*outbuffer)) \
+    concat(outbuffer, "%s: %s\n", __func__, mach_error_string(err))
 
-kern_return_t setup_exception_handling(void){
+kern_return_t setup_exception_handling(char **outbuffer){
     /* Create an exception port for the debuggee. */
     kern_return_t err = mach_port_allocate(mach_task_self(), 
             MACH_PORT_RIGHT_RECEIVE,
@@ -131,7 +132,7 @@ kern_return_t setup_exception_handling(void){
     return err;
 }
 
-kern_return_t deallocate_ports(void){
+kern_return_t deallocate_ports(char **outbuffer){
     kern_return_t err = mach_port_deallocate(mach_task_self(),
             debuggee->exception_port);
 
@@ -148,7 +149,7 @@ kern_return_t suspend(void){
     return task_suspend(debuggee->task);
 }
 
-kern_return_t get_threads(thread_act_port_array_t *threads){
+kern_return_t get_threads(thread_act_port_array_t *threads, char **outbuffer){
     mach_msg_type_number_t thread_count;
     
     kern_return_t err = task_threads(debuggee->task, threads, &thread_count);

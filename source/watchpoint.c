@@ -193,7 +193,7 @@ static void wp_delete_internal(struct watchpoint *wp){
 }
 
 void watchpoint_at_address(unsigned long location, unsigned int data_len,
-        int LSC, int thread, char **error){
+        int LSC, int thread, char **outbuffer, char **error){
     struct watchpoint *wp = watchpoint_new(location, data_len, LSC, thread, error);
 
     if(!wp)
@@ -208,7 +208,7 @@ void watchpoint_at_address(unsigned long location, unsigned int data_len,
     else if(LSC == WP_READ_WRITE)
         type = "rw";
 
-    WriteMessageBuffer("Watchpoint %d: addr = %#lx size = %d type = %s\n",
+    concat(outbuffer, "Watchpoint %d: addr = %#lx size = %d type = %s\n",
             wp->id, wp->user_location, wp->data_len, type);
     
     debuggee->num_watchpoints++;

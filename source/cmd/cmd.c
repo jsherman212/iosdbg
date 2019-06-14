@@ -25,8 +25,9 @@ static void expand_aliases(char **command){
         bytes_until_space = space - (*command);
         token = substr(*command, 0, bytes_until_space);
     }
-    else
+    else{
         token = strdup(*command);
+    }
 
     /* Check for an alias. */
     for(int i=0; i<NUM_TOP_LEVEL_COMMANDS; i++){
@@ -89,7 +90,8 @@ static void execute_shell_cmd(char *command,
 }
 
 enum cmd_error_t do_cmdline_command(char *user_command_,
-        char **expanded_command, int user_invoked, char **error){
+        char **expanded_command, int user_invoked,
+        char **outbuffer, char **error){
     char *user_command = strdup(user_command_);
     enum cmd_error_t result = CMD_SUCCESS;
 
@@ -110,7 +112,7 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
         execute_shell_cmd(shell_cmd, &exit_reason, &error);
 
         if(exit_reason){
-            WriteMessageBuffer("%s\n", exit_reason);
+            concat(outbuffer, "%s\n", exit_reason);
             free(exit_reason);
         }
         
@@ -248,7 +250,7 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
         /* Parse arguments, audit them, and if nothing went wrong,
          * call this command's cmdfunc.
          */
-        result = prepare_and_call_cmdfunc(arguments, error);
+        result = prepare_and_call_cmdfunc(arguments, outbuffer, error);
     }
 
     free(arguments);

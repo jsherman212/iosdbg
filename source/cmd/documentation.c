@@ -8,8 +8,8 @@
 #include "../queue.h"
 #include "../strext.h"
 
-void show_all_top_level_cmds(void){
-    WriteMessageBuffer("List of top level commands:\n");
+void show_all_top_level_cmds(char **outbuffer){
+    concat(outbuffer, "List of top level commands:\n");
 
     int len = 1;
     char **cmds = malloc(sizeof(char *) * len);
@@ -36,19 +36,19 @@ void show_all_top_level_cmds(void){
     }
 
     for(int i=1; i<len; i++)
-        WriteMessageBuffer("%d. %s\n", i, cmds[i]);
+        concat(outbuffer, "%d. %s\n", i, cmds[i]);
     
     token_array_free(cmds, len);
 }
 
-void documentation_for_cmd(struct dbg_cmd_t *cmd){
+void documentation_for_cmd(struct dbg_cmd_t *cmd, char **outbuffer){
     /* Traverse level order to print out the sub-commands
      * for this command. Parent commands do not have accompanying
      * "cmdfuncs".
      */
     if(!cmd->cmd_function){
-        WriteMessageBuffer("%s", cmd->documentation);
-        WriteMessageBuffer("This command has the following subcommands:\n");
+        concat(outbuffer, "%s", cmd->documentation);
+        concat(outbuffer, "This command has the following subcommands:\n");
 
         int subcmdnum = 1;
         char **subcmds = malloc(sizeof(char *) * subcmdnum);
@@ -90,24 +90,24 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd){
         }
         
         for(int i=1; i<subcmdnum; i++)
-            WriteMessageBuffer("%d. %s\n", i, subcmds[i]);
+            concat(outbuffer, "%d. %s\n", i, subcmds[i]);
 
         token_array_free(subcmds, subcmdnum);
         queue_free(cmdqueue);
 
         if(cmd->alias)
-            WriteMessageBuffer("\nThis command has an alias: '%s'\n", cmd->alias);
+            concat(outbuffer, "\nThis command has an alias: '%s'\n", cmd->alias);
         
         return;
     }
 
-    WriteMessageBuffer("%s", cmd->documentation);
+    concat(outbuffer, "%s", cmd->documentation);
 
     if(cmd->alias)
-        WriteMessageBuffer("This command has an alias: '%s'\n", cmd->alias);
+        concat(outbuffer, "This command has an alias: '%s'\n", cmd->alias);
 }
 
-void documentation_for_cmdname(char *_name, char **error){
+void documentation_for_cmdname(char *_name, char **outbuffer, char **error){
     int num_tokens = 0;
     char **tokens = token_array(_name, " ", &num_tokens);
 
@@ -123,7 +123,7 @@ void documentation_for_cmdname(char *_name, char **error){
             struct dbg_cmd_t *current = COMMANDS[idx++];
 
             if(strcmp(current->name, tokens[0]) == 0){
-                documentation_for_cmd(current);
+                documentation_for_cmd(current, outbuffer);
                 goto out;
             }
         }
@@ -153,7 +153,7 @@ void documentation_for_cmdname(char *_name, char **error){
             if(cursubcmd->level == (num_tokens - 1) &&
                     strcmp(curparent->name, tokens[cursubcmd->level - 1]) == 0){
                 if(strcmp(cursubcmd->name, tokens[cursubcmd->level]) == 0){
-                    documentation_for_cmd(cursubcmd);
+                    documentation_for_cmd(cursubcmd, outbuffer);
                     queue_free(cmdqueue);
                     goto out;
                 }

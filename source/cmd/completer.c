@@ -31,13 +31,14 @@ static void _reset_matchedcmdinfo(void){
     CURRENT_MATCH_INFO.audit_function = NULL;
 }
 
-enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
+enum cmd_error_t prepare_and_call_cmdfunc(char *args,
+        char **outbuffer, char **error){
     enum cmd_error_t result = CMD_SUCCESS;
 
     if(!CURRENT_MATCH_INFO.cmd_function){
         /* We might have a parent command... */
         if(CURRENT_MATCH_INFO.cmd){
-            documentation_for_cmd(CURRENT_MATCH_INFO.cmd);
+            documentation_for_cmd(CURRENT_MATCH_INFO.cmd, outbuffer);
             goto out1;
         }
 
@@ -53,7 +54,7 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
             error);
 
     if(*error){
-        documentation_for_cmd(CURRENT_MATCH_INFO.cmd);
+        documentation_for_cmd(CURRENT_MATCH_INFO.cmd, outbuffer);
         result = CMD_FAILURE;
         goto out;
     }
@@ -70,12 +71,12 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args, char **error){
     }
 
     if(*error){
-        documentation_for_cmd(CURRENT_MATCH_INFO.cmd);
+        documentation_for_cmd(CURRENT_MATCH_INFO.cmd, outbuffer);
         result = CMD_FAILURE;
         goto out;
     }
 
-    result = (CURRENT_MATCH_INFO.cmd_function)(parsed_args, 0, error);
+    result = (CURRENT_MATCH_INFO.cmd_function)(parsed_args, 0, outbuffer, error);
 
 out:;
     _reset_matchedcmdinfo();

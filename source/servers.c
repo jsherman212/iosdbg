@@ -73,6 +73,7 @@ static void *exception_server(void *arg){
          * If this flag is set to 0, it will never be set to 1 again.
          */
         will_auto_resume = 1;
+        char *exception_buffer = NULL;
 
         /* Display and reply to what we gathered. */
         while(num_exceptions > 0){
@@ -90,12 +91,11 @@ static void *exception_server(void *arg){
                 will_auto_resume = 0;
 
             if(should_print)
-                WriteExceptionBuffer("%s", what);
-
-            free(what);
+                concat(&exception_buffer, "%s", what);
 
             reply_to_exception(r, KERN_SUCCESS);
 
+            free(what);
             free(r);
 
             num_exceptions--;
@@ -104,7 +104,10 @@ static void *exception_server(void *arg){
         if(will_auto_resume)
             ops_resume();
 
-        PrintExceptionBuffer();
+        if(exception_buffer){
+            rl_printf(WAIT_FOR_REPROMPT, "%s", exception_buffer);
+            free(exception_buffer);
+        }
     }
 
     return NULL;
@@ -132,11 +135,11 @@ static void *death_server(void *arg){
     int status;
     waitpid(debuggee->pid, &status, 0);
 
-    char *error = NULL;
+    char *exitbuf = NULL, *error = NULL;
 
     if(WIFEXITED(status)){
         int wexitstatus = WEXITSTATUS(status);
-        WriteExceptionBuffer("\n[%s (%d) exited normally (status = 0x%8.8x)]\n", 
+        concat(&exitbuf, "\n[%s (%d) exited normally (status = 0x%8.8x)]\n", 
                 debuggee->debuggee_name, debuggee->pid, wexitstatus);
 
         char *wexitstatusstr = NULL;
@@ -145,13 +148,13 @@ static void *death_server(void *arg){
         void_convvar("$_exitsignal");
         set_convvar("$_exitcode", wexitstatusstr, &error);
 
-        desc_auto_convvar_error_if_needed("$_exitcode", error);
+        desc_auto_convvar_error_if_needed(&exitbuf, "$_exitcode", error);
 
         free(wexitstatusstr);
     }
     else if(WIFSIGNALED(status)){
         int wtermsig = WTERMSIG(status);
-        WriteExceptionBuffer("\n[%s (%d) terminated due to signal %d]\n", 
+        concat(&exitbuf, "\n[%s (%d) terminated due to signal %d]\n", 
                 debuggee->debuggee_name, debuggee->pid, wtermsig);
 
         char *wtermsigstr = NULL;
@@ -160,15 +163,17 @@ static void *death_server(void *arg){
         void_convvar("$_exitcode");
         set_convvar("$_exitsignal", wtermsigstr, &error);
 
-        desc_auto_convvar_error_if_needed("$_exitsignal", error);
+        desc_auto_convvar_error_if_needed(&exitbuf, "$_exitsignal", error);
 
         free(wtermsigstr);
     }
 
     free(arg);
-    ops_detach(1);
+    ops_detach(1, &exitbuf);
 
-    PrintExceptionBuffer();
+    rl_printf(WAIT_FOR_REPROMPT, "%s", exitbuf);
+
+    free(exitbuf);
 
     if(error)
         free(error);
@@ -179,7 +184,7 @@ static void *death_server(void *arg){
 }
 
 void setup_servers(void){
-    debuggee->setup_exception_handling();
+    debuggee->setup_exception_handling(NULL);
 
     /* Start the exception server. */
     pthread_t exception_server_thread;

@@ -27,7 +27,7 @@ struct watchpoint {
 
 static int current_watchpoint_id = 1;
 
-void watchpoint_at_address(unsigned long, unsigned int, int, int, char **);
+void watchpoint_at_address(unsigned long, unsigned int, int, int, char **, char **);
 void watchpoint_hit(struct watchpoint *);
 void watchpoint_delete(int, char **);
 void watchpoint_enable_all(void);

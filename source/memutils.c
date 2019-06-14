@@ -42,7 +42,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
     char *error = NULL;
     set_convvar("$_", locstr, &error);
 
-    desc_auto_convvar_error_if_needed("$_", error);
+    desc_auto_convvar_error_if_needed(outbuffer, "$_", error);
 
     free(locstr);
 
@@ -57,8 +57,14 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
         kern_return_t err = read_memory_at_location((void *)current_location,
                 data, data_size);
 
-        if(err)
+        if(err){
+            if(outbuffer){
+                concat(outbuffer, "could not read memory at %#lx: %s\n",
+                        location, mach_error_string(err));
+            }
+
             return err;
+        }
 
         unsigned long instr = 0;
 
@@ -78,7 +84,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
         error = NULL;
         set_convvar("$__", val, &error);
 
-        desc_auto_convvar_error_if_needed("$__", error);
+        desc_auto_convvar_error_if_needed(outbuffer, "$__", error);
 
         free(val);
 
@@ -96,16 +102,9 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
             return KERN_FAILURE;
         }
 
-        if(!outbuffer){
-            WriteMessageBuffer("%s%#lx:  %s\n",
-                    focused->thread_state.__pc == current_location
-                    ? "->  " : "    ", current_location, disassembled);
-        }
-        else{
-            concat(outbuffer, "%s%#lx:  %s\n",
-                    focused->thread_state.__pc == current_location
-                    ? "->  " : "    ", current_location, disassembled);
-        }
+        concat(outbuffer, "%s%#lx:  %s\n",
+                focused->thread_state.__pc == current_location
+                ? "->  " : "    ", current_location, disassembled);
 
         free(disassembled);
 
@@ -115,7 +114,8 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
     return KERN_SUCCESS;
 }
 
-kern_return_t dump_memory(unsigned long location, vm_size_t amount){
+kern_return_t dump_memory(unsigned long location, vm_size_t amount,
+        char **outbuffer){
     if(amount == 0)
         return KERN_SUCCESS;
 
@@ -138,29 +138,29 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount){
         if(current_row_length >= row_size)
             current_row_length = row_size;
 
-        WriteMessageBuffer("  %#lx: ", current_location);
+        concat(outbuffer, "  %#lx: ", current_location);
 
         for(int i=0; i<current_row_length; i++)
-            WriteMessageBuffer("%02x ", (uint8_t)(*(membuffer + i)));
+            concat(outbuffer, "%02x ", (uint8_t)(*(membuffer + i)));
 
         /* Print filler spaces.
          * Two spaces for would be '%02x', one more for the space after.
          */
         for(int i=current_row_length; i<row_size; i++)
-            WriteMessageBuffer("   ");
+            concat(outbuffer, "   ");
         
-        WriteMessageBuffer("  ");
+        concat(outbuffer, "  ");
 
         for(int i=0; i<current_row_length; i++){
             uint8_t cur_char = *(membuffer + i);
 
             if(isgraph(cur_char))
-                WriteMessageBuffer("%c", cur_char);
+                concat(outbuffer, "%c", cur_char);
             else
-                WriteMessageBuffer(".");
+                concat(outbuffer, ".");
         }
 
-        WriteMessageBuffer("\n");
+        concat(outbuffer, "\n");
 
         amount_dumped += row_size;
         current_location += row_size;

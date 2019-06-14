@@ -3,10 +3,10 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_examine(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *, int, char **);
-enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *, int, char **);
+enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_examine(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *, int, char **, char **);
 
 static const char *DISASSEMBLE_COMMAND_DOCUMENTATION =
     "Disassemble debuggee memory.\n"

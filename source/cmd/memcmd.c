@@ -11,7 +11,7 @@
 #include "../strext.h"
 
 enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char *location_str = argcopy(args, DISASSEMBLE_COMMAND_REGEX_GROUPS[0]);
     long location = eval_expr(location_str, error);
 
@@ -45,7 +45,7 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char *location_str = argcopy(args, EXAMINE_COMMAND_REGEX_GROUPS[0]);
     long location = eval_expr(location_str, error);
 
@@ -68,7 +68,7 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    kern_return_t err = dump_memory(location, count);
+    kern_return_t err = dump_memory(location, count, outbuffer);
 
     if(err){
         concat(error, "could not dump memory from %#lx to %#lx: %s", 
@@ -80,7 +80,7 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char *start_str = argcopy(args, MEMORY_FIND_COMMAND_REGEX_GROUPS[0]);
     long start = eval_expr(start_str, error);
 
@@ -205,12 +205,12 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
     if(limit == LONG_MAX)
         end = LONG_MAX;
 
-    WriteMessageBuffer("Searching from %#lx", start);
+    concat(outbuffer, "Searching from %#lx", start);
 
     if(end == LONG_MAX)
-        WriteMessageBuffer(" without a limit... (aborting on error)\n");
+        concat(outbuffer, " without a limit... (aborting on error)\n");
     else
-        WriteMessageBuffer(" to %#lx...\n", end);
+        concat(outbuffer, " to %#lx...\n", end);
     
     int results_cnt = 0;
     const int dump_len = 0x10;
@@ -221,13 +221,13 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
 
         if(memcmp(read_buffer, target, target_len) == 0){
             results_cnt++;
-            dump_memory(start, dump_len);
+            dump_memory(start, dump_len, outbuffer);
         }
 
         start++;
     }
 
-    WriteMessageBuffer("\n%d result(s)\n", results_cnt);
+    concat(outbuffer, "\n%d result(s)\n", results_cnt);
 
     free(target_str);
 
@@ -235,7 +235,7 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char *location_str = argcopy(args, MEMORY_WRITE_COMMAND_REGEX_GROUPS[0]);
     long location = eval_expr(location_str, error);
 

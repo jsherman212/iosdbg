@@ -21,9 +21,9 @@
 #include "trace.h"
 #include "watchpoint.h"
 
-void ops_printsiginfo(void){
-    WriteMessageBuffer("%-11s %-5s %-5s %-6s\n", "NAME", "PASS", "STOP", "NOTIFY");
-    WriteMessageBuffer("=========== ===== ===== ======\n");
+void ops_printsiginfo(char **outbuffer){
+    concat(outbuffer, "%-11s %-5s %-5s %-6s\n", "NAME", "PASS", "STOP", "NOTIFY");
+    concat(outbuffer, "=========== ===== ===== ======\n");
 
     int signo = 0;
 
@@ -50,14 +50,14 @@ void ops_printsiginfo(void){
         const char *pass_str = pass ? "true" : "false";
         const char *stop_str = stop ? "true" : "false";
 
-        WriteMessageBuffer("%-11s %-5s %-5s %-6s\n",
+        concat(outbuffer, "%-11s %-5s %-5s %-6s\n",
                 fullsig, pass_str, stop_str, notify_str);
 
         free(fullsig);
     }
 }
 
-void ops_detach(int from_death){
+void ops_detach(int from_death, char **outbuffer){
     ops_suspend();
 
     breakpoint_delete_all();
@@ -83,7 +83,7 @@ void ops_detach(int from_death){
         request = dequeue(debuggee->exc_requests);
     }
 
-    debuggee->deallocate_ports();
+    debuggee->deallocate_ports(outbuffer);
     debuggee->restore_exception_ports();
 
     /* Send SIGSTOP to set debuggee's process status to
@@ -139,16 +139,16 @@ void ops_suspend(void){
     debuggee->suspend();
 }
 
-void ops_threadupdate(void){
+void ops_threadupdate(char **out){
     thread_act_port_array_t threads;
-    debuggee->get_threads(&threads);
+    debuggee->get_threads(&threads, out);
 
     machthread_updatethreads(threads);
 
     struct machthread *focused = machthread_getfocused();
 
     if(!focused){
-        WriteMessageBuffer("[Previously selected thread dead, selecting thread #1]\n\n");
+        concat(out, "[Previously selected thread dead, selecting thread #1]\n\n");
         machthread_setfocused(threads[0]);
         focused = machthread_getfocused();
     }

@@ -165,12 +165,13 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
          * right after a breakpoint hit, just print the disassembly.
          */
         if(!debuggee->is_single_stepping){
-            // XXX should not print, should auto resume
+            /* should not print, should auto resume */
             *should_print = 0;
         }
         else{
-            // XXX should print, should not auto resume
+            /* should print, should not auto resume */
             *should_auto_resume = 0;
+            concat(desc, "\n");
             disassemble_at_location(t->thread_state.__pc, 4, desc);
         }
 
@@ -187,7 +188,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
 
     debuggee->is_single_stepping = 0;
 
-    // XXX should print, should not auto resume
+    /* should print, should not auto resume */
     *should_auto_resume = 0;
 }
 
@@ -228,7 +229,7 @@ void handle_exception(Request *request, int *should_auto_resume,
     const char *exc = exc_str(exception);
     long code = ((long *)request->code)[0];
     long subcode = ((long *)request->code)[1];
-
+    
     /* Give focus to whatever caused this exception. */
     struct machthread *focused = machthread_getfocused();
 
@@ -262,15 +263,14 @@ void handle_exception(Request *request, int *should_auto_resume,
         handle_soft_signal(focused->port, subcode, desc, notify, pass, stop);
         
         if(stop){
-            // XXX should print, should not auto resume
+            /* should print, should not auto resume */
             *should_auto_resume = 0;
             
             concat(desc, "%#llx in debuggee.", focused->thread_state.__pc);
         }
         else{
+            /* should print, should auto resume */
             concat(desc, "Resuming execution.");
-
-            // XXX should print, should auto resume
         }
         
         /* Don't print any of this if we're detaching. */
@@ -280,11 +280,11 @@ void handle_exception(Request *request, int *should_auto_resume,
             if(stop)
                 disassemble_at_location(focused->thread_state.__pc, 4, desc);
 
-            // XXX should print, should not auto resume
+            /* should print, should not auto resume */
             *should_auto_resume = 0;
         }
         else if(!notify){
-            // XXX should not print, should not auto resume
+            /* should not print, should not auto resume */
             *should_auto_resume = 0;
             *should_print = 0;
         }
@@ -295,7 +295,6 @@ void handle_exception(Request *request, int *should_auto_resume,
      */
     else if(code == EXC_ARM_DA_DEBUG){
         focused->just_hit_watchpoint = 1;
-
         focused->last_hit_wp_loc = subcode;
         focused->last_hit_wp_PC = focused->thread_state.__pc;
 
@@ -304,7 +303,7 @@ void handle_exception(Request *request, int *should_auto_resume,
          */
         set_single_step(focused, 1);
         
-        // XXX should not print, should auto resume
+        /* should not print, should auto resume */
         *should_print = 0;
     }
     /* A hardware/software breakpoint hit, or the software step
@@ -316,7 +315,7 @@ void handle_exception(Request *request, int *should_auto_resume,
                 handle_hit_watchpoint(focused, desc);
                 focused->just_hit_watchpoint = 0;
 
-                // XXX should print, should not auto resume
+                /* should print, should not auto resume */
                 *should_auto_resume = 0;
 
                 return;
@@ -331,11 +330,11 @@ void handle_exception(Request *request, int *should_auto_resume,
             if(debuggee->is_single_stepping && hit){
                 breakpoint_hit(hit);
 
-                concat(desc, ": '%s': breakpoint %d at %#lx hit %d time(s).\n",
+                concat(desc, ": '%s': breakpoint %d at %#lx hit %d time(s).",
                         focused->tname, hit->id, hit->location, hit->hit_count);
             }
             else{
-                concat(desc, ": '%s': single step.\n", focused->tname);
+                concat(desc, ": '%s': single step.", focused->tname);
             }
     
             handle_single_step(focused, should_auto_resume, should_print, desc);
@@ -350,7 +349,17 @@ void handle_exception(Request *request, int *should_auto_resume,
         disassemble_at_location(focused->thread_state.__pc, 4, desc);
         set_single_step(focused, 1);
 
-        // XXX should print, should not auto resume
+        /* should print, should not auto resume */
+        *should_auto_resume = 0;
+    }
+    /* Something else occured. */
+    else{
+        concat(desc, ": '%s': stop reason: %s (code = %#lx, subcode = %#lx)\n",
+                focused->tname, exc, code, subcode);
+        
+        disassemble_at_location(focused->thread_state.__pc, 4, desc);
+
+        /* should print, should not auto resume */
         *should_auto_resume = 0;
     }
 }

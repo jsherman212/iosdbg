@@ -319,24 +319,24 @@ void del_convvar(char *name, char **error){
         linkedlist_delete(vars, target);
 }
 
-void p_convvar(char *name){
+void p_convvar(char *name, char **outbuffer){
     if(!name || !vars)
         return;
 
     char *error = NULL;
     char *sval = convvar_strval(name, &error);
 
-    WriteMessageBuffer("%8s", "");
+    concat(outbuffer, "%8s", "");
 
     if(error)
-        WriteMessageBuffer("failed to show convenience variable '%s': %s\n", name, error);
+        concat(outbuffer, "failed to show convenience variable '%s': %s\n", name, error);
     else
-        WriteMessageBuffer("%s = %s\n", name, sval);
+        concat(outbuffer, "%s = %s\n", name, sval);
 
     free(sval);
 }
 
-void show_all_cvars(void){
+void show_all_cvars(char **outbuffer){
     if(!vars)
         return;
 
@@ -345,17 +345,17 @@ void show_all_cvars(void){
     while(current){
         struct convvar *var = current->data;
 
-        p_convvar(var->name);
+        p_convvar(var->name, outbuffer);
 
         current = current->next;
     }
 }
 
-void desc_auto_convvar_error_if_needed(char *var, char *e){
+void desc_auto_convvar_error_if_needed(char **outbuffer, char *var, char *e){
     if(!e || !var)
         return;
 
-    WriteMessageBuffer("could not automatically update the"
+    concat(outbuffer, "could not automatically update the"
             "convenience variable '%s': %s\n",
             var, e);
 }

@@ -6,7 +6,7 @@
 extern int IS_HELP_COMMAND;
 extern int LINE_MODIFIED;
 
-enum cmd_error_t prepare_and_call_cmdfunc(char *, char **);
+enum cmd_error_t prepare_and_call_cmdfunc(char *, char **, char **);
 char **completer(const char *, int, int);
 
 #endif

@@ -56,7 +56,7 @@ static int preference(char *str){
 }
 
 enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char *signals = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[0]);
     char *notify_str = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[1]);
     char *pass_str = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[2]);
@@ -69,7 +69,7 @@ enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args,
         if(pass_str)    free(pass_str);
         if(stop_str)    free(stop_str);
 
-        ops_printsiginfo();
+        ops_printsiginfo(outbuffer);
         return CMD_SUCCESS;
     }
 

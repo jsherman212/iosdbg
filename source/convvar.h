@@ -30,9 +30,9 @@ void del_convvar(char *, char **);
 struct convvar *lookup_convvar(char *);
 char *convvar_strval(char *, char **);
 void void_convvar(char *);
-void show_all_cvars(void);
-void p_convvar(char *);
+void show_all_cvars(char **);
+void p_convvar(char *, char **);
 void convvar_free(struct convvar *);
-void desc_auto_convvar_error_if_needed(char *, char *);
+void desc_auto_convvar_error_if_needed(char **, char *, char *);
 
 #endif

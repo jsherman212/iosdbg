@@ -5,7 +5,7 @@
 
 #include "argparse.h"       /* Defines MAX_GROUPS */
 
-enum cmd_error_t do_cmdline_command(char *, char **, int, char **);
+enum cmd_error_t do_cmdline_command(char *, char **, int, char **, char **);
 
 /* Macros for arguments to create_(parent|child)_cmd.
  * These exist for clarity.
@@ -48,7 +48,7 @@ struct dbg_cmd_t {
     int level;
     int parentcmd;
 
-    enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **);
+    enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **, char **);
     void (*audit_function)(struct cmd_args_t *, const char **, char **);
 };
 
@@ -56,7 +56,7 @@ struct matchedcmdinfo_t {
     char *args;
     struct regexinfo rinfo;
     struct dbg_cmd_t *cmd;
-    enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **);
+    enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **, char **);
     void (*audit_function)(struct cmd_args_t *, const char **, char **);
 };
 

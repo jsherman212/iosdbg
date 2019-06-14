@@ -12,7 +12,7 @@
 #include "../strext.h"
 
 enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     if(debuggee->num_breakpoints == 0){
         concat(error, "no breakpoints");
         return CMD_FAILURE;
@@ -24,7 +24,7 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
         char ans = answer("Delete all breakpoints? (y/n) ");
 
         if(ans == 'n'){
-            WriteMessageBuffer("Nothing deleted.\n");
+            concat(outbuffer, "Nothing deleted.\n");
             return CMD_SUCCESS;
         }
 
@@ -32,7 +32,7 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
 
         breakpoint_delete_all();
 
-        WriteMessageBuffer("All breakpoint(s) removed. (%d breakpoint(s))\n",
+        concat(outbuffer, "All breakpoint(s) removed. (%d breakpoint(s))\n",
                 num_deleted);
 
         return CMD_SUCCESS;
@@ -55,11 +55,11 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
         breakpoint_delete(id, &e);
 
         if(e){
-            WriteMessageBuffer("%s\n", e);
+            concat(outbuffer, "%s\n", e);
             free(e);
         }
         else{
-            WriteMessageBuffer("Breakpoint %d deleted\n", id);
+            concat(outbuffer, "Breakpoint %d deleted\n", id);
         }
     }
 
@@ -69,20 +69,20 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     if(debuggee->num_breakpoints == 0){
         concat(error, "no breakpoints");
         return CMD_FAILURE;
     }
 
-    WriteMessageBuffer("Current breakpoints:\n");
+    concat(outbuffer, "Current breakpoints:\n");
 
     for(struct node_t *current = debuggee->breakpoints->front;
             current;
             current = current->next){
         struct breakpoint *b = current->data;
 
-        WriteMessageBuffer("%4s%d: address = %-16.16lx, hit count = %d, hardware = %d\n",
+        concat(outbuffer, "%4s%d: address = %-16.16lx, hit count = %d, hardware = %d\n",
                 "", b->id, b->location, b->hit_count, b->hw);
     }
     
@@ -90,7 +90,7 @@ enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char *thread_str = argcopy(args, BREAKPOINT_SET_COMMAND_REGEX_GROUPS[0]);
 
     int thread = BP_ALL_THREADS;
@@ -107,7 +107,7 @@ enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args,
         if(!debuggee->suspended()){
             int len = (int)strlen("warning: ");
 
-            WriteMessageBuffer("warning: debuggee is not stopped"
+            concat(outbuffer, "warning: debuggee is not stopped"
                     ", thread IDs could have changed.\n"
                     "%*sIt is suggested to interrupt the debuggee,"
                     " remind yourself of the list of threads,\n"
@@ -125,14 +125,14 @@ enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args,
         long location = eval_expr(location_str, &e);
 
         if(e){
-            WriteMessageBuffer("warning: could not set breakpoint: %s\n", e);
+            concat(outbuffer, "warning: could not set breakpoint: %s\n", e);
             free(e);
         }
         else{
-            breakpoint_at_address(location, BP_NO_TEMP, thread, &e);
+            breakpoint_at_address(location, BP_NO_TEMP, thread, outbuffer, &e);
 
             if(e){
-                WriteMessageBuffer("warning: could not set breakpoint: %s\n", e);
+                concat(outbuffer, "warning: could not set breakpoint: %s\n", e);
                 free(e);
             }
         }

@@ -37,13 +37,13 @@ static pid_t parse_pid(char *pidstr, char **error){
 }
 
 enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
-        int arg1, char **error){
-    WriteMessageBuffer("%4s%#lx\n", "", debuggee->aslr_slide);
+        int arg1, char **outbuffer, char **error){
+    concat(outbuffer, "%4s%#lx\n", "", debuggee->aslr_slide);
     return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char *waitfor = argcopy(args, ATTACH_COMMAND_REGEX_GROUPS[0]);
     char *target = argcopy(args, ATTACH_COMMAND_REGEX_GROUPS[1]);
 
@@ -65,8 +65,13 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
         /* Detach from what we are attached to
          * and call this function again.
-         */     
-        cmdfunc_detach(NULL, 0, NULL);
+         */
+        if(*outbuffer){
+            free(*outbuffer);
+            *outbuffer = NULL;
+        }
+
+        cmdfunc_detach(NULL, 0, outbuffer, NULL);
 
         /* Re-construct the argument queue for the next call. */
         argins(args, ATTACH_COMMAND_REGEX_GROUPS[0], waitfor ? strdup(waitfor) : NULL);
@@ -77,7 +82,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
         free(target);
 
-        return cmdfunc_attach(args, 0, error);
+        return cmdfunc_attach(args, 0, outbuffer, error);
     }
 
     pid_t target_pid;
@@ -142,7 +147,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     debuggee->aslr_slide = debuggee->find_slide();
 
     if(debuggee->aslr_slide == -1)
-        WriteMessageBuffer("warning: couldn't find debuggee's ASLR slide\n");
+        concat(outbuffer, "warning: couldn't find debuggee's ASLR slide\n");
 
     debuggee->pid = target_pid;
 
@@ -176,7 +181,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     debuggee->num_watchpoints = 0;
 
     thread_act_port_array_t threads;
-    debuggee->get_threads(&threads);
+    debuggee->get_threads(&threads, outbuffer);
     
     resetmtid();
     
@@ -188,7 +193,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     debuggee->want_detach = 0;
 
-    WriteMessageBuffer("Attached to %s (pid: %d), slide: %#lx.\n",
+    concat(outbuffer, "Attached to %s (pid: %d), slide: %#lx.\n",
             debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
     /* Have Unix signals be sent as Mach exceptions. */
@@ -204,28 +209,24 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     set_convvar("$ASLR", aslr, &e);
 
     if(e){
-        WriteMessageBuffer("warning: %s\n", e);
+        concat(outbuffer, "warning: %s\n", e);
         free(e);
     }
 
     free(aslr);
-
-    if(waitfor)
-        free(target);
-
     free(target);
 
     return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     struct machthread *focused = machthread_getfocused();
 
     get_thread_state(focused);
 
-    WriteMessageBuffer("  * frame #0: 0x%16.16llx\n", focused->thread_state.__pc);
-    WriteMessageBuffer("    frame #1: 0x%16.16llx\n", focused->thread_state.__lr);
+    concat(outbuffer, "  * frame #0: 0x%16.16llx\n", focused->thread_state.__pc);
+    concat(outbuffer, "    frame #1: 0x%16.16llx\n", focused->thread_state.__lr);
 
     /* There's a linked list of frame pointers. */
     struct frame_t {
@@ -246,7 +247,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     int frame_counter = 2;
 
     while(current_frame->next){
-        WriteMessageBuffer("%4sframe #%d: 0x%16.16lx\n", "", frame_counter,
+        concat(outbuffer, "%4sframe #%d: 0x%16.16lx\n", "", frame_counter,
                 current_frame->frame);
 
         read_memory_at_location((void *)current_frame->next, 
@@ -254,7 +255,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
         frame_counter++;
     }
 
-    WriteMessageBuffer(" - cannot unwind past frame %d -\n", frame_counter - 1);
+    concat(outbuffer, " - cannot unwind past frame %d -\n", frame_counter - 1);
 
     free(current_frame);
 
@@ -262,35 +263,35 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     if(!debuggee->suspended())
         return CMD_FAILURE;
 
     ops_resume();
 
-    WriteMessageBuffer("Process %d resuming\n", debuggee->pid);
+    concat(outbuffer, "Process %d resuming\n", debuggee->pid);
 
     /* Make output look nicer. */
     if(debuggee->currently_tracing){
         rl_already_prompted = 1;
-        WriteMessageBuffer("\n");
+        concat(outbuffer, "\n");
     }
 
     return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args, 
-        int from_death, char **error){
+        int from_death, char **outbuffer, char **error){
     if(!debuggee->tracing_disabled)
         stop_trace();
     
     char *n = strdup(debuggee->debuggee_name);
     pid_t p = debuggee->pid;
 
-    ops_detach(from_death);
+    ops_detach(from_death, outbuffer);
 
     if(!from_death)
-        WriteMessageBuffer("Detached from %s (%d)\n", n, p);
+        concat(outbuffer, "Detached from %s (%d)\n", n, p);
 
     free(n);
 
@@ -298,14 +299,14 @@ enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_help(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     if(args->num_args == 0){
-        show_all_top_level_cmds();
+        show_all_top_level_cmds(outbuffer);
         return CMD_SUCCESS;
     }
 
     char *cmd = argcopy(args, HELP_COMMAND_REGEX_GROUPS[0]);
-    documentation_for_cmdname(cmd, error);
+    documentation_for_cmdname(cmd, outbuffer, error);
 
     free(cmd);
 
@@ -313,7 +314,7 @@ enum cmd_error_t cmdfunc_help(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
 
@@ -335,7 +336,7 @@ enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     char ans = answer("Do you really want to kill %s? (y/n) ", 
             debuggee->debuggee_name);
 
@@ -362,7 +363,7 @@ enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
     int status;
     waitpid(debuggee->pid, &status, 0);
 
-    ops_detach(0);
+    ops_detach(0, outbuffer);
 
     sigsettings(SIGKILL, &notify_backup, &pass_backup, &stop_backup, 1, error);
 
@@ -370,9 +371,9 @@ enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     if(debuggee->pid != -1)
-        ops_detach(0);
+        ops_detach(0, outbuffer);
 
     /* Free the arrays made from the trace.codes file. */
     if(!debuggee->tracing_disabled){
@@ -406,7 +407,7 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     /* Disable breakpoints when single stepping so we don't have to deal
      * with more exceptions being raised. Instead, just check if we're at
      * a breakpointed address every time we step.
@@ -427,7 +428,7 @@ enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
 }
 
 enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
-        int arg1, char **error){
+        int arg1, char **outbuffer, char **error){
     if(debuggee->tracing_disabled){
         concat(error, "tracing is not supported on this host");
         return CMD_FAILURE;
