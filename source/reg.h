@@ -8,7 +8,8 @@ enum format {
     HEXADECIMAL
 };
 
-/* Return a string containing the value of the register requested. */
-char *fetch_reg(struct machthread *, enum format, char *, char **);
+char *regtoa(struct machthread *, enum format, char *, char **);
+long regtol(struct machthread *, enum format, char *, char **);
+void setreg(struct machthread *, char *, char *, char **);
 
 #endif

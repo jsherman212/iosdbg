@@ -19,7 +19,7 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
         struct machthread *focused = machthread_getfocused();
 
         char *e = NULL;
-        char *r = fetch_reg(focused, HEXADECIMAL, curreg, &e);
+        char *r = regtoa(focused, HEXADECIMAL, curreg, &e);
         printf("%s: r '%s' error '%s'\n", __func__, r, e?e:"NULL");
 
         get_neon_state(focused);
@@ -142,7 +142,7 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
 
     while(curreg){
         char *e = NULL;
-        char *r = fetch_reg(focused, HEXADECIMAL, curreg, &e);
+        char *r = regtoa(focused, HEXADECIMAL, curreg, &e);
         printf("%s: r '%s' error '%s'\n", __func__, r, e?e:"NULL");
 
         const size_t curreg_len = strlen(curreg);
@@ -213,6 +213,11 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
         int arg1, char **outbuffer, char **error){
     char *target_str = argcopy(args, REGISTER_WRITE_COMMAND_REGEX_GROUPS[0]);
     char *value_str = argcopy(args, REGISTER_WRITE_COMMAND_REGEX_GROUPS[1]);
+
+    char *e = NULL;
+    setreg(machthread_getfocused(), target_str, value_str, &e);
+
+    printf("%s: setreg error '%s'\n", __func__, e?e:"NULL");
 
     size_t target_str_len = strlen(target_str);
 
