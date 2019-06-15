@@ -91,7 +91,8 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
      * constantly check if this process has launched.
      */
     if(waitfor){
-        printf("Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", 
+        rl_printf(DONT_WAIT_FOR_REPROMPT,
+                "Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", 
                 target);
 
         char *e = NULL;

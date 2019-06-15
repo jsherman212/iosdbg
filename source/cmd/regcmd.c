@@ -6,6 +6,7 @@
 
 #include "../debuggee.h"
 #include "../printing.h"
+#include "../reg.h"
 #include "../strext.h"
 #include "../thread.h"
 
@@ -16,6 +17,10 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
 
     while(curreg){
         struct machthread *focused = machthread_getfocused();
+
+        char *e = NULL;
+        char *r = fetch_reg(focused, HEXADECIMAL, curreg, &e);
+        printf("%s: r '%s' error '%s'\n", __func__, r, e?e:"NULL");
 
         get_neon_state(focused);
 
@@ -136,6 +141,10 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
     char *curreg = argcopy(args, REGISTER_GEN_COMMAND_REGEX_GROUPS[0]);
 
     while(curreg){
+        char *e = NULL;
+        char *r = fetch_reg(focused, HEXADECIMAL, curreg, &e);
+        printf("%s: r '%s' error '%s'\n", __func__, r, e?e:"NULL");
+
         const size_t curreg_len = strlen(curreg);
 
         for(int i=0; i<curreg_len; i++)
