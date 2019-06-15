@@ -6,6 +6,7 @@
 
 #include "convvar.h"
 #include "debuggee.h"
+#include "reg.h"
 #include "stack.h"
 #include "strext.h"
 #include "thread.h"
@@ -151,68 +152,6 @@ static int find_end_of_operand(char *str, int start){
     return end;
 }
 
-static char *lookup_register(char *reg, char **error){
-    if(!reg)
-        return NULL;
-
-    /* Registers will always be two or three characters.
-     * We also have to factor in the '$'.
-     * We will ignore requests for CPSR, FPSR, and FPCR.
-     */
-    size_t reglen = strlen(reg);
-
-    if(reglen < 3 || reglen > 4){
-        concat(error, "bad register '%s'", reg);
-        return NULL;
-    }
-
-    /* Put the string to lowercase so we don't
-     * have to perform as many checks.
-     */
-    for(int i=0; i<reglen; i++)
-        reg[i] = tolower(reg[i]);
-
-    struct machthread *focused = machthread_getfocused();
-
-    get_thread_state(focused);
-
-    long long regval;
-
-    if(strcmp(reg, "$fp") == 0)
-        regval = focused->thread_state.__fp;
-    else if(strcmp(reg, "$lr") == 0)
-        regval = focused->thread_state.__lr;
-    else if(strcmp(reg, "$sp") == 0)
-        regval = focused->thread_state.__sp;
-    else if(strcmp(reg, "$pc") == 0)
-        regval = focused->thread_state.__pc;
-    else{
-        /* We cannot include floating point values. */
-        if(reg[1] != 'x' && reg[1] != 'w'){
-            concat(error, "bad register '%s'", reg);
-            return NULL;
-        }
-
-        char *endptr = NULL;
-        int regnum = strtol(reg + 2, &endptr, 10);
-
-        if(endptr && *endptr){
-            concat(error, "malformed register string '%s'", reg);
-            return NULL;
-        }
-
-        if(reg[1] == 'x')
-            regval = focused->thread_state.__x[regnum];
-        else
-            regval = focused->thread_state.__x[regnum] & 0xFFFFFFFF;
-    }
-
-    char *regvalstr = NULL;
-    concat(&regvalstr, "%llx", regval);
-
-    return regvalstr;
-}
-
 /* Replace any convenience variables in the expression
  * with their values.
  */
@@ -242,7 +181,16 @@ static void sub_conv_vars(char **expr, char **error){
                      */
                     if(error && *error){
                         *error = NULL;
-                        varval_s = lookup_register(varstr, error);
+                        
+                        enum regtype rt = NONE;
+                        struct machthread *focused = machthread_getfocused();
+                        char *e = NULL;
+
+                        regtol(focused, HEXADECIMAL, &rt, varstr,
+                                NULL, &varval_s, &e);
+
+                        if(e)
+                            free(e);
                     }
 
                     /* Insert the value of that convenience variable. */

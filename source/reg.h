@@ -8,8 +8,17 @@ enum format {
     HEXADECIMAL
 };
 
-char *regtoa(struct machthread *, enum format, char *, char **);
-long regtol(struct machthread *, enum format, char *, char **);
+enum regtype {
+    NONE,
+    INTEGER,
+    LONG,
+    FLOAT,
+    DOUBLE,
+    QUADWORD
+};
+
+long regtol(struct machthread *, enum format, enum regtype *, char *,
+        char **, char **, char **);
 void setreg(struct machthread *, char *, char *, char **);
 
 #endif
