@@ -31,10 +31,8 @@ static struct machthread *machthread_new(mach_port_t thread_port){
     mt->just_hit_watchpoint = 0;
     mt->just_hit_breakpoint = 0;
     mt->just_hit_sw_breakpoint = 0;
-
     mt->last_hit_wp_loc = 0;
     mt->last_hit_wp_PC = 0;
-
     mt->last_hit_bkpt_ID = 0;
 
     return mt;  
@@ -60,7 +58,7 @@ static struct machthread *find_with_cond(enum comparison compway,
         else if(compway == FOCUSED)
             cond = t->focused;
         else if(compway == TID)
-            cond = t->tid = *(unsigned long long *)comparingwith;
+            cond = t->tid == *(unsigned long long *)comparingwith;
 
         if(cond)
             return t;

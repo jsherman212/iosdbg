@@ -155,4 +155,47 @@ void ops_threadupdate(char **out){
 
     if(focused)
         machthread_updatestate(focused);
+
+    /* Adjust thread specific breakpoints. */
+    for(struct node_t *current = debuggee->breakpoints->front;
+            current;
+            current = current->next){
+        struct breakpoint *bp = current->data;
+
+        if(bp->threadinfo.all || !bp-hw)
+            continue;
+
+        struct machthread *thread = machthread_find(bp->threadinfo.iosdbg_tid);
+
+        if(thread->tid != bp->threadinfo.real_tid){
+            get_debug_state(thread);
+
+            thread->debug_state.__bcr[bp->hw_bp_reg] = 0;
+            thread->debug_state.__bvr[bp->hw_bp_reg] = 0;
+            thread->debug_state.__mdscr_el1 = 0;
+
+            set_debug_state(thread);
+            
+            struct machthread *correct = machthread_find_via_tid(bp->threadinfo.real_tid);
+
+            if(!correct){
+                concat(out, "[The thread assigned to breakpoint %d has gone"
+                        " away, deleting it]\n", bp->id);
+                breakpoint_delete(bp->id, NULL);
+                continue;
+            }
+
+            get_debug_state(correct);
+
+            correct->debug_state.__bcr[bp->hw_bp_reg] = bp->bcr;
+            correct->debug_state.__bvr[bp->hw_bp_reg] = bp->bvr;
+
+            set_debug_state(correct);
+
+            bp->threadinfo.iosdbg_tid = correct->ID;
+            bp->threadinfo.real_tid = correct->tid;
+
+            concat(out, "[Corrected thread info for breakpoint %d]\n", bp->id);
+        }
+    }
 }

@@ -166,6 +166,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     bp->temporary = temporary;
     bp->id = current_breakpoint_id;
     
+    // XXX once I open up temp breakpoints as a feature this will cause issues
     if(!bp->temporary)
         current_breakpoint_id++;
 
@@ -270,7 +271,7 @@ void breakpoint_at_address(unsigned long address, int temporary,
 
         struct machthread *bpthread = machthread_find(bp->threadinfo.iosdbg_tid);
 
-        if(bpthread && bp->threadinfo.all){
+        if(bpthread){
             concat(outbuffer, ", for thread #%d (tid: %#llx), '%s'\n",
                     bp->threadinfo.iosdbg_tid, bpthread->tid, bpthread->tname);
         }
