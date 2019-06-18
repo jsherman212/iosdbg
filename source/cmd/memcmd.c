@@ -33,7 +33,7 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    kern_return_t err = disassemble_at_location(location, count, NULL);
+    kern_return_t err = disassemble_at_location(location, count, outbuffer);
 
     if(err){
         concat(error, "could not disassemble from %#lx to %#lx: %s", 

@@ -162,7 +162,7 @@ void ops_threadupdate(char **out){
             current = current->next){
         struct breakpoint *bp = current->data;
 
-        if(bp->threadinfo.all || !bp-hw)
+        if(bp->threadinfo.all || !bp->hw)
             continue;
 
         struct machthread *thread = machthread_find(bp->threadinfo.iosdbg_tid);
