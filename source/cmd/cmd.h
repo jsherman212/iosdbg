@@ -6,7 +6,8 @@
 #include "argparse.h"       /* Defines MAX_GROUPS */
 
 void initialize_commands(void);
-enum cmd_error_t do_cmdline_command(char *, char **, int, char **, char **);
+enum cmd_error_t do_cmdline_command(char *, char **, int, int *,
+        char **, char **);
 
 /* Macros for arguments to create_(parent|child)_cmd.
  * These exist for clarity.

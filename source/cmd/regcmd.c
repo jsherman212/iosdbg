@@ -12,7 +12,7 @@
 
 enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args, 
         int arg1, char **outbuffer, char **error){
-    struct machthread *focused = machthread_getfocused();
+    struct machthread *focused = get_focused_thread();
 
     char *curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
 
@@ -49,7 +49,7 @@ enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args, 
         int arg1, char **outbuffer, char **error){
-    struct machthread *focused = machthread_getfocused();
+    struct machthread *focused = get_focused_thread();
 
     /* If there were no arguments, print every register. */
     if(args->num_args == 0){
@@ -108,7 +108,7 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
     char *target_str = argcopy(args, REGISTER_WRITE_COMMAND_REGEX_GROUPS[0]);
     char *value_str = argcopy(args, REGISTER_WRITE_COMMAND_REGEX_GROUPS[1]);
 
-    struct machthread *focused = machthread_getfocused();
+    struct machthread *focused = get_focused_thread();
 
     setreg(focused, target_str, value_str, error);
 

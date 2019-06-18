@@ -1,12 +1,12 @@
-#ifndef _MACHTHREAD_H_
-#define _MACHTHREAD_H_
+#ifndef _THREAD_H_
+#define _THREAD_H_
 
 #include <mach/mach.h>
 
 #define MAXTHREADSIZENAME 64
 
 struct machthread {
-    /* Port to this thread. */
+    /* Port for this thread. */
     mach_port_t port;
 
     /* Tells us if this thread is the one being focused on. */
@@ -51,10 +51,10 @@ enum comparison {
     TID
 };
 
-struct machthread *machthread_fromport(mach_port_t);
-struct machthread *machthread_find(int);
-struct machthread *machthread_find_via_tid(unsigned long long);
-struct machthread *machthread_getfocused(void);
+struct machthread *thread_from_port(mach_port_t);
+struct machthread *find_thread_from_ID(int);
+struct machthread *find_thread_from_TID(unsigned long long);
+struct machthread *get_focused_thread(void);
 
 /* For clarity. This is only used with the functions below. */
 #define FOR_ALL_THREADS (NULL)
@@ -66,14 +66,10 @@ kern_return_t set_debug_state(struct machthread *);
 kern_return_t get_neon_state(struct machthread *);
 kern_return_t set_neon_state(struct machthread *);
 
-int machthread_setfocusgivenindex(int);
-void machthread_updatestate(struct machthread *);
-void machthread_updatethreads(thread_act_port_array_t);
-void machthread_setfocused(mach_port_t);
-
-char *get_thread_name_from_thread_port(mach_port_t);
-unsigned int get_tid_from_thread_port(mach_port_t);
-
+int set_focused_thread_with_idx(int);
+void update_all_thread_states(struct machthread *);
+void update_thread_list(thread_act_port_array_t, char **);
+void set_focused_thread(mach_port_t);
 void resetmtid(void);
 
 static int current_machthread_id = 1;

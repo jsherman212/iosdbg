@@ -343,9 +343,16 @@ static void inputloop(void){
             outbuffer = NULL;
         }
 
+        int force_show_outbuffer = 0;
         char *linecpy = NULL, *error = NULL;
         enum cmd_error_t result = do_cmdline_command(line,
-                &linecpy, 1, &outbuffer, &error);
+                &linecpy, 1, &force_show_outbuffer, &outbuffer, &error);
+
+        if(force_show_outbuffer){
+            rl_printf(DONT_WAIT_FOR_REPROMPT, "%s", outbuffer);
+            free(outbuffer);
+            outbuffer = NULL;
+        }
 
         if(result == CMD_FAILURE && error){
             rl_printf(DONT_WAIT_FOR_REPROMPT, "error: %s\n", error);

@@ -40,7 +40,7 @@ enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    int result = machthread_setfocusgivenindex(thread_id);
+    int result = set_focused_thread_with_idx(thread_id);
     
     if(result){
         concat(error, "could not set focused thread to thread %d", thread_id);

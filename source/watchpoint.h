@@ -4,13 +4,22 @@
 struct watchpoint {
     int id;
     unsigned long user_location;
-    unsigned long watch_location;
+    unsigned long aligned_location;
     int hit_count;
     void *data;
     unsigned int data_len;
     int hw_wp_reg;
-    int LSC;
-    int thread;
+    //int LSC;
+    const char *type;
+
+    struct {
+        int all;
+        int iosdbg_tid;
+        unsigned long long pthread_tid;
+    } threadinfo;
+
+    __uint64_t wcr;
+    __uint64_t wvr;
 };
 
 #define WP_ALL_THREADS (-1)

@@ -93,7 +93,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
 
         char *disassembled = ArmadilloDisassembleB(instr, current_location);
 
-        struct machthread *focused = machthread_getfocused();
+        struct machthread *focused = get_focused_thread();
 
         err = get_thread_state(focused);
 

@@ -4,17 +4,60 @@
 #include "debuggee.h"
 #include "linkedlist.h"
 #include "printing.h"
+#include "strext.h"
 #include "thread.h"
 
-static struct machthread *machthread_new(mach_port_t thread_port){
+static char *get_pthread_name(mach_port_t thread_port){
+    if(thread_port == MACH_PORT_NULL)
+        return NULL;
+
+    thread_extended_info_data_t exinfo;
+    mach_msg_type_number_t count = THREAD_EXTENDED_INFO_COUNT;
+
+    kern_return_t kret = thread_info(thread_port,
+            THREAD_EXTENDED_INFO,
+            (thread_info_t)&exinfo,
+            &count);
+
+    if(kret)
+        return NULL;
+
+    return strdup(exinfo.pth_name);
+}
+
+static unsigned long long get_pthread_tid(mach_port_t thread_port,
+        char **outbuffer){
+    if(thread_port == MACH_PORT_NULL)
+        return KERN_FAILURE;
+
+    thread_identifier_info_data_t ident;
+    mach_msg_type_number_t count = THREAD_IDENTIFIER_INFO_COUNT;
+
+    kern_return_t kret = thread_info(thread_port,
+            THREAD_IDENTIFIER_INFO,
+            (thread_info_t)&ident,
+            &count);
+
+    if(kret){
+        concat(outbuffer, "warning: couldn't get pthread tid"
+                " for thread %#x: %s\n",
+                thread_port, mach_error_string(kret));
+        return -1;
+    }
+
+    return ident.thread_id;
+}
+
+static struct machthread *machthread_new(mach_port_t thread_port,
+        char **outbuffer){
     struct machthread *mt = malloc(sizeof(struct machthread));
 
     mt->port = thread_port;
     mt->focused = 0;
-    mt->tid = get_tid_from_thread_port(mt->port);
+    mt->tid = get_pthread_tid(mt->port, outbuffer);
 
     memset(mt->tname, '\0', sizeof(mt->tname));
-    char *tname = get_thread_name_from_thread_port(mt->port);
+    char *tname = get_pthread_name(mt->port);
     
     if(tname){
         strcpy(mt->tname, tname);
@@ -24,7 +67,7 @@ static struct machthread *machthread_new(mach_port_t thread_port){
         strcpy(mt->tname, "");
     }
     
-    machthread_updatestate(mt);
+    update_all_thread_states(mt);
     
     mt->ID = current_machthread_id++;
 
@@ -70,7 +113,7 @@ static struct machthread *find_with_cond(enum comparison compway,
     return NULL;
 }
 
-struct machthread *machthread_fromport(mach_port_t thread_port){
+struct machthread *thread_from_port(mach_port_t thread_port){
     if(thread_port == MACH_PORT_NULL)
         return NULL;
 
@@ -84,7 +127,7 @@ struct machthread *machthread_fromport(mach_port_t thread_port){
     return ret;
 }
 
-struct machthread *machthread_find(int ID){
+struct machthread *find_thread_from_ID(int ID){
     int *IDptr = malloc(sizeof(ID));
     *IDptr = ID;
     
@@ -95,7 +138,7 @@ struct machthread *machthread_find(int ID){
     return ret;
 }
 
-struct machthread *machthread_find_via_tid(unsigned long long tid){
+struct machthread *find_thread_from_TID(unsigned long long tid){
     unsigned long long *tid_ptr = malloc(sizeof(unsigned long long));
     *tid_ptr = tid;
 
@@ -106,7 +149,7 @@ struct machthread *machthread_find_via_tid(unsigned long long tid){
     return ret;
 }
 
-struct machthread *machthread_getfocused(void){
+struct machthread *get_focused_thread(void){
     return find_with_cond(FOCUSED, NULL);
 }
 
@@ -254,7 +297,7 @@ kern_return_t set_neon_state(struct machthread *thread){
     return KERN_SUCCESS;
 }
 
-int machthread_setfocusgivenindex(int focus_index){
+int set_focused_thread_with_idx(int focus_index){
     /* We print out the thread list starting at 1. */
     focus_index--;
     int counter = 0;
@@ -272,12 +315,12 @@ int machthread_setfocusgivenindex(int focus_index){
     if(!newfocus)
         return -1;
 
-    machthread_setfocused(newfocus->port);
+    set_focused_thread(newfocus->port);
 
     return 0;
 }
 
-void machthread_updatestate(struct machthread *mt){
+void update_all_thread_states(struct machthread *mt){
     if(!mt)
         return;
 
@@ -289,7 +332,8 @@ void machthread_updatestate(struct machthread *mt){
     get_neon_state(mt);
 }
 
-void machthread_updatethreads(thread_act_port_array_t threads){
+void update_thread_list(thread_act_port_array_t threads,
+        char **outbuffer){
     if(!debuggee->threads)
         return;
     
@@ -298,7 +342,7 @@ void machthread_updatethreads(thread_act_port_array_t threads){
      */
     if(!debuggee->threads->front){
         for(int i=0; i<debuggee->thread_count; i++){
-            struct machthread *add = machthread_new(threads[i]);
+            struct machthread *add = machthread_new(threads[i], outbuffer);
             linkedlist_add(debuggee->threads, add);
         }
 
@@ -317,7 +361,7 @@ void machthread_updatethreads(thread_act_port_array_t threads){
 
     while(current){
         struct machthread *t = current->data;
-        struct machthread *updated = machthread_new(threads[tcnt]);
+        struct machthread *updated = machthread_new(threads[tcnt], outbuffer);
         
         mach_port_type_t type;
         mach_port_type(mach_task_self(), t->port, &type);
@@ -333,7 +377,7 @@ void machthread_updatethreads(thread_act_port_array_t threads){
             continue;
         }
         else{
-            machthread_updatestate(t);
+            update_all_thread_states(t);
             t->ID -= ID_deduction;
         }
         
@@ -351,17 +395,17 @@ void machthread_updatethreads(thread_act_port_array_t threads){
      * calling this function.
      */
     for(int i=new_thread_start_ID; i<debuggee->thread_count; i++){
-        struct machthread *add = machthread_new(threads[i]);
+        struct machthread *add = machthread_new(threads[i], outbuffer);
         linkedlist_add(debuggee->threads, add);
     }
 }
 
-void machthread_setfocused(mach_port_t thread_port){
+void set_focused_thread(mach_port_t thread_port){
     if(thread_port == MACH_PORT_NULL)
         return;
 
-    struct machthread *prevfocus = machthread_getfocused();
-    struct machthread *newfocus = machthread_fromport(thread_port);
+    struct machthread *prevfocus = get_focused_thread();
+    struct machthread *newfocus = thread_from_port(thread_port);
     
     if(!newfocus)
         return;
@@ -370,42 +414,6 @@ void machthread_setfocused(mach_port_t thread_port){
     
     if(prevfocus)
         prevfocus->focused = 0;
-}
-
-char *get_thread_name_from_thread_port(mach_port_t thread_port){
-    if(thread_port == MACH_PORT_NULL)
-        return NULL;
-
-    thread_extended_info_data_t exinfo;
-    mach_msg_type_number_t count = THREAD_EXTENDED_INFO_COUNT;
-
-    kern_return_t kret = thread_info(thread_port,
-            THREAD_EXTENDED_INFO,
-            (thread_info_t)&exinfo,
-            &count);
-
-    if(kret)
-        return NULL;
-
-    return strdup(exinfo.pth_name);
-}
-
-unsigned int get_tid_from_thread_port(mach_port_t thread_port){
-    if(thread_port == MACH_PORT_NULL)
-        return KERN_FAILURE;
-
-    thread_identifier_info_data_t ident;
-    mach_msg_type_number_t count = THREAD_IDENTIFIER_INFO_COUNT;
-
-    kern_return_t kret = thread_info(thread_port,
-            THREAD_IDENTIFIER_INFO,
-            (thread_info_t)&ident,
-            &count);
-
-    if(kret)
-        return kret;
-
-    return ident.thread_id;
 }
 
 void resetmtid(void){

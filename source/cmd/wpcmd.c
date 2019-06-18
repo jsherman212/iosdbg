@@ -82,17 +82,9 @@ enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
             current = current->next){
         struct watchpoint *w = current->data;
 
-        concat(outbuffer, "%4s%d: address = %-16.16lx, hit count = %d, size = %d",
-                "", w->id, w->user_location, w->hit_count, w->data_len);
-
-        const char *type = "r";
-
-        if(w->LSC == WP_WRITE)
-            type = "w";
-        else if(w->LSC == WP_READ_WRITE)
-            type = "rw";
-
-        concat(outbuffer, ", type = %s\n", type);
+        concat(outbuffer, "%4s%d: address = %-16.16lx, hit count = %d,"
+                " size = %d, type = %s\n",
+                "", w->id, w->user_location, w->hit_count, w->data_len, w->type);
     }
     
     return CMD_SUCCESS;
@@ -100,19 +92,47 @@ enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args, 
         int arg1, char **outbuffer, char **error){
-    char *type_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[0]);
-    int LSC = WP_WRITE;
+    char *thread_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[0]);
+    int thread = WP_ALL_THREADS;
 
-    if(strcmp(type_str, "--r") == 0)
-        LSC = WP_READ;
-    else if(strcmp(type_str, "--w") == 0)
+    if(thread_str){
+        thread = (int)strtol(thread_str, NULL, 10);
+
+        if(!(thread >= 1 && thread <= debuggee->thread_count)){
+            concat(error, "bad thread number %d", thread);
+            free(thread_str);
+            return CMD_FAILURE;
+        }
+
+        if(!debuggee->suspended()){
+            int len = (int)strlen("warning: ");
+
+            concat(outbuffer, "warning: debuggee is not stopped"
+                    ", thread IDs could have changed.\n"
+                    "%*sIt is suggested to interrupt the debuggee,"
+                    " remind yourself of the list of threads,\n"
+                    "%*sand set the watchpoint again.\n",
+                    len, "", len, "");
+        }
+    }
+
+    char *type_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[1]);
+    int LSC;
+
+    if(!type_str)
         LSC = WP_WRITE;
-    else if(strcmp(type_str, "--rw") == 0)
-        LSC = WP_READ_WRITE;
+    else{
+        if(strcmp(type_str, "r") == 0)
+            LSC = WP_READ;
+        else if(strcmp(type_str, "w") == 0)
+            LSC = WP_WRITE;
+        else
+            LSC = WP_READ_WRITE;
 
-    free(type_str);
+        free(type_str);
+    }
 
-    char *location_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[1]);
+    char *location_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[2]);
     long location = eval_expr(location_str, error);
 
     free(location_str);
@@ -120,7 +140,7 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
 
-    char *data_len_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[2]);
+    char *data_len_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[3]);
     int data_len = (int)strtol_err(data_len_str, error);
 
     free(data_len_str);
@@ -129,7 +149,7 @@ enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args,
         return CMD_FAILURE;
 
     watchpoint_at_address(location, data_len, LSC,
-            WP_ALL_THREADS, outbuffer, error);
+            thread, outbuffer, error);
 
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }

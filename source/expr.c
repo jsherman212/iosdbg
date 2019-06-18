@@ -183,7 +183,7 @@ static void sub_conv_vars(char **expr, char **error){
                         *error = NULL;
                         
                         enum regtype rt = NONE;
-                        struct machthread *focused = machthread_getfocused();
+                        struct machthread *focused = get_focused_thread();
                         char *e = NULL;
 
                         regtol(focused, HEXADECIMAL, &rt, varstr,

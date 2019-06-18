@@ -1,3 +1,10 @@
+6-18-19
+- shutdown threads upon detach
+- rename thread.c functions
+- prepare_and_call_cmdfunc shows cmd documentation on syntax error again
+- working on refactoring breakpoint.c and watchpoint.c
+- working on thread specific watchpoints
+
 6-17-19
 - fix disassemble and compiler error
 

@@ -60,11 +60,28 @@ static struct watchpoint *watchpoint_new(unsigned long location,
     
     struct watchpoint *wp = malloc(sizeof(struct watchpoint));
 
-    wp->thread = thread;
+    if(thread == WP_ALL_THREADS){
+        wp->threadinfo.all = 1;
+        wp->threadinfo.iosdbg_tid = 0;
+        wp->threadinfo.pthread_tid = 0;
+    }
+    else{
+        wp->threadinfo.all = 0;
+        wp->threadinfo.iosdbg_tid = thread;
+
+        struct machthread *target = find_thread_from_ID(wp->threadinfo.iosdbg_tid);
+
+        if(!target){
+            concat(error, "no such thread with ID %d", wp->threadinfo.iosdbg_tid);
+            free(wp);
+            return NULL;
+        }
+
+        wp->threadinfo.pthread_tid = target->tid;
+    }
 
     wp->user_location = location;
-    wp->hit_count = 0;
-    
+    wp->hit_count = 0;    
     wp->data_len = data_len;
     wp->data = malloc(wp->data_len);
 
@@ -88,7 +105,8 @@ static struct watchpoint *watchpoint_new(unsigned long location,
         return NULL;
     }
 
-    wp->LSC = LSC;
+    wp->hw_wp_reg = available_wp_reg;
+    //wp->LSC = LSC;
 
     /* Setup the DBGWCR<n>_EL1 register.
      * We need the following criteria to correctly set up this watchpoint:
@@ -99,7 +117,6 @@ static struct watchpoint *watchpoint_new(unsigned long location,
      *  - E must be 0b1 so this watchpoint is enabled.
      */
     unsigned BAS = (((1 << wp->data_len) - 1) << (wp->user_location & 0x7) << 5);
-    LSC <<= 3;
 
     __uint64_t wcr = BAS | LSC | PAC | E;
 
@@ -108,9 +125,12 @@ static struct watchpoint *watchpoint_new(unsigned long location,
      */
     __uint64_t wvr = (wp->user_location & ~0x7);
 
-    wp->watch_location = wvr;
+    wp->aligned_location = wvr;
 
-    if(wp->thread == WP_ALL_THREADS){
+    wp->wcr = wcr;
+    wp->wvr = wvr;
+
+    if(wp->threadinfo.all){
         for(struct node_t *current = debuggee->threads->front;
                 current;
                 current = current->next){
@@ -118,29 +138,35 @@ static struct watchpoint *watchpoint_new(unsigned long location,
 
             get_debug_state(t);
 
-            t->debug_state.__wcr[available_wp_reg] = wcr;
-            t->debug_state.__wvr[available_wp_reg] = wvr;
+            t->debug_state.__wcr[wp->hw_wp_reg] = wp->wcr;
+            t->debug_state.__wvr[wp->hw_wp_reg] = wp->wvr;
 
             set_debug_state(t);
         }
     }
     else{
-        // XXX struct machthread *target = find_with_id etc etc
+        struct machthread *target = find_thread_from_ID(wp->threadinfo.iosdbg_tid);
+
+        get_debug_state(target);
+
+        target->debug_state.__wcr[wp->hw_wp_reg] = wp->wcr;
+        target->debug_state.__wvr[wp->hw_wp_reg] = wp->wvr;
+
+        set_debug_state(target);
     }
 
-    wp->hw_wp_reg = available_wp_reg;
     wp->id = current_watchpoint_id++;
 
     return wp;
 }
 
 static void enable_wp(struct watchpoint *wp){
-    unsigned BAS = (((1 << wp->data_len) - 1) << (wp->user_location & 0x7) << 5);
+  //  unsigned BAS = (((1 << wp->data_len) - 1) << (wp->user_location & 0x7) << 5);
 
-    __uint64_t wcr = BAS | wp->LSC | PAC | E;
-    __uint64_t wvr = wp->watch_location;
+    //__uint64_t wcr = BAS | wp->LSC | PAC | E;
+    //__uint64_t wvr = wp->aligned_location;
 
-    if(wp->thread == WP_ALL_THREADS){
+    if(wp->threadinfo.all){
         for(struct node_t *current = debuggee->threads->front;
                 current;
                 current = current->next){
@@ -148,33 +174,42 @@ static void enable_wp(struct watchpoint *wp){
 
             get_debug_state(t);
 
-            t->debug_state.__wcr[wp->hw_wp_reg] = wcr;
-            t->debug_state.__wvr[wp->hw_wp_reg] = wvr;
+            t->debug_state.__wcr[wp->hw_wp_reg] = wp->wcr;
+            t->debug_state.__wvr[wp->hw_wp_reg] = wp->wvr;
 
             set_debug_state(t);
         }
     }
     else{
-        // XXX struct machthread *target = find_with_id etc etc
+        struct machthread *target = find_thread_from_ID(wp->threadinfo.iosdbg_tid);
+
+        get_debug_state(target);
+
+        target->debug_state.__wcr[wp->hw_wp_reg] = wp->wcr;
+        target->debug_state.__wvr[wp->hw_wp_reg] = wp->wvr;
+
+        set_debug_state(target);
     }
 }
 
 static void disable_wp(struct watchpoint *wp){
-    if(wp->thread == WP_ALL_THREADS){
+    if(wp->threadinfo.all){
         for(struct node_t *current = debuggee->threads->front;
                 current;
                 current = current->next){
             struct machthread *t = current->data;
 
             get_debug_state(t);
-
             t->debug_state.__wcr[wp->hw_wp_reg] = 0;
-
             set_debug_state(t);
         }
     }
     else{
-        // XXX struct machthread *target = find_with_id etc etc
+        struct machthread *target = find_thread_from_ID(wp->threadinfo.iosdbg_tid);
+
+        get_debug_state(target);
+        target->debug_state.__wcr[wp->hw_wp_reg] = 0;
+        set_debug_state(target);
     }
 }
 
@@ -194,7 +229,8 @@ static void wp_delete_internal(struct watchpoint *wp){
 
 void watchpoint_at_address(unsigned long location, unsigned int data_len,
         int LSC, int thread, char **outbuffer, char **error){
-    struct watchpoint *wp = watchpoint_new(location, data_len, LSC, thread, error);
+    struct watchpoint *wp = watchpoint_new(location, data_len,
+            (LSC << 3), thread, error);
 
     if(!wp)
         return;
@@ -208,8 +244,20 @@ void watchpoint_at_address(unsigned long location, unsigned int data_len,
     else if(LSC == WP_READ_WRITE)
         type = "rw";
 
-    concat(outbuffer, "Watchpoint %d: addr = %#lx size = %d type = %s\n",
-            wp->id, wp->user_location, wp->data_len, type);
+    wp->type = type;
+    
+    if(wp->threadinfo.all){
+        concat(outbuffer, "Watchpoint %d: addr = %#lx size = %d type = %s\n",
+                wp->id, wp->user_location, wp->data_len, wp->type);
+    }
+    else{
+        struct machthread *wpthread = find_thread_from_ID(wp->threadinfo.iosdbg_tid);
+
+        concat(outbuffer, "Watchpoint %d, for thread #%d (tid: %#llx, '%s'\n"
+                "addr = %#lx size = %d type = %s\n",
+                wp->id, wp->threadinfo.iosdbg_tid, wpthread->tid, wpthread->tname,
+                wp->user_location, wp->data_len, wp->type);
+    }
     
     debuggee->num_watchpoints++;
 }
@@ -264,7 +312,7 @@ void watchpoint_delete_all(void){
 }
 
 struct watchpoint *find_wp_with_address(unsigned long addr){
-    /* Double-word align addr to match with wp->watch_location. */
+    /* Double-word align addr to match with wp->aligned_location. */
     addr &= ~0x7;
 
     for(struct node_t *current = debuggee->watchpoints->front;
@@ -272,7 +320,7 @@ struct watchpoint *find_wp_with_address(unsigned long addr){
             current = current->next){
         struct watchpoint *wp = current->data;
 
-        if(wp->watch_location == addr)
+        if(wp->aligned_location == addr)
             return wp;
     }
     

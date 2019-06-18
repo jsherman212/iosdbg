@@ -14,7 +14,7 @@ struct breakpoint {
     struct {
         int all;
         int iosdbg_tid;
-        unsigned long long real_tid;
+        unsigned long long pthread_tid;
     } threadinfo;
 
     __uint64_t bcr;

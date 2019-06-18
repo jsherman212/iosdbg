@@ -36,18 +36,16 @@ static void repair_cmd_args(struct cmd_args_t *_args, int unlim,
     for(int i=0; i<argcount; i++){
         char *arg = va_arg(args, char *);
 
-        if(arg){
+        if(arg)
             argins(_args, groupnames[i], arg);
-        }
     }
 
     if(unlim){
         char *arg = va_arg(args, char *);
 
         while(arg){
-            if(arg){
+            if(arg)
                 argins(_args, groupnames[argcount - 1], arg);
-            }
 
             arg = va_arg(args, char *);
         }
@@ -300,29 +298,32 @@ void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
         return;
     }
 
-    char *type = argcopy(args, groupnames[0]);
+    /* tid doesn't need to be checked. */
+    char *tid = argcopy(args, groupnames[0]);
 
-    if(!type || (strcmp(type, "--r") != 0 &&
-            strcmp(type, "--w") != 0 &&
-            strcmp(type, "--rw") != 0)){
-        concat(error, "invalid watchpoint type");
-        free_on_failure(1, type);
+    char *type = argcopy(args, groupnames[1]);
+
+    if(type && (strcmp(type, "r") != 0 &&
+            strcmp(type, "w") != 0 &&
+            strcmp(type, "rw") != 0)){
+        concat(error, "invalid watchpoint type '%s'", type);
+        free_on_failure(2, tid, type);
         return;
     }
 
-    char *location = argcopy(args, groupnames[1]);
+    char *location = argcopy(args, groupnames[2]);
 
     if(!location){
         concat(error, "need location");
-        free_on_failure(2, type, location);
+        free_on_failure(3, tid, type, location);
     }
 
-    char *size = argcopy(args, groupnames[2]);
+    char *size = argcopy(args, groupnames[3]);
 
     if(!size){
         concat(error, "missing data size");
-        free_on_failure(3, type, location, size);
+        free_on_failure(4, tid, type, location, size);
     }
 
-    repair_cmd_args(args, 0, groupnames, 3, type, location, size);
+    repair_cmd_args(args, 0, groupnames, 4, tid, type, location, size);
 }

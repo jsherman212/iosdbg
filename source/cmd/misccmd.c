@@ -186,10 +186,10 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     
     resetmtid();
     
-    machthread_updatethreads(threads);
-    machthread_setfocused(threads[0]);
+    update_thread_list(threads, outbuffer);
+    set_focused_thread(threads[0]);
 
-    struct machthread *focused = machthread_getfocused();
+    struct machthread *focused = get_focused_thread();
     get_thread_state(focused);
 
     debuggee->want_detach = 0;
@@ -222,7 +222,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
 enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
         int arg1, char **outbuffer, char **error){
-    struct machthread *focused = machthread_getfocused();
+    struct machthread *focused = get_focused_thread();
 
     get_thread_state(focused);
 
@@ -415,7 +415,7 @@ enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
      */
     breakpoint_disable_all();
 
-    struct machthread *focused = machthread_getfocused();
+    struct machthread *focused = get_focused_thread();
 
     get_debug_state(focused);
     focused->debug_state.__mdscr_el1 |= 1;

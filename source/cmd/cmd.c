@@ -438,7 +438,7 @@ void initialize_commands(void){
                 NULL);
         struct dbg_cmd_t *set = create_child_cmd("set",
                 NULL, WATCHPOINT_SET_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
-                WATCHPOINT_SET_COMMAND_REGEX, _NUM_GROUPS(3), _UNK_ARGS(0),
+                WATCHPOINT_SET_COMMAND_REGEX, _NUM_GROUPS(4), _UNK_ARGS(0),
                 WATCHPOINT_SET_COMMAND_REGEX_GROUPS, cmdfunc_watchpoint_set,
                 audit_watchpoint_set);
 
@@ -451,7 +451,7 @@ void initialize_commands(void){
 }
 
 enum cmd_error_t do_cmdline_command(char *user_command_,
-        char **expanded_command, int user_invoked,
+        char **expanded_command, int user_invoked, int *force_show_outbuffer,
         char **outbuffer, char **error){
     char *user_command = strdup(user_command_);
     enum cmd_error_t result = CMD_SUCCESS;
@@ -611,7 +611,8 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
         /* Parse arguments, audit them, and if nothing went wrong,
          * call this command's cmdfunc.
          */
-        result = prepare_and_call_cmdfunc(arguments, outbuffer, error);
+        result = prepare_and_call_cmdfunc(arguments, outbuffer,
+                force_show_outbuffer, error);
     }
 
     free(arguments);

@@ -1,6 +1,5 @@
 #include <errno.h>
 #include <mach/mach.h>
-#include <pthread/pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/event.h>
@@ -15,8 +14,12 @@
 #include "linkedlist.h"
 #include "printing.h"
 #include "queue.h"
+#include "servers.h"
 #include "strext.h"
 #include "trace.h"
+
+pthread_t exception_server_thread;
+pthread_t death_server_thread;
 
 static void *exception_server(void *arg){
     pthread_setname_np("exception handling thread");
@@ -31,13 +34,25 @@ static void *exception_server(void *arg){
     while(MACH_PORT_VALID(debuggee->exception_port)){ 
         struct req *req = malloc(sizeof(struct req));
         
-        mach_msg(&(req->hdr),
-                MACH_RCV_MSG,
+        /* Set a one second timeout so we can check if we need to
+         * shutdown this thread.
+         * For whatever reason, after deallocating this exception port,
+         * mach_msg doesn't return.
+         */
+        kern_return_t err = mach_msg(&(req->hdr),
+                MACH_RCV_MSG | MACH_RCV_TIMEOUT,
                 0,
                 sizeof(struct req),
                 debuggee->exception_port,
-                MACH_MSG_TIMEOUT_NONE,
+                1000,
                 MACH_PORT_NULL);
+
+        pthread_testcancel();
+
+        if(err == MACH_RCV_TIMED_OUT){
+            free(req);
+            continue;
+        }
 
         /* We got something, suspend debuggee execution. */
         ops_suspend();
@@ -47,7 +62,7 @@ static void *exception_server(void *arg){
 
         num_exceptions++;
 
-        kern_return_t err = KERN_SUCCESS;
+        err = KERN_SUCCESS;
 
         /* Gather up any more exceptions. */
         while(err != MACH_RCV_TIMED_OUT){
@@ -104,6 +119,8 @@ static void *exception_server(void *arg){
         if(will_auto_resume)
             ops_resume();
 
+        pthread_testcancel();
+
         if(exception_buffer){
             rl_printf(WAIT_FOR_REPROMPT, "%s", exception_buffer);
             free(exception_buffer);
@@ -113,18 +130,32 @@ static void *exception_server(void *arg){
     return NULL;
 }
 
+static void death_server_cleanup(void *arg){
+    free(arg);
+}
+
 static void *death_server(void *arg){
     pthread_setname_np("death event thread");
+    pthread_cleanup_push(death_server_cleanup, arg);
 
     int kqid = *(int *)arg;
 
+    struct timespec timeout = {0};
+    timeout.tv_sec = 1;
+    timeout.tv_nsec = 0;
+
     struct kevent death_event;
 
-    /* Provide a struct for the kernel to write to if any changes occur. */
-    int changes = kevent(kqid, NULL, 0, &death_event, 1, NULL);
+    int changes = 0;
+
+    while(changes <= 0){
+        /* Provide a struct for the kernel to write to if any changes occur. */
+        changes = kevent(kqid, NULL, 0, &death_event, 1, &timeout);
+        pthread_testcancel();
+    }
 
     /* Don't report if we detached earlier. */
-    if(debuggee->pid == -1 || changes < 0){
+    if(debuggee->pid == -1){
         free(arg);
         pthread_exit(NULL);
     }
@@ -168,7 +199,6 @@ static void *death_server(void *arg){
         free(wtermsigstr);
     }
 
-    free(arg);
     ops_detach(1, &exitbuf);
 
     rl_printf(WAIT_FOR_REPROMPT, "%s", exitbuf);
@@ -180,14 +210,14 @@ static void *death_server(void *arg){
 
     close(kqid);
 
+    pthread_cleanup_pop(1);
+
     return NULL;
 }
 
 void setup_servers(void){
     debuggee->setup_exception_handling(NULL);
 
-    /* Start the exception server. */
-    pthread_t exception_server_thread;
     pthread_create(&exception_server_thread, NULL, exception_server, NULL);
 
     int kqid = kqueue();
@@ -207,7 +237,5 @@ void setup_servers(void){
     int *intptr = malloc(sizeof(int));
     *intptr = kqid;
 
-    /* Check if the debuggee dies. */
-    pthread_t death_server_thread;
     pthread_create(&death_server_thread, NULL, death_server, intptr);
 }

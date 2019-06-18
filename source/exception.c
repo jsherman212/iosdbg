@@ -184,7 +184,6 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
 
     concat(desc, "\n");
     disassemble_at_location(t->thread_state.__pc, 4, desc);
-    set_single_step(t, 0);
 
     debuggee->is_single_stepping = 0;
 
@@ -231,11 +230,11 @@ void handle_exception(Request *request, int *should_auto_resume,
     long subcode = ((long *)request->code)[1];
     
     /* Give focus to whatever caused this exception. */
-    struct machthread *focused = machthread_getfocused();
+    struct machthread *focused = get_focused_thread();
 
     if(!focused || focused->port != thread){
-        machthread_setfocused(thread);
-        focused = machthread_getfocused();
+        set_focused_thread(thread);
+        focused = get_focused_thread();
     }
 
     get_thread_state(focused);

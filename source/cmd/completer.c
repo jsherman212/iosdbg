@@ -32,7 +32,7 @@ static void _reset_matchedcmdinfo(void){
 }
 
 enum cmd_error_t prepare_and_call_cmdfunc(char *args,
-        char **outbuffer, char **error){
+        char **outbuffer, int *force_show_outbuffer, char **error){
     enum cmd_error_t result = CMD_SUCCESS;
 
     if(!CURRENT_MATCH_INFO.cmd_function){
@@ -54,6 +54,7 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args,
             error);
 
     if(*error){
+        *force_show_outbuffer = 1;
         documentation_for_cmd(CURRENT_MATCH_INFO.cmd, outbuffer);
         result = CMD_FAILURE;
         goto out;
@@ -71,7 +72,9 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args,
     }
 
     if(*error){
+        *force_show_outbuffer = 1;
         documentation_for_cmd(CURRENT_MATCH_INFO.cmd, outbuffer);
+        concat(outbuffer, "\n");
         result = CMD_FAILURE;
         goto out;
     }

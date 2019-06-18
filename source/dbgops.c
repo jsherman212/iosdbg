@@ -60,6 +60,9 @@ void ops_printsiginfo(char **outbuffer){
 void ops_detach(int from_death, char **outbuffer){
     ops_suspend();
 
+    pthread_cancel(exception_server_thread);
+    pthread_cancel(death_server_thread);
+
     breakpoint_delete_all();
     watchpoint_delete_all();
 
@@ -131,30 +134,35 @@ void ops_detach(int from_death, char **outbuffer){
     ops_resume();
 }
 
-void ops_resume(void){
-    debuggee->resume();
+kern_return_t ops_resume(void){
+    return debuggee->resume();
 }
 
-void ops_suspend(void){
-    debuggee->suspend();
+kern_return_t ops_suspend(void){
+    return debuggee->suspend();
 }
 
 void ops_threadupdate(char **out){
     thread_act_port_array_t threads;
     debuggee->get_threads(&threads, out);
 
-    machthread_updatethreads(threads);
+    update_thread_list(threads, out);
 
-    struct machthread *focused = machthread_getfocused();
+    struct machthread *focused = get_focused_thread();
 
     if(!focused){
+        if(*out)
+            concat(out, "\n");
+
         concat(out, "[Previously selected thread dead, selecting thread #1]\n\n");
-        machthread_setfocused(threads[0]);
-        focused = machthread_getfocused();
+        set_focused_thread(threads[0]);
+        focused = get_focused_thread();
     }
 
     if(focused)
-        machthread_updatestate(focused);
+        update_all_thread_states(focused);
+
+    // XXX create functions for the following later
 
     /* Adjust thread specific breakpoints. */
     for(struct node_t *current = debuggee->breakpoints->front;
@@ -165,9 +173,9 @@ void ops_threadupdate(char **out){
         if(bp->threadinfo.all || !bp->hw)
             continue;
 
-        struct machthread *thread = machthread_find(bp->threadinfo.iosdbg_tid);
+        struct machthread *thread = find_thread_from_ID(bp->threadinfo.iosdbg_tid);
 
-        if(thread->tid != bp->threadinfo.real_tid){
+        if(thread->tid != bp->threadinfo.pthread_tid){
             get_debug_state(thread);
 
             thread->debug_state.__bcr[bp->hw_bp_reg] = 0;
@@ -176,7 +184,7 @@ void ops_threadupdate(char **out){
 
             set_debug_state(thread);
             
-            struct machthread *correct = machthread_find_via_tid(bp->threadinfo.real_tid);
+            struct machthread *correct = find_thread_from_TID(bp->threadinfo.pthread_tid);
 
             if(!correct){
                 concat(out, "[The thread assigned to breakpoint %d has gone"
@@ -193,9 +201,51 @@ void ops_threadupdate(char **out){
             set_debug_state(correct);
 
             bp->threadinfo.iosdbg_tid = correct->ID;
-            bp->threadinfo.real_tid = correct->tid;
+            bp->threadinfo.pthread_tid = correct->tid;
 
             concat(out, "[Corrected thread info for breakpoint %d]\n", bp->id);
+        }
+    }
+
+    /* Adjust thread specific watchpoints. */
+    for(struct node_t *current = debuggee->watchpoints->front;
+            current;
+            current = current->next){
+        struct watchpoint *wp = current->data;
+
+        if(wp->threadinfo.all)
+            continue;
+
+        struct machthread *thread = find_thread_from_ID(wp->threadinfo.iosdbg_tid);
+
+        if(thread->tid != wp->threadinfo.pthread_tid){
+            get_debug_state(thread);
+
+            thread->debug_state.__wcr[wp->hw_wp_reg] = 0;
+            thread->debug_state.__wvr[wp->hw_wp_reg] = 0;
+
+            set_debug_state(thread);
+            
+            struct machthread *correct = find_thread_from_TID(wp->threadinfo.pthread_tid);
+
+            if(!correct){
+                concat(out, "[The thread assigned to watchpoint %d has gone"
+                        " away, deleting it]\n", wp->id);
+                breakpoint_delete(wp->id, NULL);
+                continue;
+            }
+
+            get_debug_state(correct);
+
+            correct->debug_state.__wcr[wp->hw_wp_reg] = wp->wcr;
+            correct->debug_state.__wvr[wp->hw_wp_reg] = wp->wvr;
+
+            set_debug_state(correct);
+
+            wp->threadinfo.iosdbg_tid = correct->ID;
+            wp->threadinfo.pthread_tid = correct->tid;
+
+            concat(out, "[Corrected thread info for watchpoint %d]\n", wp->id);
         }
     }
 }
