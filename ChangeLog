@@ -1,3 +1,11 @@
+6-19-19
+- new thread to update debuggee threads every second or right when one goes
+away
+- finished thread specific breakpoints
+- implemented thread-safe way to iterate through debuggee's threads,
+still need to do breakpoints and watchpoints
+- working on fixing up ops_threadupdate logic
+
 6-18-19
 - shutdown threads upon detach
 - rename thread.c functions

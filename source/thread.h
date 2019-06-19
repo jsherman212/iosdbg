@@ -2,8 +2,24 @@
 #define _THREAD_H_
 
 #include <mach/mach.h>
+#include <pthread/pthread.h>
+
+#include "linkedlist.h"
+
+extern pthread_mutex_t THREAD_LOCK;
+
+#define TH_LOCKED_FOREACH(var) \
+    pthread_mutex_lock(&THREAD_LOCK); \
+    for(struct node_t *var = debuggee->threads->front; \
+            var; \
+            var = var->next) \
+
+#define TH_END_LOCKED_FOREACH \
+    pthread_mutex_unlock(&THREAD_LOCK)
 
 #define MAXTHREADSIZENAME 64
+
+extern mach_port_t THREAD_DEATH_NOTIFY_PORT;
 
 struct machthread {
     /* Port for this thread. */

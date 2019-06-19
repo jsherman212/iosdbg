@@ -191,13 +191,15 @@ static void enable_hw_bp(struct breakpoint *bp){
     }
     else{
         struct machthread *target = find_thread_from_ID(bp->threadinfo.iosdbg_tid);
+        
+        if(target){
+            get_debug_state(target);
 
-        get_debug_state(target);
+            target->debug_state.__bcr[bp->hw_bp_reg] = bp->bcr;
+            target->debug_state.__bvr[bp->hw_bp_reg] = bp->bvr;
 
-        target->debug_state.__bcr[bp->hw_bp_reg] = bp->bcr;
-        target->debug_state.__bvr[bp->hw_bp_reg] = bp->bvr;
-
-        set_debug_state(target);
+            set_debug_state(target);
+        }
     }
 }
 
@@ -216,9 +218,11 @@ static void disable_hw_bp(struct breakpoint *bp){
     else{
         struct machthread *target = find_thread_from_ID(bp->threadinfo.iosdbg_tid);
 
-        get_debug_state(target);
-        target->debug_state.__bcr[bp->hw_bp_reg] = 0;
-        set_debug_state(target);
+        if(target){
+            get_debug_state(target);
+            target->debug_state.__bcr[bp->hw_bp_reg] = 0;
+            set_debug_state(target);
+        }
     }
 }
 
@@ -244,8 +248,7 @@ static void bp_set_state_internal(struct breakpoint *bp, int disabled){
 
 static void bp_delete_internal(struct breakpoint *bp){
     bp_set_state_internal(bp, BP_DISABLED);
-    linkedlist_delete(debuggee->breakpoints, bp);
-    
+    linkedlist_delete(debuggee->breakpoints, bp);    
     debuggee->num_breakpoints--;
 }
 

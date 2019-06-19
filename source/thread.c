@@ -2,10 +2,12 @@
 #include <stdlib.h>
 
 #include "debuggee.h"
-#include "linkedlist.h"
 #include "printing.h"
 #include "strext.h"
 #include "thread.h"
+
+mach_port_t THREAD_DEATH_NOTIFY_PORT = MACH_PORT_NULL;
+pthread_mutex_t THREAD_LOCK = PTHREAD_MUTEX_INITIALIZER;
 
 static char *get_pthread_name(mach_port_t thread_port){
     if(thread_port == MACH_PORT_NULL)
@@ -48,35 +50,62 @@ static unsigned long long get_pthread_tid(mach_port_t thread_port,
     return ident.thread_id;
 }
 
+static void get_thread_info(struct machthread *thread, char **outbuffer){
+    thread->tid = get_pthread_tid(thread->port, outbuffer);
+
+    memset(thread->tname, '\0', sizeof(thread->tname));
+    char *tname = get_pthread_name(thread->port);
+    
+    if(tname){
+        strncpy(thread->tname, tname, MAXTHREADSIZENAME);
+        free(tname);
+    }
+    else{
+        strcpy(thread->tname, "");
+    }
+    
+    update_all_thread_states(thread);
+}
+
 static struct machthread *machthread_new(mach_port_t thread_port,
         char **outbuffer){
     struct machthread *mt = malloc(sizeof(struct machthread));
 
     mt->port = thread_port;
+
+    get_thread_info(mt, outbuffer);
+
     mt->focused = 0;
-    mt->tid = get_pthread_tid(mt->port, outbuffer);
-
-    memset(mt->tname, '\0', sizeof(mt->tname));
-    char *tname = get_pthread_name(mt->port);
-    
-    if(tname){
-        strcpy(mt->tname, tname);
-        free(tname);
-    }
-    else{
-        strcpy(mt->tname, "");
-    }
-    
-    update_all_thread_states(mt);
-    
     mt->ID = current_machthread_id++;
-
     mt->just_hit_watchpoint = 0;
     mt->just_hit_breakpoint = 0;
     mt->just_hit_sw_breakpoint = 0;
     mt->last_hit_wp_loc = 0;
     mt->last_hit_wp_PC = 0;
     mt->last_hit_bkpt_ID = 0;
+
+    kern_return_t kret = KERN_SUCCESS;
+
+    if(THREAD_DEATH_NOTIFY_PORT == MACH_PORT_NULL){
+        kret = mach_port_allocate(mach_task_self(),
+                MACH_PORT_RIGHT_RECEIVE, &THREAD_DEATH_NOTIFY_PORT);
+
+        if(kret){
+            concat(outbuffer, "warning: could not create initial thread"
+                    " death notify port: %s\n", mach_error_string(kret));
+        }
+    }
+    
+    mach_port_t prev;
+
+    kret = mach_port_request_notification(mach_task_self(), mt->port,
+            MACH_NOTIFY_DEAD_NAME, 0, THREAD_DEATH_NOTIFY_PORT,
+            MACH_MSG_TYPE_MAKE_SEND_ONCE, &prev);
+
+    if(kret){
+        concat(outbuffer, "warning: could not register Mach death notification"
+                " for thread %#x: %s\n", mt->port, mach_error_string(kret));
+    }
 
     return mt;  
 }
@@ -86,28 +115,34 @@ static struct machthread *find_with_cond(enum comparison compway,
         void *comparingwith){
     if(!debuggee->threads)
         return NULL;
-
-    struct node_t *current = debuggee->threads->front;
-
-    while(current){
+ 
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
         int cond = 0;
 
         if(compway == PORTS)
             cond = t->port == *(mach_port_t *)comparingwith;
-        else if(compway == IDS)
+        else if(compway == IDS){
+            //printf("%s: t->ID %d comparingWith %d\n",
+              //      __func__, t->ID, *(int *)comparingwith);
             cond = t->ID == *(int *)comparingwith;
+        }
         else if(compway == FOCUSED)
             cond = t->focused;
         else if(compway == TID)
             cond = t->tid == *(unsigned long long *)comparingwith;
 
-        if(cond)
-            return t;
-
-        current = current->next;
+        if(cond){
+            struct machthread *found = t;
+            if(cond == IDS){
+      //          printf("%s: returning found %p\n", __func__, found);
+            }
+            TH_END_LOCKED_FOREACH;
+            return found;
+        }
     }
+    TH_END_LOCKED_FOREACH;
 
     /* Not found. */
     return NULL;
@@ -163,9 +198,7 @@ kern_return_t get_thread_state(struct machthread *thread){
                 &count);
     }
 
-    for(struct node_t *current = debuggee->threads->front;
-            current;
-            current = current->next){
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
         thread_get_state(t->port,
@@ -173,6 +206,7 @@ kern_return_t get_thread_state(struct machthread *thread){
                 (thread_state_t)&t->thread_state,
                 &count);
     }
+    TH_END_LOCKED_FOREACH;
 
     return KERN_SUCCESS;
 }
@@ -187,9 +221,7 @@ kern_return_t set_thread_state(struct machthread *thread){
                 count);
     }
 
-    for(struct node_t *current = debuggee->threads->front;
-            current;
-            current = current->next){
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
         thread_set_state(t->port,
@@ -197,6 +229,7 @@ kern_return_t set_thread_state(struct machthread *thread){
                 (thread_state_t)&t->thread_state,
                 count);
     }
+    TH_END_LOCKED_FOREACH;
 
     return KERN_SUCCESS;
 }
@@ -211,9 +244,7 @@ kern_return_t get_debug_state(struct machthread *thread){
                 &count);
     }
 
-    for(struct node_t *current = debuggee->threads->front;
-            current;
-            current = current->next){
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
         thread_get_state(t->port,
@@ -221,6 +252,7 @@ kern_return_t get_debug_state(struct machthread *thread){
                 (thread_state_t)&t->debug_state,
                 &count);
     }
+    TH_END_LOCKED_FOREACH;
 
     return KERN_SUCCESS;
 }
@@ -235,9 +267,7 @@ kern_return_t set_debug_state(struct machthread *thread){
                 count);
     }
 
-    for(struct node_t *current = debuggee->threads->front;
-            current;
-            current = current->next){
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
         thread_set_state(t->port,
@@ -245,6 +275,7 @@ kern_return_t set_debug_state(struct machthread *thread){
                 (thread_state_t)&t->debug_state,
                 count);
     }
+    TH_END_LOCKED_FOREACH;
 
     return KERN_SUCCESS;
 }
@@ -259,9 +290,7 @@ kern_return_t get_neon_state(struct machthread *thread){
                 &count);
     }
     
-    for(struct node_t *current = debuggee->threads->front;
-            current;
-            current = current->next){
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
         thread_get_state(t->port,
@@ -269,6 +298,7 @@ kern_return_t get_neon_state(struct machthread *thread){
                 (thread_state_t)&t->neon_state,
                 &count);
     }
+    TH_END_LOCKED_FOREACH;
 
     return KERN_SUCCESS;
 }
@@ -283,9 +313,7 @@ kern_return_t set_neon_state(struct machthread *thread){
                 count);
     }
     
-    for(struct node_t *current = debuggee->threads->front;
-            current;
-            current = current->next){
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
         thread_set_state(t->port,
@@ -293,6 +321,7 @@ kern_return_t set_neon_state(struct machthread *thread){
                 (thread_state_t)&t->neon_state,
                 count);
     }
+    TH_END_LOCKED_FOREACH;
 
     return KERN_SUCCESS;
 }
@@ -301,16 +330,16 @@ int set_focused_thread_with_idx(int focus_index){
     /* We print out the thread list starting at 1. */
     focus_index--;
     int counter = 0;
-
-    struct node_t *current = debuggee->threads->front;
     struct machthread *newfocus = NULL;
 
-    while(current && counter <= focus_index){
-        newfocus = current->data;
-        current = current->next;
+    TH_LOCKED_FOREACH(current){
+        if(counter > focus_index)
+            break;
 
+        newfocus = current->data;
         counter++;
     }
+    TH_END_LOCKED_FOREACH;
 
     if(!newfocus)
         return -1;
@@ -334,7 +363,7 @@ void update_all_thread_states(struct machthread *mt){
 
 void update_thread_list(thread_act_port_array_t threads,
         char **outbuffer){
-    if(!debuggee->threads)
+    if(!debuggee->threads || !threads)
         return;
     
     /* Check if there are no threads in the linked list. This should only
@@ -349,26 +378,19 @@ void update_thread_list(thread_act_port_array_t threads,
         return;
     }
 
+    int tcnt = 0, ID_deduction = 0, new_thread_start_ID = 1;
+
     /* Before we add the new threads, go through our current list
      * and clean it up if necessary.
      */
-    struct node_t *current = debuggee->threads->front;
-
-    int tcnt = 0;
-    int ID_deduction = 0;
-    
-    int new_thread_start_ID = 1;
-
-    while(current){
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
-        struct machthread *updated = machthread_new(threads[tcnt], outbuffer);
         
         mach_port_type_t type;
         mach_port_type(mach_task_self(), t->port, &type);
 
         if(type == MACH_PORT_TYPE_DEAD_NAME){
             linkedlist_delete(debuggee->threads, t);
-            current = current->next;
             ID_deduction++;
             
             /* If we've gotten to the end of our list of threads,
@@ -377,16 +399,14 @@ void update_thread_list(thread_act_port_array_t threads,
             continue;
         }
         else{
-            update_all_thread_states(t);
+            get_thread_info(t, outbuffer);
             t->ID -= ID_deduction;
         }
         
         new_thread_start_ID = t->ID;
-        current = current->next;
         tcnt++;
-
-        free(updated);
     }
+    TH_END_LOCKED_FOREACH;
 
     current_machthread_id = new_thread_start_ID + 1;
 

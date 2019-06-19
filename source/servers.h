@@ -5,7 +5,8 @@
 
 extern pthread_t exception_server_thread;
 extern pthread_t death_server_thread;
+extern pthread_t tmon_thread;
 
-void setup_servers(void);
+void setup_servers(char **);
 
 #endif

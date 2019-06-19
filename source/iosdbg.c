@@ -304,11 +304,6 @@ static void setup_initial_debuggee(void){
     set_convvar("$_exitsignal", "", &error);
 }
 
-static inline void threadupdate(char **outbuffer){
-    if(debuggee->pid != -1)
-        ops_threadupdate(outbuffer);
-}
-
 static void inputloop(void){
     char *line = NULL, *prevline = NULL;
 
@@ -334,17 +329,8 @@ static void inputloop(void){
             add_history(line);
         }
 
-        char *outbuffer = NULL;
-        threadupdate(&outbuffer);
-
-        if(outbuffer){
-            rl_printf(DONT_WAIT_FOR_REPROMPT, "%s", outbuffer);
-            free(outbuffer);
-            outbuffer = NULL;
-        }
-
         int force_show_outbuffer = 0;
-        char *linecpy = NULL, *error = NULL;
+        char *outbuffer = NULL, *linecpy = NULL, *error = NULL;
         enum cmd_error_t result = do_cmdline_command(line,
                 &linecpy, 1, &force_show_outbuffer, &outbuffer, &error);
 

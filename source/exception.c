@@ -118,10 +118,10 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
 static void handle_hit_watchpoint(struct machthread *t, char **desc){
     struct watchpoint *hit = find_wp_with_address(t->last_hit_wp_loc);
 
-    watchpoint_hit(hit);
-
     if(!hit)
         return;
+
+    watchpoint_hit(hit);
 
     unsigned int sz = hit->data_len;
 

@@ -175,9 +175,6 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     debuggee->breakpoints = linkedlist_new();
     debuggee->watchpoints = linkedlist_new();
     debuggee->threads = linkedlist_new();
-
-    setup_servers();
-
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
 
@@ -191,6 +188,8 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     struct machthread *focused = get_focused_thread();
     get_thread_state(focused);
+
+    setup_servers(outbuffer);
 
     debuggee->want_detach = 0;
 

@@ -106,7 +106,6 @@ static struct watchpoint *watchpoint_new(unsigned long location,
     }
 
     wp->hw_wp_reg = available_wp_reg;
-    //wp->LSC = LSC;
 
     /* Setup the DBGWCR<n>_EL1 register.
      * We need the following criteria to correctly set up this watchpoint:
@@ -161,11 +160,6 @@ static struct watchpoint *watchpoint_new(unsigned long location,
 }
 
 static void enable_wp(struct watchpoint *wp){
-  //  unsigned BAS = (((1 << wp->data_len) - 1) << (wp->user_location & 0x7) << 5);
-
-    //__uint64_t wcr = BAS | wp->LSC | PAC | E;
-    //__uint64_t wvr = wp->aligned_location;
-
     if(wp->threadinfo.all){
         for(struct node_t *current = debuggee->threads->front;
                 current;
@@ -223,7 +217,6 @@ static void wp_set_state_internal(struct watchpoint *wp, int disabled){
 static void wp_delete_internal(struct watchpoint *wp){
     disable_wp(wp);
     linkedlist_delete(debuggee->watchpoints, wp);
-
     debuggee->num_watchpoints--;
 }
 

@@ -67,7 +67,8 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
     
     return CMD_SUCCESS;
 }
-
+// XXX XXX move back when done
+#include "../thread.h"
 enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
         int arg1, char **outbuffer, char **error){
     if(debuggee->num_breakpoints == 0){
@@ -84,6 +85,12 @@ enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
 
         concat(outbuffer, "%4s%d: address = %-16.16lx, hit count = %d, hardware = %d\n",
                 "", b->id, b->location, b->hit_count, b->hw);
+
+        if(!(b->threadinfo.all)){
+            struct machthread *bpthread = find_thread_from_ID(b->threadinfo.iosdbg_tid);
+            concat(outbuffer, "%8sfor thread %d (tid: %#llx), '%s'\n",
+                    "", bpthread->ID, bpthread->tid, bpthread->tname);
+        }
     }
     
     return CMD_SUCCESS;

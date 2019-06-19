@@ -62,6 +62,7 @@ void ops_detach(int from_death, char **outbuffer){
 
     pthread_cancel(exception_server_thread);
     pthread_cancel(death_server_thread);
+    pthread_cancel(tmon_thread);
 
     breakpoint_delete_all();
     watchpoint_delete_all();
@@ -146,6 +147,11 @@ void ops_threadupdate(char **out){
     thread_act_port_array_t threads;
     debuggee->get_threads(&threads, out);
 
+    //printf("%s: threads %p\n", __func__, threads);
+
+    if(!threads)
+        return;
+
     update_thread_list(threads, out);
 
     struct machthread *focused = get_focused_thread();
@@ -173,37 +179,62 @@ void ops_threadupdate(char **out){
         if(bp->threadinfo.all || !bp->hw)
             continue;
 
-        struct machthread *thread = find_thread_from_ID(bp->threadinfo.iosdbg_tid);
+        struct machthread *found_thread = find_thread_from_ID(bp->threadinfo.iosdbg_tid);
 
-        if(thread->tid != bp->threadinfo.pthread_tid){
-            get_debug_state(thread);
+        /* If that didn't work, let's see if we can find our thread
+         * from its pthread TID.
+         */
+        
+        if(!found_thread){
+        /*    concat(out, "%s: searching for thread based off of iosdbg"
+                   " TID didn't work, trying pthread TID\n", __func__);
+           */
+            found_thread = find_thread_from_TID(bp->threadinfo.pthread_tid);
+        }
+        /*
+        concat(out, "%s: bp %d: iosdbg tid %d pthread tid %#llx."
+                " Found thread iosdbg tid %d thread->tid %#llx\n",
+                __func__, bp->id, bp->threadinfo.iosdbg_tid,
+                bp->threadinfo.pthread_tid,
+                found_thread?found_thread->ID:-1,found_thread?found_thread->tid:-1);
+        */
+        struct machthread *correct_thread = find_thread_from_TID(bp->threadinfo.pthread_tid);
 
-            thread->debug_state.__bcr[bp->hw_bp_reg] = 0;
-            thread->debug_state.__bvr[bp->hw_bp_reg] = 0;
-            thread->debug_state.__mdscr_el1 = 0;
+        if(found_thread && correct_thread &&
+                ((found_thread->tid != bp->threadinfo.pthread_tid) ||
+                (found_thread->ID != bp->threadinfo.iosdbg_tid))){
+            get_debug_state(found_thread);
 
-            set_debug_state(thread);
+            found_thread->debug_state.__bcr[bp->hw_bp_reg] = 0;
+            found_thread->debug_state.__bvr[bp->hw_bp_reg] = 0;
+            found_thread->debug_state.__mdscr_el1 = 0;
+
+            set_debug_state(found_thread);
             
-            struct machthread *correct = find_thread_from_TID(bp->threadinfo.pthread_tid);
+            //printf( "%s: correct_thread: %p\n", __func__, correct_thread);
 
-            if(!correct){
-                concat(out, "[The thread assigned to breakpoint %d has gone"
-                        " away, deleting it]\n", bp->id);
-                breakpoint_delete(bp->id, NULL);
-                continue;
-            }
+            get_debug_state(correct_thread);
 
-            get_debug_state(correct);
+            correct_thread->debug_state.__bcr[bp->hw_bp_reg] = bp->bcr;
+            correct_thread->debug_state.__bvr[bp->hw_bp_reg] = bp->bvr;
 
-            correct->debug_state.__bcr[bp->hw_bp_reg] = bp->bcr;
-            correct->debug_state.__bvr[bp->hw_bp_reg] = bp->bvr;
+            set_debug_state(correct_thread);
 
-            set_debug_state(correct);
-
-            bp->threadinfo.iosdbg_tid = correct->ID;
-            bp->threadinfo.pthread_tid = correct->tid;
+            bp->threadinfo.iosdbg_tid = correct_thread->ID;
+            bp->threadinfo.pthread_tid = correct_thread->tid;
 
             concat(out, "[Corrected thread info for breakpoint %d]\n", bp->id);
+        }
+        else if(!found_thread || !correct_thread){
+            /*
+            concat(out, "%s: thread for breakpoint %d doesn't exist,"
+                    " we searched for iosdbg id %#x, pthread tid %#llx\n",
+                    __func__,
+                    bp->id, bp->threadinfo.iosdbg_tid, bp->threadinfo.pthread_tid);
+                    */
+            concat(out, "\n[The thread assigned to breakpoint %d has gone"
+                    " away, deleting it]\n", bp->id);
+            breakpoint_delete(bp->id, NULL);
         }
     }
 
@@ -229,7 +260,7 @@ void ops_threadupdate(char **out){
             struct machthread *correct = find_thread_from_TID(wp->threadinfo.pthread_tid);
 
             if(!correct){
-                concat(out, "[The thread assigned to watchpoint %d has gone"
+                concat(out, "\n[The thread assigned to watchpoint %d has gone"
                         " away, deleting it]\n", wp->id);
                 breakpoint_delete(wp->id, NULL);
                 continue;
@@ -245,7 +276,7 @@ void ops_threadupdate(char **out){
             wp->threadinfo.iosdbg_tid = correct->ID;
             wp->threadinfo.pthread_tid = correct->tid;
 
-            concat(out, "[Corrected thread info for watchpoint %d]\n", wp->id);
+            concat(out, "\n[Corrected thread info for watchpoint %d]\n", wp->id);
         }
     }
 }

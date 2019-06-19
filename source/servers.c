@@ -16,18 +16,20 @@
 #include "queue.h"
 #include "servers.h"
 #include "strext.h"
+#include "thread.h"
 #include "trace.h"
 
 pthread_t exception_server_thread;
 pthread_t death_server_thread;
+pthread_t tmon_thread;
+
+struct req {
+    mach_msg_header_t hdr;
+    char data[256];
+};
 
 static void *exception_server(void *arg){
     pthread_setname_np("exception handling thread");
-
-    struct req {
-        mach_msg_header_t hdr;
-        char data[256];
-    };
 
     int num_exceptions = 0, will_auto_resume = 1;
 
@@ -215,27 +217,61 @@ static void *death_server(void *arg){
     return NULL;
 }
 
-void setup_servers(void){
-    debuggee->setup_exception_handling(NULL);
+static void *thread_monitor_server(void *arg){
+    pthread_setname_np("thread monitor");
+
+    while(1){
+        struct req *req = malloc(sizeof(struct req));
+
+        /* Update the list of threads every second or right
+         * after one goes away.
+         */
+        mach_msg(&(req->hdr),
+                MACH_RCV_MSG | MACH_RCV_TIMEOUT,
+                0,
+                sizeof(struct req),
+                THREAD_DEATH_NOTIFY_PORT,
+                1000,
+                MACH_PORT_NULL);
+
+        free(req);
+
+        pthread_testcancel();
+        
+        char *thbuffer = NULL;
+        ops_threadupdate(&thbuffer);
+
+        if(thbuffer){
+            rl_printf(WAIT_FOR_REPROMPT, "%s", thbuffer);
+            free(thbuffer);
+        }
+    }
+    
+    return NULL;
+}
+
+void setup_servers(char **outbuffer){
+    debuggee->setup_exception_handling(outbuffer);
 
     pthread_create(&exception_server_thread, NULL, exception_server, NULL);
 
     int kqid = kqueue();
 
-    if(kqid == -1){
-        printf("Could not create kernel event queue\n");
-        return;
+    if(kqid == -1)
+        concat(outbuffer, "warning: could not create kernel event queue\n");
+    else{
+        struct kevent kev;
+
+        EV_SET(&kev, debuggee->pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
+
+        /* Tell the kernel to add this event to the monitored list. */
+        kevent(kqid, &kev, 1, NULL, 0, NULL);
+
+        int *intptr = malloc(sizeof(int));
+        *intptr = kqid;
+
+        pthread_create(&death_server_thread, NULL, death_server, intptr);
     }
 
-    struct kevent kev;
-
-    EV_SET(&kev, debuggee->pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, NULL);
-
-    /* Tell the kernel to add this event to the monitored list. */
-    kevent(kqid, &kev, 1, NULL, 0, NULL);
-
-    int *intptr = malloc(sizeof(int));
-    *intptr = kqid;
-
-    pthread_create(&death_server_thread, NULL, death_server, intptr);
+    pthread_create(&tmon_thread, NULL, thread_monitor_server, NULL);
 }
