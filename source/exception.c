@@ -49,14 +49,9 @@ static const char *exc_str(exception_type_t exception){
     }
 }
 
-static void set_single_step(struct machthread *t, int enabled){
+static inline void enable_single_step(struct machthread *t){
     get_debug_state(t);
-
-    if(enabled)
-        t->debug_state.__mdscr_el1 |= 1;
-    else
-        t->debug_state.__mdscr_el1 = 0;
-
+    t->debug_state.__mdscr_el1 |= 1;
     set_debug_state(t);
 }
 
@@ -252,10 +247,6 @@ void handle_exception(Request *request, int *should_auto_resume,
 
     get_thread_state(focused);
 
-    //printf("%s: focused->ignore_upcoming_exception %d\n",
-      //      __func__, focused->ignore_upcoming_exception);
-    focused->ignore_upcoming_exception = 0;
-
     concat(desc, "\n * Thread #%d (tid = %#llx)", focused->ID, focused->tid);
 
     /* A number of things could have happened to cause an exception:
@@ -317,7 +308,7 @@ void handle_exception(Request *request, int *should_auto_resume,
         /* The software step exception will occur after the user
          * resumes the debuggee.
          */
-        set_single_step(focused, 1);
+        enable_single_step(focused);
         
         /* should not print, should auto resume */
         *should_print = 0;
@@ -359,7 +350,7 @@ void handle_exception(Request *request, int *should_auto_resume,
         concat(desc, ": '%s':", focused->tname);
         handle_hit_breakpoint(focused, should_auto_resume, should_print, subcode, desc);
         disassemble_at_location(focused->thread_state.__pc, 4, desc);
-        set_single_step(focused, 1);
+        enable_single_step(focused);
     }
     /* Something else occured. */
     else{

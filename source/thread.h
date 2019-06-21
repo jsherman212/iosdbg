@@ -66,8 +66,6 @@ struct machthread {
 
     /* Keeps track of the ID of the last breakpoint that hit on this thread. */
     int last_hit_bkpt_ID;
-
-    int ignore_upcoming_exception;
 };
 
 enum comparison {

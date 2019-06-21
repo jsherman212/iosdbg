@@ -1,5 +1,6 @@
 6-21-19
 - thread specific breakpoints and watchpoints finished
+- corrected excessive rl_printf timeout timer
 
 6-20-19
 - iosdbg remembers command history between sessions

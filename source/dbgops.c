@@ -239,8 +239,6 @@ static void clear_wrong_thread_debug_state(int which, struct machthread *t,
 
     t->debug_state.__mdscr_el1 = 0;
 
-    t->ignore_upcoming_exception = 1;
-
     set_debug_state(t);
 }
 

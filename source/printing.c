@@ -20,7 +20,7 @@ int rl_printf(int setting, const char *msg, ...){
         /* Wait until readline has reprompted us from the main thread
          * in order to adjust the prompt and assure clean output if we're
          * printing from another thread.
-         * For safety, include a timeout of five seconds.
+         * For safety, include a timeout.
          */
         mach_timebase_info_data_t info;
         kern_return_t err = mach_timebase_info(&info);
@@ -30,16 +30,17 @@ int rl_printf(int setting, const char *msg, ...){
             return -1;
         }
 
-        double timeout = 5.0;
+        double timeout = 0.08;
 
         uint64_t start = mach_absolute_time();
         uint64_t end = start;
+        uint64_t nanos = 0;
 
         while(!(rl_readline_state & RL_STATE_READCMD)){
             end = mach_absolute_time();
 
             uint64_t elapsed = end - start;
-            uint64_t nanos = elapsed * (info.numer / info.denom);
+            nanos = elapsed * (info.numer / info.denom);
 
             if(((double)nanos / NSEC_PER_SEC) >= timeout)
                 break;
