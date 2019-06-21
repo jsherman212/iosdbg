@@ -1,3 +1,4 @@
+#include <mach/mach.h>
 #include <mach/mach_time.h>
 #include <pthread/pthread.h>
 #include <stdarg.h>
@@ -26,6 +27,7 @@ int rl_printf(int setting, const char *msg, ...){
         kern_return_t err = mach_timebase_info(&info);
 
         if(err){
+            printf("warning: mach_timebase_info says %s\n", mach_error_string(err));
             pthread_mutex_unlock(&printing_mutex);
             return -1;
         }
@@ -34,13 +36,12 @@ int rl_printf(int setting, const char *msg, ...){
 
         uint64_t start = mach_absolute_time();
         uint64_t end = start;
-        uint64_t nanos = 0;
 
         while(!(rl_readline_state & RL_STATE_READCMD)){
             end = mach_absolute_time();
 
             uint64_t elapsed = end - start;
-            nanos = elapsed * (info.numer / info.denom);
+            uint64_t nanos = elapsed * (info.numer / info.denom);
 
             if(((double)nanos / NSEC_PER_SEC) >= timeout)
                 break;
