@@ -1,3 +1,6 @@
+6-21-19
+- thread specific breakpoints and watchpoints finished
+
 6-20-19
 - iosdbg remembers command history between sessions
 - done implementing thread safe iteration for debuggee breakpoints,

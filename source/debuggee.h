@@ -90,7 +90,8 @@ struct debuggee {
     kern_return_t (*suspend)(void);
 
     /* The function pointer to update the list of the debuggee's threads. */
-    kern_return_t (*get_threads)(thread_act_port_array_t *, char **);
+    kern_return_t (*get_threads)(thread_act_port_array_t *,
+            mach_msg_type_number_t *, char **);
 
     /* The function pointer to figure out if the debuggee is currently suspended. */
     int (*suspended)(void);

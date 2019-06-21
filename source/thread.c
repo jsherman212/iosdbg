@@ -364,23 +364,27 @@ void update_all_thread_states(struct machthread *mt){
 }
 
 void update_thread_list(thread_act_port_array_t threads,
-        char **outbuffer){
+        mach_msg_type_number_t cnt, char **outbuffer){
     TH_LOCK;
 
     if(!debuggee->threads || !threads){
+        debuggee->thread_count = 0;
         TH_UNLOCK;
         return;
     }
+
 
     /* Check if there are no threads in the linked list. This should only
      * be the case right after we attach to our target program.
      */
     if(!debuggee->threads->front){
-        for(int i=0; i<debuggee->thread_count; i++){
+        for(int i=0; i<cnt; i++){
             struct machthread *add = machthread_new(threads[i], outbuffer);
 
-            if(add)
+            if(add){
+                debuggee->thread_count = i+1;
                 linkedlist_add(debuggee->threads, add);
+            }
         }
 
         TH_UNLOCK;
@@ -390,26 +394,88 @@ void update_thread_list(thread_act_port_array_t threads,
 
     mach_port_t focused_th_port = MACH_PORT_NULL;
 
+    struct th_excinfo {
+        mach_port_t owner;
+
+        int just_hit_watchpoint;
+        int just_hit_breakpoint;
+        int just_hit_sw_breakpoint;
+        unsigned long last_hit_wp_loc;
+        unsigned long last_hit_wp_PC;
+        int last_hit_bkpt_ID;
+        int ignore_upcoming_exception;
+    };
+
+    //int num_good_threads = 0;
+
+    int infos_cnt = 0;
+    struct th_excinfo **infos = malloc(infos_cnt);
+    
+   // printf("%s: cnt %d, debuggee->num_threads %d\n", __func__, cnt,
+     //       debuggee->thread_count);
+
     TH_FOREACH(current){
         struct machthread *t = current->data;
 
         if(t->focused)
             focused_th_port = t->port;
 
+        struct th_excinfo **infos_rea = realloc(infos, sizeof(struct th_excinfo) *
+                (++infos_cnt));
+        infos = infos_rea;
+
+        struct th_excinfo *info = malloc(sizeof(struct th_excinfo));
+
+        info->owner = t->port;
+
+        info->just_hit_watchpoint = t->just_hit_watchpoint;
+        info->just_hit_breakpoint = t->just_hit_breakpoint;
+        info->just_hit_sw_breakpoint = t->just_hit_sw_breakpoint;
+        info->last_hit_wp_loc = t->last_hit_wp_loc;
+        info->last_hit_wp_PC = t->last_hit_wp_PC;
+        info->last_hit_bkpt_ID = t->last_hit_bkpt_ID;
+        info->ignore_upcoming_exception = t->ignore_upcoming_exception;
+
+        infos[infos_cnt - 1] = info;
+
         linkedlist_delete(debuggee->threads, t);
     }
 
     resetmtid();
 
-    for(int i=0; i<debuggee->thread_count; i++){
+    for(int i=0; i<cnt; i++){
         struct machthread *add = machthread_new(threads[i], outbuffer);
 
-        if(threads[i] == focused_th_port)
+        if(add && threads[i] == focused_th_port)
             add->focused = 1;
 
-        if(add)
+        if(add){
+            for(int j=0; j<infos_cnt; j++){
+                //printf("%s: looking at infos[j] %p j %d\n",
+                  //      __func__, infos[j], j);
+                if(infos[j]->owner == add->port){
+                    add->just_hit_watchpoint = infos[j]->just_hit_watchpoint;
+                    add->just_hit_breakpoint = infos[j]->just_hit_breakpoint;
+                    add->just_hit_sw_breakpoint = infos[j]->just_hit_sw_breakpoint;
+                    add->last_hit_wp_loc = infos[j]->last_hit_wp_loc;
+                    add->last_hit_wp_PC = infos[j]->last_hit_wp_PC;
+                    add->last_hit_bkpt_ID = infos[j]->last_hit_bkpt_ID;
+                    add->ignore_upcoming_exception = infos[j]->ignore_upcoming_exception;
+
+                    break;
+                }
+
+            }
+
+            debuggee->thread_count = i+1;
             linkedlist_add(debuggee->threads, add);
+        }
     }
+
+    for(int i=0; i<infos_cnt; i++)
+        free(infos[i]);
+
+    free(infos);
 
     TH_UNLOCK;
 }

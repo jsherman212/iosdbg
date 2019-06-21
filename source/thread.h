@@ -94,7 +94,8 @@ kern_return_t set_neon_state(struct machthread *);
 
 int set_focused_thread_with_idx(int);
 void update_all_thread_states(struct machthread *);
-void update_thread_list(thread_act_port_array_t, char **);
+void update_thread_list(thread_act_port_array_t,
+        mach_msg_type_number_t, char **);
 void set_focused_thread(mach_port_t);
 void resetmtid(void);
 

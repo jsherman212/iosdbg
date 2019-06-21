@@ -189,11 +189,14 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     debuggee->num_watchpoints = 0;
 
     thread_act_port_array_t threads;
-    debuggee->get_threads(&threads, outbuffer);
+    mach_msg_type_number_t cnt;
+    debuggee->get_threads(&threads, &cnt, outbuffer);
+
+    debuggee->thread_count = cnt;
     
     resetmtid();
     
-    update_thread_list(threads, outbuffer);
+    update_thread_list(threads, debuggee->thread_count, outbuffer);
     set_focused_thread(threads[0]);
 
     struct machthread *focused = get_focused_thread();

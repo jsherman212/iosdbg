@@ -252,8 +252,8 @@ void handle_exception(Request *request, int *should_auto_resume,
 
     get_thread_state(focused);
 
-    printf("%s: focused->ignore_upcoming_exception %d\n",
-            __func__, focused->ignore_upcoming_exception);
+    //printf("%s: focused->ignore_upcoming_exception %d\n",
+      //      __func__, focused->ignore_upcoming_exception);
     focused->ignore_upcoming_exception = 0;
 
     concat(desc, "\n * Thread #%d (tid = %#llx)", focused->ID, focused->tid);

@@ -149,14 +149,11 @@ kern_return_t suspend(void){
     return task_suspend(debuggee->task);
 }
 
-kern_return_t get_threads(thread_act_port_array_t *threads, char **outbuffer){
-    mach_msg_type_number_t thread_count;
-    
-    kern_return_t err = task_threads(debuggee->task, threads, &thread_count);
+kern_return_t get_threads(thread_act_port_array_t *threads,
+        mach_msg_type_number_t *cnt, char **outbuffer){
+    kern_return_t err = task_threads(debuggee->task, threads, cnt);
     
     WARN_ON_MACH_ERR(err);
-
-    debuggee->thread_count = thread_count;
 
     return err;
 }

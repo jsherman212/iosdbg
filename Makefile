@@ -23,7 +23,7 @@ cmds : $(CMD_SOURCES) $(CRITICAL_HEADER_FILES)
 	cd $(SRC)/cmd
 	$(MAKE) -B
 
-BUILD-DEVICE=iosdragon
+BUILD-DEVICE=pink
 BUILD-PATH=/var/mobile/iosdbg-dev
 
 deploy:

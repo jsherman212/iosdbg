@@ -322,12 +322,13 @@ static void adjust_bps_and_wps(char **out){
 
 void ops_threadupdate(char **out){
     thread_act_port_array_t threads;
-    debuggee->get_threads(&threads, out);
+    mach_msg_type_number_t cnt;
+    debuggee->get_threads(&threads, &cnt, out);
 
     if(!threads)
         return;
 
-    update_thread_list(threads, out);
+    update_thread_list(threads, cnt, out);
 
     struct machthread *focused = get_focused_thread();
 
@@ -344,4 +345,12 @@ void ops_threadupdate(char **out){
         update_all_thread_states(focused);
 
     adjust_bps_and_wps(out);
+
+    kern_return_t ret = vm_deallocate(mach_task_self(),
+            (vm_address_t)threads, cnt * sizeof(mach_port_t));
+
+    if(ret){
+        concat(out, "warning: vm_deallocate says %s\n", __func__,
+                mach_error_string(ret));
+    }
 }

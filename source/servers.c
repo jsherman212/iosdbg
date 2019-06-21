@@ -240,9 +240,7 @@ static void *thread_monitor_server(void *arg){
         
         char *thbuffer = NULL;
         
-        ops_suspend();
         ops_threadupdate(&thbuffer);
-        ops_resume();
 
         if(thbuffer){
             rl_printf(WAIT_FOR_REPROMPT, "%s", thbuffer);
