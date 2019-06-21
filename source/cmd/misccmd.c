@@ -28,6 +28,7 @@
 #include "../tarrays.h"
 #include "../thread.h"
 #include "../trace.h"
+#include "../watchpoint.h"
 
 int KEEP_CHECKING_FOR_PROCESS;
 
@@ -172,9 +173,18 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     debuggee->exc_requests = queue_new();
 
+    BP_LOCK;
     debuggee->breakpoints = linkedlist_new();
+    BP_UNLOCK;
+
+    WP_LOCK;
     debuggee->watchpoints = linkedlist_new();
+    WP_UNLOCK;
+
+    TH_LOCK;
     debuggee->threads = linkedlist_new();
+    TH_UNLOCK;
+    
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
 
@@ -318,17 +328,14 @@ enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args,
     if(debuggee->pid == -1)
         return CMD_FAILURE;
 
-    for(struct node_t *current = debuggee->threads->front;
-            current;
-            current = current->next){
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
         get_debug_state(t);
-
         t->debug_state.__mdscr_el1 = 0;
-
         set_debug_state(t);
     }
+    TH_END_LOCKED_FOREACH;
 
     kill(debuggee->pid, SIGSTOP);
 

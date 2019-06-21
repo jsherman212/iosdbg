@@ -10,6 +10,8 @@
 #include "strext.h"
 #include "thread.h"
 
+pthread_mutex_t BREAKPOINT_LOCK = PTHREAD_MUTEX_INITIALIZER;
+
 /* Find an available hardware breakpoint register.*/
 static int find_ready_bp_reg(void){
     /* Keep track of what hardware breakpoint registers are used
@@ -22,14 +24,13 @@ static int find_ready_bp_reg(void){
      */
     memset(bp_map, -1, sizeof(int) * debuggee->num_hw_bps);
 
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
+    BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
 
         if(bp->hw)
             bp_map[bp->hw_bp_reg] = 0;
     }
+    BP_END_LOCKED_FOREACH;
 
     /* Now search bp_map for any empty spots. */
     for(int i=0; i<debuggee->num_hw_bps; i++){
@@ -57,6 +58,8 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     
     struct breakpoint *bp = malloc(sizeof(struct breakpoint));
 
+    bp->threadinfo.tname = NULL;
+
     if(thread == BP_ALL_THREADS){
         bp->threadinfo.all = 1;
         bp->threadinfo.iosdbg_tid = 0;
@@ -75,6 +78,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
         }
 
         bp->threadinfo.pthread_tid = target->tid;
+        concat(&bp->threadinfo.tname, "%s", target->tname);
     }
 
     bp->hw = 0;
@@ -110,9 +114,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
         bp->bvr = bvr;
 
         if(bp->threadinfo.all){
-            for(struct node_t *current = debuggee->threads->front;
-                    current;
-                    current = current->next){
+            TH_LOCKED_FOREACH(current){
                 struct machthread *t = current->data;
 
                 get_debug_state(t);
@@ -122,16 +124,30 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
 
                 set_debug_state(t);
             }
+            TH_END_LOCKED_FOREACH;
         }
         else{
             struct machthread *target = find_thread_from_ID(bp->threadinfo.iosdbg_tid);
 
-            get_debug_state(target);
+            if(target){
+                get_debug_state(target);
 
-            target->debug_state.__bcr[available_bp_reg] = bcr;
-            target->debug_state.__bvr[available_bp_reg] = bvr;
+                target->debug_state.__bcr[available_bp_reg] = bcr;
+                target->debug_state.__bvr[available_bp_reg] = bvr;
 
-            set_debug_state(target);
+                set_debug_state(target);
+            }
+            else{
+                concat(error, "the thread for your breakpoint has gone away,"
+                        " please try again.");
+
+                if(bp->threadinfo.tname)
+                    free(bp->threadinfo.tname);
+
+                free(bp);
+
+                return NULL;
+            }
         }
     }
     
@@ -169,16 +185,12 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     if(!bp->temporary)
         current_breakpoint_id++;
 
-    debuggee->num_breakpoints++;
-
     return bp;
 }
 
 static void enable_hw_bp(struct breakpoint *bp){
     if(bp->threadinfo.all){
-        for(struct node_t *current = debuggee->threads->front;
-                current;
-                current = current->next){
+        TH_LOCKED_FOREACH(current){
             struct machthread *t = current->data;
 
             get_debug_state(t);
@@ -188,6 +200,7 @@ static void enable_hw_bp(struct breakpoint *bp){
 
             set_debug_state(t);
         }
+        TH_END_LOCKED_FOREACH;
     }
     else{
         struct machthread *target = find_thread_from_ID(bp->threadinfo.iosdbg_tid);
@@ -205,15 +218,14 @@ static void enable_hw_bp(struct breakpoint *bp){
 
 static void disable_hw_bp(struct breakpoint *bp){
     if(bp->threadinfo.all){
-        for(struct node_t *current = debuggee->threads->front;
-                current;
-                current = current->next){
+        TH_LOCKED_FOREACH(current){
             struct machthread *t = current->data;
 
             get_debug_state(t);
             t->debug_state.__bcr[bp->hw_bp_reg] = 0;
             set_debug_state(t);
         }
+        TH_END_LOCKED_FOREACH;
     }
     else{
         struct machthread *target = find_thread_from_ID(bp->threadinfo.iosdbg_tid);
@@ -248,6 +260,10 @@ static void bp_set_state_internal(struct breakpoint *bp, int disabled){
 
 static void bp_delete_internal(struct breakpoint *bp){
     bp_set_state_internal(bp, BP_DISABLED);
+    
+    if(bp->threadinfo.tname)
+        free(bp->threadinfo.tname);
+
     linkedlist_delete(debuggee->breakpoints, bp);    
     debuggee->num_breakpoints--;
 }
@@ -259,16 +275,17 @@ void breakpoint_at_address(unsigned long address, int temporary,
     if(!bp)
         return;
 
+    BP_LOCK;
     linkedlist_add(debuggee->breakpoints, bp);
+    BP_UNLOCK;
 
     if(!temporary){
         concat(outbuffer, "Breakpoint %d at %#lx", bp->id, bp->location);
 
-        struct machthread *bpthread = find_thread_from_ID(bp->threadinfo.iosdbg_tid);
-
-        if(bpthread){
+        if(!bp->threadinfo.all){
             concat(outbuffer, ", for thread #%d (tid: %#llx), '%s'\n",
-                    bp->threadinfo.iosdbg_tid, bpthread->tid, bpthread->tname);
+                    bp->threadinfo.iosdbg_tid, bp->threadinfo.pthread_tid,
+                    bp->threadinfo.tname);
         }
         else{
             concat(outbuffer, "\n");
@@ -280,6 +297,8 @@ void breakpoint_at_address(unsigned long address, int temporary,
      */
     if(!bp->hw)
         write_memory_to_location(bp->location, CFSwapInt32(BRK), 4);
+
+    debuggee->num_breakpoints++;
 }
 
 void breakpoint_hit(struct breakpoint *bp){
@@ -287,108 +306,116 @@ void breakpoint_hit(struct breakpoint *bp){
         return;
 
     if(bp->temporary)
-        breakpoint_delete(bp->id, NULL);
+        breakpoint_delete_specific(bp);
     else
         bp->hit_count++;
 }
 
 void breakpoint_delete(int breakpoint_id, char **error){
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
+    BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
 
         if(bp->id == breakpoint_id){
             bp_delete_internal(bp);
+            BP_END_LOCKED_FOREACH;
             return;
         }
     }
+    BP_END_LOCKED_FOREACH;
 
     if(error)
         concat(error, "breakpoint %d not found", breakpoint_id);
 }
 
+void breakpoint_delete_specific(struct breakpoint *bp){
+    if(!bp)
+        return;
+
+    bp_delete_internal(bp);
+}
+
 void breakpoint_disable(int breakpoint_id, char **error){
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
+    BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
 
         if(bp->id == breakpoint_id){
             bp_set_state_internal(bp, BP_DISABLED);
+            BP_END_LOCKED_FOREACH;
             return;
         }
     }
+    BP_END_LOCKED_FOREACH;
 
     if(error)
         concat(error, "breakpoint %d not found", breakpoint_id);
 }
 
 void breakpoint_enable(int breakpoint_id, char **error){
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
+    BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
 
         if(bp->id == breakpoint_id){
             bp_set_state_internal(bp, BP_ENABLED);
+            BP_END_LOCKED_FOREACH;
             return;
         }
     }
+    BP_END_LOCKED_FOREACH;
 
     if(error)
         concat(error, "breakpoint %d not found", breakpoint_id);
 }
 
 void breakpoint_disable_all(void){
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
+    BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
         bp_set_state_internal(bp, BP_DISABLED);
     }
+    BP_END_LOCKED_FOREACH;
 }
 
 void breakpoint_enable_all(void){
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
+    BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
         bp_set_state_internal(bp, BP_ENABLED);
     }
+    BP_END_LOCKED_FOREACH;
 }
 
 int breakpoint_disabled(int breakpoint_id){
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
+    BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
 
-        if(bp->id == breakpoint_id)
-            return bp->disabled;
+        if(bp->id == breakpoint_id){
+            int disabled = bp->disabled;
+            BP_END_LOCKED_FOREACH;
+            return disabled;
+        }
     }
+    BP_END_LOCKED_FOREACH;
 
     return 0;
 }
 
 void breakpoint_delete_all(void){
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
+    BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
         bp_delete_internal(bp);
     }
+    BP_END_LOCKED_FOREACH;
 }
 
 struct breakpoint *find_bp_with_address(unsigned long addr){
-    for(struct node_t *current = debuggee->breakpoints->front;
-            current;
-            current = current->next){
+    BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
         
-        if(bp->location == addr)
-            return bp;
+        if(bp->location == addr){
+            struct breakpoint *found = bp;
+            BP_END_LOCKED_FOREACH;
+            return found;
+        }
     }
+    BP_END_LOCKED_FOREACH;
 
     return NULL;
 }

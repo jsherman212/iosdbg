@@ -5,7 +5,10 @@
 
 #include "argparse.h"       /* Defines MAX_GROUPS */
 
+extern FILE *IOSDBG_HISTORY;
+
 void initialize_commands(void);
+void load_history(void);
 enum cmd_error_t do_cmdline_command(char *, char **, int, int *,
         char **, char **);
 

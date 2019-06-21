@@ -1,6 +1,22 @@
 #ifndef _WATCHPOINT_H_
 #define _WATCHPOINT_H_
 
+#include <pthread/pthread.h>
+
+extern pthread_mutex_t WATCHPOINT_LOCK;
+
+#define WP_LOCKED_FOREACH(var) \
+    pthread_mutex_lock(&WATCHPOINT_LOCK); \
+    for(struct node_t *var = debuggee->watchpoints->front; \
+            var; \
+            var = var->next) \
+
+#define WP_END_LOCKED_FOREACH \
+    pthread_mutex_unlock(&WATCHPOINT_LOCK)
+
+#define WP_LOCK pthread_mutex_lock(&WATCHPOINT_LOCK)
+#define WP_UNLOCK pthread_mutex_unlock(&WATCHPOINT_LOCK)
+
 struct watchpoint {
     int id;
     unsigned long user_location;
@@ -9,13 +25,13 @@ struct watchpoint {
     void *data;
     unsigned int data_len;
     int hw_wp_reg;
-    //int LSC;
     const char *type;
 
     struct {
         int all;
         int iosdbg_tid;
         unsigned long long pthread_tid;
+        char *tname;
     } threadinfo;
 
     __uint64_t wcr;
@@ -38,6 +54,7 @@ static int current_watchpoint_id = 1;
 
 void watchpoint_at_address(unsigned long, unsigned int, int, int, char **, char **);
 void watchpoint_hit(struct watchpoint *);
+void watchpoint_delete_specific(struct watchpoint *);
 void watchpoint_delete(int, char **);
 void watchpoint_enable_all(void);
 void watchpoint_disable_all(void);

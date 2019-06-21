@@ -10,6 +10,7 @@
 #include "../linkedlist.h"
 #include "../queue.h"
 #include "../strext.h"
+#include "../thread.h"
 
 static void free_on_failure(int argcount, ...){
     va_list args;
@@ -264,8 +265,10 @@ void audit_thread_list(struct cmd_args_t *args, const char **groupnames,
         return;
     }
 
+    TH_LOCK;
     if(!debuggee->threads || !debuggee->threads->front)
         concat(error, "no threads");
+    TH_UNLOCK;
 }
 
 void audit_thread_select(struct cmd_args_t *args, const char **groupnames,
@@ -275,10 +278,13 @@ void audit_thread_select(struct cmd_args_t *args, const char **groupnames,
         return;
     }
 
+    TH_LOCK;
     if(!debuggee->threads || !debuggee->threads->front){
+        TH_UNLOCK;
         concat(error, "no threads");
         return;
     }
+    TH_UNLOCK;
 
     char *tid = argcopy(args, groupnames[0]);
 

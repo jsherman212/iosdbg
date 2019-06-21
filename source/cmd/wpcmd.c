@@ -77,15 +77,20 @@ enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
 
     concat(outbuffer, "Current watchpoints:\n");
 
-    for(struct node_t *current = debuggee->watchpoints->front;
-            current;
-            current = current->next){
+    WP_LOCKED_FOREACH(current){
         struct watchpoint *w = current->data;
 
         concat(outbuffer, "%4s%d: address = %-16.16lx, hit count = %d,"
                 " size = %d, type = %s\n",
                 "", w->id, w->user_location, w->hit_count, w->data_len, w->type);
+
+        if(!(w->threadinfo.all)){
+            concat(outbuffer, "%8sfor thread %d (tid: %#llx), '%s'\n",
+                    "", w->threadinfo.iosdbg_tid, w->threadinfo.pthread_tid,
+                    w->threadinfo.tname);
+        }
     }
+    WP_END_LOCKED_FOREACH;
     
     return CMD_SUCCESS;
 }

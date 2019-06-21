@@ -11,15 +11,14 @@
 
 enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args, 
         int arg1, char **outbuffer, char **error){
-    for(struct node_t *current = debuggee->threads->front;
-            current;
-            current = current->next){
+    TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
         concat(outbuffer, "\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", 
                 t->focused ? "* " : "", t->ID, t->tid, t->tname, 
                 t->thread_state.__pc);
     }
+    TH_END_LOCKED_FOREACH;
 
     return CMD_SUCCESS;
 }

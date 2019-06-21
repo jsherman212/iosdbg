@@ -6,6 +6,11 @@
 
 #include "linkedlist.h"
 
+#define TH_FOREACH(var) \
+    for(struct node_t *var = debuggee->threads->front; \
+            var; \
+            var = var->next) \
+
 extern pthread_mutex_t THREAD_LOCK;
 
 #define TH_LOCKED_FOREACH(var) \
@@ -16,6 +21,9 @@ extern pthread_mutex_t THREAD_LOCK;
 
 #define TH_END_LOCKED_FOREACH \
     pthread_mutex_unlock(&THREAD_LOCK)
+
+#define TH_LOCK pthread_mutex_lock(&THREAD_LOCK)
+#define TH_UNLOCK pthread_mutex_unlock(&THREAD_LOCK)
 
 #define MAXTHREADSIZENAME 64
 
@@ -28,7 +36,7 @@ struct machthread {
     /* Tells us if this thread is the one being focused on. */
     int focused;
 
-    /* Thread ID. */
+    /* pthread thread ID. */
     unsigned long long tid;
 
     /* The name of this thread. */
@@ -58,6 +66,8 @@ struct machthread {
 
     /* Keeps track of the ID of the last breakpoint that hit on this thread. */
     int last_hit_bkpt_ID;
+
+    int ignore_upcoming_exception;
 };
 
 enum comparison {

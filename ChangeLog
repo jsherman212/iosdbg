@@ -1,3 +1,9 @@
+6-20-19
+- iosdbg remembers command history between sessions
+- done implementing thread safe iteration for debuggee breakpoints,
+watchpoints, and threads
+- fixed up ops_threadupdate logic
+
 6-19-19
 - new thread to update debuggee threads every second or right when one goes
 away

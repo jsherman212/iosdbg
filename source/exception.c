@@ -115,11 +115,15 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
     ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
 }
 
-static void handle_hit_watchpoint(struct machthread *t, char **desc){
+static void handle_hit_watchpoint(struct machthread *t, int *should_auto_resume,
+        int *should_print, char **desc){
     struct watchpoint *hit = find_wp_with_address(t->last_hit_wp_loc);
 
-    if(!hit)
+    if(!hit){
+        /* should auto resume, shouldn't print */
+        *should_print = 0;
         return;
+    }
 
     watchpoint_hit(hit);
 
@@ -141,6 +145,9 @@ static void handle_hit_watchpoint(struct machthread *t, char **desc){
     
     t->last_hit_wp_loc = 0;
     t->last_hit_wp_PC = 0;
+
+    /* should print, should not auto resume */
+    *should_auto_resume = 0;
 }
 
 static void handle_single_step(struct machthread *t, int *should_auto_resume,
@@ -192,15 +199,18 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
 }
 
 static void handle_hit_breakpoint(struct machthread *t,
-        long subcode, char **desc){
+        int *should_auto_resume, int *should_print, long subcode, char **desc){
     struct breakpoint *hit = find_bp_with_address(subcode);
 
     /* This could be possible. If the user deletes all breakpoints before
      * we have a chance to handle an exception related to a breakpoint,
      * we'll end up with hit being NULL.
      */
-    if(!hit)
+    if(!hit){
+        /* should auto resume, shouldn't print */
+        *should_print = 0;
         return;
+    }
 
     breakpoint_hit(hit);
 
@@ -213,6 +223,9 @@ static void handle_hit_breakpoint(struct machthread *t,
     }
 
     t->last_hit_bkpt_ID = hit->id;
+
+    /* should print, should not auto resume */
+    *should_auto_resume = 0;
 }
 
 void handle_exception(Request *request, int *should_auto_resume,
@@ -238,6 +251,10 @@ void handle_exception(Request *request, int *should_auto_resume,
     }
 
     get_thread_state(focused);
+
+    printf("%s: focused->ignore_upcoming_exception %d\n",
+            __func__, focused->ignore_upcoming_exception);
+    focused->ignore_upcoming_exception = 0;
 
     concat(desc, "\n * Thread #%d (tid = %#llx)", focused->ID, focused->tid);
 
@@ -311,12 +328,8 @@ void handle_exception(Request *request, int *should_auto_resume,
     else if(exception == EXC_BREAKPOINT && code == EXC_ARM_BREAKPOINT){
         if(subcode == 0){
             if(focused->just_hit_watchpoint){
-                handle_hit_watchpoint(focused, desc);
+                handle_hit_watchpoint(focused, should_auto_resume, should_print, desc);
                 focused->just_hit_watchpoint = 0;
-
-                /* should print, should not auto resume */
-                *should_auto_resume = 0;
-
                 return;
             }
 
@@ -344,12 +357,9 @@ void handle_exception(Request *request, int *should_auto_resume,
         focused->just_hit_breakpoint = 1;
 
         concat(desc, ": '%s':", focused->tname);
-        handle_hit_breakpoint(focused, subcode, desc);
+        handle_hit_breakpoint(focused, should_auto_resume, should_print, subcode, desc);
         disassemble_at_location(focused->thread_state.__pc, 4, desc);
         set_single_step(focused, 1);
-
-        /* should print, should not auto resume */
-        *should_auto_resume = 0;
     }
     /* Something else occured. */
     else{

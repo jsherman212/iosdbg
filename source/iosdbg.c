@@ -327,6 +327,12 @@ static void inputloop(void){
         else if(linelen > 0 &&
                 (!prevline || (prevline && strcmp(line, prevline) != 0))){
             add_history(line);
+
+            if(IOSDBG_HISTORY){
+                fwrite(line, sizeof(char), linelen, IOSDBG_HISTORY);
+                fputc('\n', IOSDBG_HISTORY);
+                fflush(IOSDBG_HISTORY);
+            }
         }
 
         int force_show_outbuffer = 0;
@@ -407,6 +413,7 @@ int main(int argc, char **argv, const char **envp){
     install_handlers();
     initialize_readline();
     initialize_commands();
+    load_history();
     
     struct sigaction sa = {0};
     
@@ -435,6 +442,9 @@ int main(int argc, char **argv, const char **envp){
             "Type '!' before your input to execute a shell command.\n");
 
     inputloop();
+
+    if(IOSDBG_HISTORY)
+        fclose(IOSDBG_HISTORY);
 
     return 0;
 }
