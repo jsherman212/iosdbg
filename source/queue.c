@@ -59,12 +59,9 @@ void queue_free(struct queue_t *queue){
     if(!queue)
         return;
 
-    if(queue->data)
-        free(queue->data);
-
-    queue->data = NULL;
-
+    free(queue->data);
     free(queue);
 
+    queue->data = NULL;
     queue = NULL;
 }

@@ -189,8 +189,7 @@ static void sub_conv_vars(char **expr, char **error){
                         regtol(focused, HEXADECIMAL, &rt, varstr,
                                 NULL, &varval_s, &e);
 
-                        if(e)
-                            free(e);
+                        free(e);
                     }
 
                     /* Insert the value of that convenience variable. */

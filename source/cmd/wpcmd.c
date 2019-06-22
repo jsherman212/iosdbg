@@ -47,20 +47,17 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
         char *e = NULL;
         int id = (int)strtol_err(all_ids[i], &e);
 
-        if(e){
-            free(e);
-            e = NULL;
-        }
+        free(e);
+        e = NULL;
 
         watchpoint_delete(id, &e);
 
-        if(e){
+        if(e)
             concat(outbuffer, "%s\n", e);
-            free(e);
-        }
-        else{
+        else
             concat(outbuffer, "Watchpoint %d deleted\n", id);
-        }
+
+        free(e);
     }
 
     token_array_free(all_ids, len);

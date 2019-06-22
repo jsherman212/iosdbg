@@ -263,8 +263,7 @@ void handle_exception(Request *request, int *should_auto_resume,
 
         sigsettings(subcode, &notify, &pass, &stop, 0, &error);
 
-        if(error)
-            free(error);
+        free(error);
         
         concat(desc, ", '%s' received signal ", focused->tname);
         handle_soft_signal(focused->port, subcode, desc, notify, pass, stop);

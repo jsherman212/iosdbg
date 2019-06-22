@@ -47,20 +47,17 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
         char *e = NULL;
         int id = (int)strtol_err(all_ids[i], &e);
 
-        if(e){
-            free(e);
-            e = NULL;
-        }
+        free(e);
+        e = NULL;
 
         breakpoint_delete(id, &e);
 
-        if(e){
+        if(e)
             concat(outbuffer, "%s\n", e);
-            free(e);
-        }
-        else{
+        else
             concat(outbuffer, "Breakpoint %d deleted\n", id);
-        }
+
+        free(e);
     }
 
     token_array_free(all_ids, len);
@@ -128,20 +125,18 @@ enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args,
         char *e = NULL;
         long location = eval_expr(location_str, &e);
 
-        if(e){
+        if(e)
             concat(outbuffer, "warning: could not set breakpoint: %s\n", e);
-            free(e);
-        }
         else{
             breakpoint_at_address(location, BP_NO_TEMP, thread, outbuffer, &e);
 
-            if(e){
+            if(e)
                 concat(outbuffer, "warning: could not set breakpoint: %s\n", e);
-                free(e);
-            }
         }
 
+        free(e);
         free(location_str);
+
         location_str = argcopy(args, BREAKPOINT_SET_COMMAND_REGEX_GROUPS[1]);
     }
 

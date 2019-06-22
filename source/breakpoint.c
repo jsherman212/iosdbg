@@ -141,9 +141,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
                 concat(error, "the thread for your breakpoint has gone away,"
                         " please try again.");
 
-                if(bp->threadinfo.tname)
-                    free(bp->threadinfo.tname);
-
+                free(bp->threadinfo.tname);
                 free(bp);
 
                 return NULL;
@@ -261,8 +259,7 @@ static void bp_set_state_internal(struct breakpoint *bp, int disabled){
 static void bp_delete_internal(struct breakpoint *bp){
     bp_set_state_internal(bp, BP_DISABLED);
     
-    if(bp->threadinfo.tname)
-        free(bp->threadinfo.tname);
+    free(bp->threadinfo.tname);
 
     linkedlist_delete(debuggee->breakpoints, bp);    
     debuggee->num_breakpoints--;

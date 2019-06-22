@@ -33,8 +33,7 @@ void ops_printsiginfo(char **outbuffer){
 
         sigsettings(signo, &notify, &pass, &stop, 0, &e);
 
-        if(e)
-            free(e);
+        free(e);
 
         char *sigstr = strdup(sys_signame[signo]);
         size_t sigstrlen = strlen(sigstr);

@@ -262,8 +262,7 @@ static int setup_tracing(void){
         free(freethis);
     }
 
-    if(line)
-        free(line);
+    free(line);
 
     fclose(tracecodes);
 
@@ -357,15 +356,9 @@ static void inputloop(void){
             }
 
             if(result == CMD_QUIT){
-                if(linecpy)
-                    free(linecpy);
-
-                if(prevline)
-                    free(prevline);
-
-                if(error)
-                    free(error);
-
+                free(linecpy);
+                free(prevline);
+                free(error);
                 free(line);
 
                 return;
@@ -376,10 +369,10 @@ static void inputloop(void){
             size_t linecpylen = strlen(linecpy);
             char *prevline_replacement = realloc(prevline, linecpylen + 1);
             strncpy(prevline_replacement, linecpy, linecpylen + 1);
-            free(linecpy);
             prevline = prevline_replacement;
         }
 
+        free(linecpy);
         free(line);
     }
 }

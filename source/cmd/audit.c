@@ -18,9 +18,7 @@ static void free_on_failure(int argcount, ...){
 
     for(int i=0; i<argcount; i++){
         char *arg = va_arg(args, char *);
-
-        if(arg)
-            free(arg);
+        free(arg);
     }
 
     va_end(args);
@@ -229,18 +227,7 @@ void audit_memory_write(struct cmd_args_t *args, const char **groupnames,
         concat(error, "no debuggee");
 }
 
-void audit_register_float(struct cmd_args_t *args, const char **groupnames,
-        char **error){
-    if(debuggee->pid == -1){
-        concat(error, "no debuggee");
-        return;
-    }
-
-    if(args->num_args == 0)
-        concat(error, "need a register");
-}
-
-void audit_register_gen(struct cmd_args_t *args, const char **groupnames,
+void audit_register_view(struct cmd_args_t *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");

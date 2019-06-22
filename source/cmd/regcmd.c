@@ -10,44 +10,7 @@
 #include "../strext.h"
 #include "../thread.h"
 
-enum cmd_error_t cmdfunc_register_float(struct cmd_args_t *args, 
-        int arg1, char **outbuffer, char **error){
-    struct machthread *focused = get_focused_thread();
-
-    char *curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
-
-    while(curreg){
-        char *cleanedreg = NULL, *curregval = NULL, *e = NULL;
-        enum regtype curregtype = NONE;
-
-        long val = regtol(focused, HEXADECIMAL, &curregtype,
-                curreg, &cleanedreg, &curregval, &e);
-
-        if(e){
-            concat(outbuffer, "%10s %s\n", "error:", e);
-            free(e);
-        }
-
-        if(curregtype == FLOAT)
-            concat(outbuffer, "%8s = %g\n", cleanedreg, *(float *)&val);
-        else if(curregtype == DOUBLE)
-            concat(outbuffer, "%8s = %.15g\n", cleanedreg, *(double *)&val);
-        else if(curregtype == QUADWORD)
-            concat(outbuffer, "%8s = %s\n", cleanedreg, curregval);
-
-        if(cleanedreg)
-            free(cleanedreg);
-        if(curregval)
-            free(curregval);
-
-        free(curreg);
-        curreg = argcopy(args, REGISTER_FLOAT_COMMAND_REGEX_GROUPS[0]);
-    }
-
-    return CMD_SUCCESS;
-}
-
-enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_register_view(struct cmd_args_t *args,
         int arg1, char **outbuffer, char **error){
     struct machthread *focused = get_focused_thread();
 
@@ -74,32 +37,36 @@ enum cmd_error_t cmdfunc_register_gen(struct cmd_args_t *args,
         return CMD_SUCCESS;
     }
 
-    /* Otherwise, print the registers they asked for. */
-    char *curreg = argcopy(args, REGISTER_GEN_COMMAND_REGEX_GROUPS[0]);
+    char *curreg = argcopy(args, REGISTER_VIEW_COMMAND_REGEX_GROUPS[0]);
 
     while(curreg){
-        char *cleanedreg = NULL, *e = NULL;
+        char *cleanedreg = NULL, *curregval = NULL, *e = NULL;
         enum regtype curregtype = NONE;
         long val = regtol(focused, HEXADECIMAL, &curregtype,
-                curreg, &cleanedreg, NULL, &e);
+                curreg, &cleanedreg, &curregval, &e);
 
-        if(e){
+        if(e)
             concat(outbuffer, "%10s %s\n", "error:", e);
-            free(e);
-        }
 
         if(curregtype == LONG)
             concat(outbuffer, "%8s = 0x%16.16lx\n", cleanedreg, val);
         else if(curregtype == INTEGER)
             concat(outbuffer, "%8s = 0x%8.8x\n", cleanedreg, val);
+        else if(curregtype == FLOAT)
+            concat(outbuffer, "%8s = %g\n", cleanedreg, *(float *)&val);
+        else if(curregtype == DOUBLE)
+            concat(outbuffer, "%8s = %.15g\n", cleanedreg, *(double *)&val);
+        else if(curregtype == QUADWORD)
+            concat(outbuffer, "%8s = %s\n", cleanedreg, curregval);
 
-        if(cleanedreg)
-            free(cleanedreg);
-        
+        free(cleanedreg);
+        free(curregval);
+        free(e);
         free(curreg);
-        curreg = argcopy(args, REGISTER_GEN_COMMAND_REGEX_GROUPS[0]);
+
+        curreg = argcopy(args, REGISTER_VIEW_COMMAND_REGEX_GROUPS[0]);
     }
-    
+
     return CMD_SUCCESS;
 }
 
@@ -112,10 +79,8 @@ enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
 
     setreg(focused, target_str, value_str, error);
 
-    if(target_str)
-        free(target_str);
-    if(value_str)
-        free(value_str);
+    free(target_str);
+    free(value_str);
 
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }

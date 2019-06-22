@@ -56,9 +56,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
                 debuggee->debuggee_name, target);
 
         if(ans == 'n'){
-            if(waitfor)
-                free(waitfor);
-
+            free(waitfor);
             free(target);
 
             return CMD_SUCCESS;
@@ -78,9 +76,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         argins(args, ATTACH_COMMAND_REGEX_GROUPS[0], waitfor ? strdup(waitfor) : NULL);
         argins(args, ATTACH_COMMAND_REGEX_GROUPS[1], strdup(target));
 
-        if(waitfor)
-            free(waitfor);
-
+        free(waitfor);
         free(target);
 
         return cmdfunc_attach(args, 0, outbuffer, error);
@@ -121,9 +117,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     }
 
     if(*error || target_pid == -1){
-        if(waitfor)
-            free(waitfor);
-
+        free(waitfor);
         free(target);
 
         return CMD_FAILURE;
@@ -133,14 +127,12 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
             target_pid, &debuggee->task);
 
     if(err){
-        if(waitfor)
-            free(waitfor);
-
         concat(error, "couldn't get task port for %s (pid: %d): %s\n"
                 "Did you forget to sign iosdbg with entitlements?\n"
                 "Are you privileged enough to debug this process?",
                 target, target_pid, mach_error_string(err));
 
+        free(waitfor);
         free(target);
 
         return CMD_FAILURE;
@@ -221,11 +213,10 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     char *e = NULL;
     set_convvar("$ASLR", aslr, &e);
 
-    if(e){
+    if(e)
         concat(outbuffer, "warning: %s\n", e);
-        free(e);
-    }
 
+    free(e);
     free(aslr);
     free(target);
 
@@ -389,24 +380,18 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
     if(!debuggee->tracing_disabled){
         stop_trace();
         
-        for(int i=0; i<bsd_syscalls_arr_len; i++){
-            if(bsd_syscalls[i])
-                free(bsd_syscalls[i]);
-        }
+        for(int i=0; i<bsd_syscalls_arr_len; i++)
+            free(bsd_syscalls[i]);
 
         free(bsd_syscalls);
 
-        for(int i=0; i<mach_traps_arr_len; i++){
-            if(mach_traps[i])
-                free(mach_traps[i]);
-        }
+        for(int i=0; i<mach_traps_arr_len; i++)
+            free(mach_traps[i]);
 
         free(mach_traps);
 
-        for(int i=0; i<mach_messages_arr_len; i++){
-            if(mach_messages[i])
-                free(mach_messages[i]);
-        }
+        for(int i=0; i<mach_messages_arr_len; i++)
+            free(mach_messages[i]);
 
         free(mach_messages);
     }

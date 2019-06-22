@@ -206,9 +206,7 @@ static void *death_server(void *arg){
     rl_printf(WAIT_FOR_REPROMPT, "%s", exitbuf);
 
     free(exitbuf);
-
-    if(error)
-        free(error);
+    free(error);
 
     close(kqid);
 

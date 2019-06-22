@@ -96,10 +96,7 @@ static struct watchpoint *watchpoint_new(unsigned long location,
         concat(error, "could not set watchpoint: could not read memory at %#lx",
                 location);
         free(wp->data);
-
-        if(wp->threadinfo.tname)
-            free(wp->threadinfo.tname);
-
+        free(wp->threadinfo.tname);
         free(wp);
 
         return NULL;
@@ -112,10 +109,7 @@ static struct watchpoint *watchpoint_new(unsigned long location,
                 "no more hardware watchpoint registers available (%d/%d) used", 
                 debuggee->num_hw_wps, debuggee->num_hw_wps);
         free(wp->data);
-
-        if(wp->threadinfo.tname)
-            free(wp->threadinfo.tname);
-
+        free(wp->threadinfo.tname);
         free(wp);
 
         return NULL;
@@ -174,10 +168,7 @@ static struct watchpoint *watchpoint_new(unsigned long location,
                     " please try again");
 
             free(wp->data);
-
-            if(wp->threadinfo.tname)
-                free(wp->threadinfo.tname);
-
+            free(wp->threadinfo.tname);
             free(wp);
 
             return NULL;
@@ -248,10 +239,9 @@ static void wp_set_state_internal(struct watchpoint *wp, int disabled){
 
 static void wp_delete_internal(struct watchpoint *wp){
     disable_wp(wp);
-    free(wp->data);
 
-    if(wp->threadinfo.tname)
-        free(wp->threadinfo.tname);
+    free(wp->data);
+    free(wp->threadinfo.tname);
 
     linkedlist_delete(debuggee->watchpoints, wp);
     debuggee->num_watchpoints--;

@@ -149,10 +149,7 @@ static char *regtoa(struct machthread *thread, enum format format,
     }
 
     char type = reg[0];
-    int which = (int)strtol_err(reg + 1, error);
-
-    if(*error)
-        return NULL;
+    int which = (int)strtol(reg + 1, NULL, 10);
 
     if(!good_reg(type, which)){
         concat(error, "invalid register '%s'", reg);
@@ -254,25 +251,15 @@ long regtol(struct machthread *thread, enum format format, enum regtype *outtype
 }
 
 static inline void free_estrs(char *e1, char *e2, char *e3, char *e4){
-    if(e1){
-        free(e1);
-        e1 = NULL;
-    }
+    free(e1);
+    free(e2);
+    free(e3);
+    free(e4);
 
-    if(e2){
-        free(e2);
-        e2 = NULL;
-    }
-
-    if(e3){
-        free(e3);
-        e3 = NULL;
-    }
-
-    if(e4){
-        free(e4);
-        e4 = NULL;
-    }
+    e1 = NULL;
+    e2 = NULL;
+    e3 = NULL;
+    e4 = NULL;
 }
 
 void setreg(struct machthread *thread, char *reg,

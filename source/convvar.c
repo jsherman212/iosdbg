@@ -364,8 +364,6 @@ void convvar_free(struct convvar *var){
     if(!var)
         return;
 
-    if(var->name)
-        free(var->name);
-
+    free(var->name);
     free(var);
 }

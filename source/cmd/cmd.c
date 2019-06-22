@@ -319,27 +319,21 @@ void initialize_commands(void){
     struct dbg_cmd_t *_register = create_parent_cmd("register",
             NULL, REGISTER_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
             NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
-            NO_GROUPS, _NUM_SUBCMDS(3), NULL, NULL);
+            NO_GROUPS, _NUM_SUBCMDS(2), NULL, NULL);
     {
-        struct dbg_cmd_t *_float = create_child_cmd("float",
-                NULL, REGISTER_FLOAT_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
-                REGISTER_FLOAT_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
-                REGISTER_FLOAT_COMMAND_REGEX_GROUPS, cmdfunc_register_float,
-                audit_register_float);
-        struct dbg_cmd_t *gen = create_child_cmd("gen",
-                NULL, REGISTER_GEN_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
-                REGISTER_GEN_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
-                REGISTER_GEN_COMMAND_REGEX_GROUPS, cmdfunc_register_gen,
-                audit_register_gen);
+        struct dbg_cmd_t *view = create_child_cmd("view",
+                NULL, REGISTER_VIEW_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+                REGISTER_VIEW_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
+                REGISTER_VIEW_COMMAND_REGEX_GROUPS, cmdfunc_register_view,
+                audit_register_view);
         struct dbg_cmd_t *write = create_child_cmd("write",
                 NULL, REGISTER_WRITE_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
                 REGISTER_WRITE_COMMAND_REGEX, _NUM_GROUPS(2), _UNK_ARGS(0),
                 REGISTER_WRITE_COMMAND_REGEX_GROUPS, cmdfunc_register_write,
                 audit_register_write);
 
-        _register->subcmds[0] = _float;
-        _register->subcmds[1] = gen;
-        _register->subcmds[2] = write;
+        _register->subcmds[0] = view;
+        _register->subcmds[1] = write;
     }
 
     ADD_CMD(_register);
@@ -566,11 +560,11 @@ enum cmd_error_t do_cmdline_command(char *user_command_,
         char *shell_cmd = usercommandcpy + 1;
         execute_shell_cmd(shell_cmd, &exit_reason, error);
 
-        if(exit_reason){
+        if(exit_reason)
             concat(outbuffer, "%s\n", exit_reason);
-            free(exit_reason);
-        }
         
+        free(exit_reason);
+
         if(*error)
             result = CMD_FAILURE;
 

@@ -22,8 +22,7 @@ int LINE_MODIFIED = 0;
 static struct matchedcmdinfo_t CURRENT_MATCH_INFO = {0};
 
 static void _reset_matchedcmdinfo(void){
-    if(CURRENT_MATCH_INFO.rinfo.argregex)
-        free(CURRENT_MATCH_INFO.rinfo.argregex);
+    free(CURRENT_MATCH_INFO.rinfo.argregex);
 
     CURRENT_MATCH_INFO.rinfo.argregex = NULL;
     CURRENT_MATCH_INFO.cmd = NULL;

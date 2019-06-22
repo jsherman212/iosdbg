@@ -72,15 +72,11 @@ pid_t pid_of_program(char *progname, char **error){
     
     if(matches > 1){
         concat(error, "multiple instances of '%s': \n%s", progname, matchstr);
-
-        if(matchstr)
-            free(matchstr);
-
+        free(matchstr);
         return -1;
     }
 
-    if(matchstr)
-        free(matchstr);
+    free(matchstr);
 
     if(matches == 0){
         concat(error, "could not find a process named '%s'", progname);

@@ -64,12 +64,13 @@ enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args,
     
     /* If no arguments were given, the user wants to see settings. */
     if(!signals || !notify_str || !pass_str || !stop_str){
-        if(signals)     free(signals);
-        if(notify_str)  free(notify_str);
-        if(pass_str)    free(pass_str);
-        if(stop_str)    free(stop_str);
+        free(signals);
+        free(notify_str);
+        free(pass_str);
+        free(stop_str);
 
         ops_printsiginfo(outbuffer);
+
         return CMD_SUCCESS;
     }
 
@@ -88,8 +89,7 @@ enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args,
         char *e = NULL;
         sigsettings(sig, &notify, &pass, &stop, 1, &e);
 
-        if(e)
-            free(e);
+        free(e);
     }
 
     free(signals);

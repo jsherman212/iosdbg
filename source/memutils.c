@@ -45,9 +45,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
     desc_auto_convvar_error_if_needed(outbuffer, "$_", error);
 
     free(locstr);
-
-    if(error)
-        free(error);
+    free(error);
 
     enum { data_size = 4 };
 
@@ -87,9 +85,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
         desc_auto_convvar_error_if_needed(outbuffer, "$__", error);
 
         free(val);
-
-        if(error)
-            free(error);
+        free(error);
 
         char *disassembled = ArmadilloDisassembleB(instr, current_location);
 

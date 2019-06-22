@@ -32,7 +32,7 @@ int rl_printf(int setting, const char *msg, ...){
             return -1;
         }
 
-        double timeout = 0.08;
+        double timeout = 0.75;
 
         uint64_t start = mach_absolute_time();
         uint64_t end = start;

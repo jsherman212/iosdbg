@@ -56,14 +56,13 @@ static void get_thread_info(struct machthread *thread, char **outbuffer){
     memset(thread->tname, '\0', sizeof(thread->tname));
     char *tname = get_pthread_name(thread->port);
     
-    if(tname){
+    if(tname)
         strncpy(thread->tname, tname, MAXTHREADSIZENAME);
-        free(tname);
-    }
-    else{
+    else
         strcpy(thread->tname, "");
-    }
     
+    free(tname);
+
     update_all_thread_states(thread);
 }
 
