@@ -17,5 +17,6 @@ int is_number_fast(char *);
 char **token_array(char *, const char *, int *);
 void token_array_free(char **, int);
 char *strnran(size_t);
+int is_whitespace(char *);
 
 #endif

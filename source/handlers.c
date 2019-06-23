@@ -6,6 +6,7 @@
 #include "linkedlist.h"
 #include "memutils.h"
 #include "strext.h"
+#include "thread.h"
 
 unsigned long find_slide(void){
     kern_return_t err = KERN_SUCCESS;
@@ -135,12 +136,16 @@ kern_return_t setup_exception_handling(char **outbuffer){
 kern_return_t deallocate_ports(char **outbuffer){
     kern_return_t err = mach_port_deallocate(mach_task_self(),
             debuggee->exception_port);
+    debuggee->exception_port = MACH_PORT_NULL;
 
     WARN_ON_MACH_ERR(err);
     
     err = mach_port_deallocate(mach_task_self(), debuggee->task);
+    debuggee->task = MACH_PORT_NULL;
 
     WARN_ON_MACH_ERR(err);
+
+    THREAD_DEATH_NOTIFY_PORT = MACH_PORT_NULL;
 
     return err;
 }

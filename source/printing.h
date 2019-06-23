@@ -2,10 +2,11 @@
 #define _PRINTING_H_
 
 enum {
-    WAIT_FOR_REPROMPT,
-    DONT_WAIT_FOR_REPROMPT 
+    MAIN_THREAD,
+    NOT_MAIN_THREAD
 };
 
 int rl_printf(int, const char *, ...);
+void notify_of_reprompt(void);
 
 #endif

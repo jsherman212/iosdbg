@@ -11,9 +11,6 @@ struct debuggee {
     /* PID of the debuggee. */
     pid_t pid;
 
-    /* Number of pending messages received at the debuggee's exception port. */
-    int pending_exceptions;
-
     /* Exception requests from exception_server. */
     struct queue_t *exc_requests;
 

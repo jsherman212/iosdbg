@@ -309,6 +309,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
     if(!location){
         concat(error, "need location");
         free_on_failure(3, tid, type, location);
+        return;
     }
 
     char *size = argcopy(args, groupnames[3]);

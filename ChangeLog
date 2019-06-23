@@ -1,6 +1,8 @@
 6-22-19
 - morphed register float and register gen commands into register view
 - get rid of NULL checks before calling free
+- utilize readline's alternate interface to stop busy waiting and avoid race
+condition in rl_printf
 
 6-21-19
 - thread specific breakpoints and watchpoints finished

@@ -59,10 +59,6 @@ void ops_printsiginfo(char **outbuffer){
 void ops_detach(int from_death, char **outbuffer){
     ops_suspend();
 
-    pthread_cancel(exception_server_thread);
-    pthread_cancel(death_server_thread);
-    pthread_cancel(tmon_thread);
-
     breakpoint_delete_all();
     watchpoint_delete_all();
 

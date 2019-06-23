@@ -14,14 +14,9 @@
 #include "linkedlist.h"
 #include "printing.h"
 #include "queue.h"
-#include "servers.h"
 #include "strext.h"
 #include "thread.h"
 #include "trace.h"
-
-pthread_t exception_server_thread;
-pthread_t death_server_thread;
-pthread_t tmon_thread;
 
 struct req {
     mach_msg_header_t hdr;
@@ -48,8 +43,6 @@ static void *exception_server(void *arg){
                 debuggee->exception_port,
                 1000,
                 MACH_PORT_NULL);
-
-        pthread_testcancel();
 
         if(err == MACH_RCV_TIMED_OUT){
             free(req);
@@ -121,10 +114,8 @@ static void *exception_server(void *arg){
         if(will_auto_resume)
             ops_resume();
 
-        pthread_testcancel();
-
         if(exception_buffer){
-            rl_printf(WAIT_FOR_REPROMPT, "%s", exception_buffer);
+            rl_printf(NOT_MAIN_THREAD, "%s", exception_buffer);
             free(exception_buffer);
         }
     }
@@ -132,13 +123,8 @@ static void *exception_server(void *arg){
     return NULL;
 }
 
-static void death_server_cleanup(void *arg){
-    free(arg);
-}
-
 static void *death_server(void *arg){
     pthread_setname_np("death event thread");
-    pthread_cleanup_push(death_server_cleanup, arg);
 
     int kqid = *(int *)arg;
 
@@ -153,7 +139,6 @@ static void *death_server(void *arg){
     while(changes <= 0){
         /* Provide a struct for the kernel to write to if any changes occur. */
         changes = kevent(kqid, NULL, 0, &death_event, 1, &timeout);
-        pthread_testcancel();
     }
 
     /* Don't report if we detached earlier. */
@@ -203,14 +188,14 @@ static void *death_server(void *arg){
 
     ops_detach(1, &exitbuf);
 
-    rl_printf(WAIT_FOR_REPROMPT, "%s", exitbuf);
+    rl_printf(NOT_MAIN_THREAD, "%s", exitbuf);
 
     free(exitbuf);
     free(error);
 
     close(kqid);
 
-    pthread_cleanup_pop(1);
+    free(arg);
 
     return NULL;
 }
@@ -218,7 +203,7 @@ static void *death_server(void *arg){
 static void *thread_monitor_server(void *arg){
     pthread_setname_np("thread monitor");
 
-    while(1){
+    while(MACH_PORT_VALID(THREAD_DEATH_NOTIFY_PORT)){
         struct req *req = malloc(sizeof(struct req));
 
         /* Update the list of threads every second or right
@@ -234,14 +219,12 @@ static void *thread_monitor_server(void *arg){
 
         free(req);
 
-        pthread_testcancel();
-        
         char *thbuffer = NULL;
         
         ops_threadupdate(&thbuffer);
 
         if(thbuffer){
-            rl_printf(WAIT_FOR_REPROMPT, "%s", thbuffer);
+            rl_printf(NOT_MAIN_THREAD, "%s", thbuffer);
             free(thbuffer);
         }
     }
@@ -252,6 +235,7 @@ static void *thread_monitor_server(void *arg){
 void setup_servers(char **outbuffer){
     debuggee->setup_exception_handling(outbuffer);
 
+    pthread_t exception_server_thread;
     pthread_create(&exception_server_thread, NULL, exception_server, NULL);
 
     int kqid = kqueue();
@@ -269,8 +253,10 @@ void setup_servers(char **outbuffer){
         int *intptr = malloc(sizeof(int));
         *intptr = kqid;
 
+        pthread_t death_server_thread;
         pthread_create(&death_server_thread, NULL, death_server, intptr);
     }
 
+    pthread_t tmon_thread;
     pthread_create(&tmon_thread, NULL, thread_monitor_server, NULL);
 }

@@ -387,6 +387,4 @@ void reply_to_exception(Request *req, kern_return_t retcode){
             MACH_PORT_NULL,
             MACH_MSG_TIMEOUT_NONE,
             MACH_PORT_NULL);
-
-    debuggee->pending_exceptions--;
 }

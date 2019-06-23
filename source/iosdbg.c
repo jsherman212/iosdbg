@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <pthread/pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -26,15 +27,10 @@
 #include "cmd/completer.h"  /* For IS_HELP_COMMAND */
 #include "cmd/misccmd.h"    /* For KEEP_CHECKING_FOR_PROCESS */
 
-struct debuggee *debuggee;
+struct debuggee *debuggee = NULL;
 
-char **bsd_syscalls;
-char **mach_traps;
-char **mach_messages;
-
-int bsd_syscalls_arr_len;
-int mach_traps_arr_len;
-int mach_messages_arr_len;
+char **bsd_syscalls = NULL, **mach_traps = NULL, **mach_messages = NULL;
+int bsd_syscalls_arr_len = 0, mach_traps_arr_len = 0, mach_messages_arr_len = 0;
 
 static void interrupt(int x1){
     if(KEEP_CHECKING_FOR_PROCESS)
@@ -303,77 +299,123 @@ static void setup_initial_debuggee(void){
     set_convvar("$_exitsignal", "", &error);
 }
 
-static void inputloop(void){
-    char *line = NULL, *prevline = NULL;
+static int QUIT = 0;
 
-    static const char *prompt = "\033[2m(iosdbg) \033[0m";
+static void linecb(char *line){
+    static char *prevline = NULL;
 
-    while((line = readline(prompt)) != NULL){
-        size_t linelen = strlen(line);
+    size_t linelen = strlen(line);
 
-        /* If the user hits enter, repeat the last command,
-         * and do not add to the command history if the length
-         * of line is 0.
-         */
-        if(linelen == 0 && prevline){
-            size_t prevlinelen = strlen(prevline);
+    /* If the user hits enter, repeat the last command,
+     * and do not add to the command history if the length
+     * of line is 0.
+     */
+    if(linelen == 0 && prevline){
+        size_t prevlinelen = strlen(prevline);
 
-            char *line_replacement = realloc(line, prevlinelen + 1);
-            strncpy(line_replacement, prevline, prevlinelen + 1);
+        char *line_replacement = realloc(line, prevlinelen + 1);
+        strncpy(line_replacement, prevline, prevlinelen + 1);
 
-            line = line_replacement;
+        line = line_replacement;
+    }
+    else if(linelen > 0 &&
+            (!prevline || (prevline && strcmp(line, prevline) != 0)) &&
+            !is_whitespace(line)){
+        add_history(line);
+
+        if(IOSDBG_HISTORY){
+            fwrite(line, sizeof(char), linelen, IOSDBG_HISTORY);
+            fputc('\n', IOSDBG_HISTORY);
+            fflush(IOSDBG_HISTORY);
         }
-        else if(linelen > 0 &&
-                (!prevline || (prevline && strcmp(line, prevline) != 0))){
-            add_history(line);
+    }
 
-            if(IOSDBG_HISTORY){
-                fwrite(line, sizeof(char), linelen, IOSDBG_HISTORY);
-                fputc('\n', IOSDBG_HISTORY);
-                fflush(IOSDBG_HISTORY);
-            }
-        }
+    int force_show_outbuffer = 0;
+    char *outbuffer = NULL, *linecpy = NULL, *error = NULL;
+    enum cmd_error_t result = do_cmdline_command(line,
+            &linecpy, 1, &force_show_outbuffer, &outbuffer, &error);
 
-        int force_show_outbuffer = 0;
-        char *outbuffer = NULL, *linecpy = NULL, *error = NULL;
-        enum cmd_error_t result = do_cmdline_command(line,
-                &linecpy, 1, &force_show_outbuffer, &outbuffer, &error);
+    if(force_show_outbuffer){
+        rl_printf(MAIN_THREAD, "%s", outbuffer);
+        free(outbuffer);
+        outbuffer = NULL;
+    }
 
-        if(force_show_outbuffer){
-            rl_printf(DONT_WAIT_FOR_REPROMPT, "%s", outbuffer);
+    if(result == CMD_FAILURE && error){
+        rl_printf(MAIN_THREAD, "error: %s\n", error);
+        free(error);
+    }
+    else{
+        if(outbuffer){
+            rl_printf(MAIN_THREAD, "%s", outbuffer);
             free(outbuffer);
-            outbuffer = NULL;
         }
 
-        if(result == CMD_FAILURE && error){
-            rl_printf(DONT_WAIT_FOR_REPROMPT, "error: %s\n", error);
+        if(result == CMD_QUIT){
+            free(line);
+            free(linecpy);
+            free(prevline);
             free(error);
+
+            rl_callback_handler_remove();
+            QUIT = 1;
+     
+            return;
         }
-        else{
-            if(outbuffer){
-                rl_printf(DONT_WAIT_FOR_REPROMPT, "%s", outbuffer);
-                free(outbuffer);
-            }
+    }
 
-            if(result == CMD_QUIT){
-                free(linecpy);
-                free(prevline);
-                free(error);
-                free(line);
+    if(linecpy){
+        size_t linecpylen = strlen(linecpy);
+        char *prevline_replacement = realloc(prevline, linecpylen + 1);
+        strncpy(prevline_replacement, linecpy, linecpylen + 1);
+        prevline = prevline_replacement;
+    }
 
+    free(linecpy);
+    free(line);
+}
+
+static inline long secs_to_usecs(double seconds){
+    return seconds * 1e+6;
+}
+
+static void inputloop(void){
+    static const char *prompt = "\033[2m(iosdbg) \033[0m";
+    rl_callback_handler_install(prompt, linecb);
+
+    while(1){
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(fileno(rl_instream), &fds);
+
+        struct timeval tv = {0};
+        tv.tv_sec = 0;
+        tv.tv_usec = secs_to_usecs(0.001);
+
+        int ret = select(FD_SETSIZE, &fds, NULL, NULL, &tv);
+
+        if(ret < 0){
+            if(errno != EINTR){
+                rl_callback_handler_remove();
                 return;
             }
+
+            continue;
         }
 
-        if(linecpy){
-            size_t linecpylen = strlen(linecpy);
-            char *prevline_replacement = realloc(prevline, linecpylen + 1);
-            strncpy(prevline_replacement, linecpy, linecpylen + 1);
-            prevline = prevline_replacement;
-        }
+        if(FD_ISSET(fileno(rl_instream), &fds)){
+            rl_callback_read_char();
 
-        free(linecpy);
-        free(line);
+            if(QUIT)
+                return;
+        }
+        else if(ret == 0){
+            /* select only times out when we are issuing a command. When issuing
+             * commands, the prompt is visible, making this a good time to
+             * wake up any other threads waiting to print to stdout.
+             */
+            notify_of_reprompt();
+        }
     }
 }
 
@@ -400,7 +442,6 @@ static void early_configuration(void){
 
 int main(int argc, char **argv, const char **envp){
     pthread_setname_np("iosdbg main thread");
-
     early_configuration();
     setup_initial_debuggee();
     install_handlers();
@@ -417,14 +458,6 @@ int main(int argc, char **argv, const char **envp){
 
     sigaction(SIGINT, &sa, NULL);
     
-    bsd_syscalls = NULL;
-    mach_traps = NULL;
-    mach_messages = NULL;
-
-    bsd_syscalls_arr_len = 0;
-    mach_traps_arr_len = 0;
-    mach_messages_arr_len = 0;
-
     int err = setup_tracing();
 
     if(err)

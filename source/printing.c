@@ -1,56 +1,32 @@
-#include <mach/mach.h>
-#include <mach/mach_time.h>
 #include <pthread/pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #include <readline/readline.h>
 
 #include "printing.h"
 
 pthread_mutex_t printing_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t printing_cond = PTHREAD_COND_INITIALIZER;
 
 int rl_printf(int setting, const char *msg, ...){
     pthread_mutex_lock(&printing_mutex);
 
     int adjust;
 
-    if(setting == WAIT_FOR_REPROMPT){
-        /* Wait until readline has reprompted us from the main thread
-         * in order to adjust the prompt and assure clean output if we're
-         * printing from another thread.
-         * For safety, include a timeout.
-         */
-        mach_timebase_info_data_t info;
-        kern_return_t err = mach_timebase_info(&info);
-
-        if(err){
-            printf("warning: mach_timebase_info says %s\n", mach_error_string(err));
-            pthread_mutex_unlock(&printing_mutex);
-            return -1;
-        }
-
-        double timeout = 0.75;
-
-        uint64_t start = mach_absolute_time();
-        uint64_t end = start;
-
-        while(!(rl_readline_state & RL_STATE_READCMD)){
-            end = mach_absolute_time();
-
-            uint64_t elapsed = end - start;
-            uint64_t nanos = elapsed * (info.numer / info.denom);
-
-            if(((double)nanos / NSEC_PER_SEC) >= timeout)
-                break;
-        }
-
+    /* The only thread which guarantees non-garbled printing is the main
+     * thread because it's the one which handles reprompting. In order for
+     * other threads to print to stdout cleanly, we wait for the main
+     * thread to tell us it has reprompted. From there, we can remove the
+     * current prompt, print to stdout, then restore the prompt.
+     */
+    if(setting == NOT_MAIN_THREAD){
+        pthread_cond_wait(&printing_cond, &printing_mutex);
         adjust = 1;
     }
     else{
-        adjust = rl_readline_state & RL_STATE_READCMD;
+        adjust = 0;
     }
 
     char *saved_line;
@@ -81,4 +57,10 @@ int rl_printf(int setting, const char *msg, ...){
     pthread_mutex_unlock(&printing_mutex);
 
     return w;
+}
+
+void notify_of_reprompt(void){
+    pthread_mutex_lock(&printing_mutex);
+    pthread_cond_broadcast(&printing_cond);
+    pthread_mutex_unlock(&printing_mutex);
 }

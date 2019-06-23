@@ -269,3 +269,18 @@ char *strnran(size_t len){
 
     return rstr;
 }
+
+int is_whitespace(char *str){
+    if(!str)
+        return 0;
+
+    size_t len = strlen(str);
+    int idx = len;
+
+    while(idx >= 0){
+        if(isalnum(str[idx--]))
+            return 0;
+    }
+
+    return 1;
+}
