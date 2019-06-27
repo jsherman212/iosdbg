@@ -8,7 +8,6 @@
 #include "../expr.h"
 #include "../interaction.h"
 #include "../linkedlist.h"
-#include "../printing.h"
 #include "../strext.h"
 
 enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,

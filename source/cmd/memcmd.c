@@ -7,7 +7,6 @@
 #include "../debuggee.h"
 #include "../expr.h"
 #include "../memutils.h"
-#include "../printing.h"
 #include "../strext.h"
 
 enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 

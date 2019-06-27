@@ -5,7 +5,6 @@
 #include "regcmd.h"
 
 #include "../debuggee.h"
-#include "../printing.h"
 #include "../reg.h"
 #include "../strext.h"
 #include "../thread.h"

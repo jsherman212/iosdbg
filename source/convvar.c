@@ -6,7 +6,6 @@
 
 #include "convvar.h"
 #include "linkedlist.h"
-#include "printing.h"
 #include "strext.h"
 
 static struct linkedlist *vars;

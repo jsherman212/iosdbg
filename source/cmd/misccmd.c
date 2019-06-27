@@ -12,6 +12,7 @@
 
 #include "../breakpoint.h"
 #include "../convvar.h"
+#include "../dbgio.h"
 #include "../dbgops.h"
 #include "../debuggee.h"
 #include "../exception.h"
@@ -19,7 +20,6 @@
 #include "../interaction.h"
 #include "../linkedlist.h"
 #include "../memutils.h"
-#include "../printing.h"
 #include "../procutils.h"
 #include "../ptrace.h"
 #include "../servers.h"
@@ -88,8 +88,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
      * constantly check if this process has launched.
      */
     if(waitfor){
-        rl_printf(MAIN_THREAD,
-                "Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", 
+        printf("Waiting for process '%s' to launch (Ctrl+C to stop)\n\n", 
                 target);
 
         char *e = NULL;

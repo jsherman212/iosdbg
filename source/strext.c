@@ -6,43 +6,39 @@
 
 #include "expr.h"
 
-int vconcat(char **dst, const char *src, va_list args){
+static int _concat_internal(char **dst, const char *src, va_list args){
     if(!src || !dst)
         return 0;
 
     if(!(*dst)){
-        *dst = malloc(1);
+        *dst = malloc(0);
         *(*dst) = '\0';
     }
-
+    
     size_t srclen = strlen(src);
     size_t dstlen = strlen(*dst);
 
-    const size_t pad = 0x400;
-
-    /* We have no way of knowing how many bytes src will
-     * take up once format specifiers are substituted.
-     */
-    char *dst1 = malloc(srclen + dstlen + pad);
+    const size_t needed = vsnprintf(NULL, 0, src, args);
+    char *dst1 = malloc(srclen + dstlen + needed);
     strncpy(dst1, *dst, dstlen + 1);
 
-    int w = vsnprintf(&(dst1)[dstlen], srclen + dstlen + pad, src, args);
+    int w = vsnprintf(&dst1[dstlen], srclen + dstlen + needed, src, args);
 
-    /* Now we can figure out the length of this string,
-     * so realloc to free up unused memory.
-     */
     char *dst2 = realloc(dst1, strlen(dst1) + 1);
-
     *dst = dst2;
 
     return w;
+}
+
+int vconcat(char **dst, const char *src, va_list args){
+    return _concat_internal(dst, src, args);
 }
 
 int concat(char **dst, const char *src, ...){
     va_list args;
     va_start(args, src);
 
-    int w = vconcat(dst, src, args);
+    int w = _concat_internal(dst, src, args);
 
     va_end(args);
 

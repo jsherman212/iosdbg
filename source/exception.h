@@ -2,7 +2,6 @@
 #define _EXCEPTION_H_
 
 #include <mach/mach.h>
-#include <pthread/pthread.h>
 
 typedef struct {
     mach_msg_header_t Head;

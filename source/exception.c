@@ -266,7 +266,8 @@ void handle_exception(Request *request, int *should_auto_resume,
         free(error);
         
         concat(desc, ", '%s' received signal ", focused->tname);
-        handle_soft_signal(focused->port, subcode, desc, notify, pass, stop);
+        handle_soft_signal(focused->port, subcode,
+                desc, notify, pass, stop);
         
         if(stop){
             /* should print, should not auto resume */

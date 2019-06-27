@@ -1,3 +1,9 @@
+6-27-19
+- use pipes for more efficient I/O
+- fixed up strext.c concat functions
+- take advanage of libhistory to manage the history file
+- set non-thread specific breakpoints on new threads
+
 6-22-19
 - morphed register float and register gen commands into register view
 - get rid of NULL checks before calling free

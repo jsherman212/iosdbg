@@ -8,11 +8,11 @@
 #include <readline/readline.h>
 
 #include "convvar.h"
+#include "dbgio.h"
 #include "dbgops.h"
 #include "debuggee.h"
 #include "exception.h"
 #include "linkedlist.h"
-#include "printing.h"
 #include "queue.h"
 #include "strext.h"
 #include "thread.h"
@@ -52,8 +52,7 @@ static void *exception_server(void *arg){
         /* We got something, suspend debuggee execution. */
         ops_suspend();
 
-        Request *request = (Request *)req;
-        enqueue(debuggee->exc_requests, request);
+        enqueue(debuggee->exc_requests, (Request *)req);
 
         num_exceptions++;
 
@@ -71,10 +70,8 @@ static void *exception_server(void *arg){
                     0,
                     MACH_PORT_NULL);
 
-            Request *request = (Request *)req;
-
-            if(request && err == KERN_SUCCESS){
-                enqueue(debuggee->exc_requests, request);
+            if(req && err == KERN_SUCCESS){
+                enqueue(debuggee->exc_requests, (Request *)req);
                 num_exceptions++;
             }
         }
@@ -115,7 +112,7 @@ static void *exception_server(void *arg){
             ops_resume();
 
         if(exception_buffer){
-            rl_printf(NOT_MAIN_THREAD, "%s", exception_buffer);
+            io_append("%s", exception_buffer);
             free(exception_buffer);
         }
     }
@@ -128,18 +125,10 @@ static void *death_server(void *arg){
 
     int kqid = *(int *)arg;
 
-    struct timespec timeout = {0};
-    timeout.tv_sec = 1;
-    timeout.tv_nsec = 0;
-
     struct kevent death_event;
 
-    int changes = 0;
-
-    while(changes <= 0){
-        /* Provide a struct for the kernel to write to if any changes occur. */
-        changes = kevent(kqid, NULL, 0, &death_event, 1, &timeout);
-    }
+    /* Provide a struct for the kernel to write to if any changes occur. */
+    int changes = kevent(kqid, NULL, 0, &death_event, 1, NULL);
 
     /* Don't report if we detached earlier. */
     if(debuggee->pid == -1){
@@ -188,7 +177,7 @@ static void *death_server(void *arg){
 
     ops_detach(1, &exitbuf);
 
-    rl_printf(NOT_MAIN_THREAD, "%s", exitbuf);
+    io_append("%s", exitbuf);
 
     free(exitbuf);
     free(error);
@@ -224,7 +213,7 @@ static void *thread_monitor_server(void *arg){
         ops_threadupdate(&thbuffer);
 
         if(thbuffer){
-            rl_printf(NOT_MAIN_THREAD, "%s", thbuffer);
+            io_append("%s", thbuffer);
             free(thbuffer);
         }
     }

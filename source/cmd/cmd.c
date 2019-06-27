@@ -1,11 +1,13 @@
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -23,10 +25,9 @@
 
 #include "completer.h"
 
-#include "../printing.h"
 #include "../strext.h"
 
-FILE *IOSDBG_HISTORY = NULL;
+char *HISTORY_PATH = NULL;
 
 static struct dbg_cmd_t *common_initialization(const char *name,
         const char *alias, const char *documentation, int level,
@@ -453,89 +454,38 @@ void load_history(void){
     char *home = getenv("HOME");
 
     if(!home){
-        printf("warning: HOME not found in environment list\n");
+        printf("warning: HOME not found in environment list\n"
+                "cannot load command history\n");
         return;
     }
 
-    char pathbuf[strlen(home) + strlen(".iosdbg") + 2];
-    snprintf(pathbuf, sizeof(pathbuf), "%s/.iosdbg", home);
+    concat(&HISTORY_PATH, "%s/.iosdbg/iosdbg-history", home);
 
-    DIR *hist_dir = opendir(pathbuf);
-
-    if(!hist_dir && errno == ENOENT){
-        int ret = mkdir(pathbuf, 0700);
-
-        if(ret == -1){
-            printf("warning: couldn't create dir at ~/.iosdbg: %s\n",
-                    strerror(errno));
-            return;
-        }
-    }
-    else if(!hist_dir && errno != ENOENT){
-        printf("warning: couldn't open directory ~/.iosdbg: %s\n",
-                strerror(errno));
-        return;
+    if(read_history(HISTORY_PATH)){
+        int fd = creat(HISTORY_PATH, 0644);
+        close(fd);
     }
 
-    if(hist_dir)
-        closedir(hist_dir);
+    FILE *histfp = fopen(HISTORY_PATH, "r");
 
-    char histnamebuf[strlen(pathbuf) + strlen("iosdbg-history") + 2];
-    snprintf(histnamebuf, sizeof(histnamebuf), "%s/iosdbg-history", pathbuf);
+    int numlines = 0;
+    char ch;
 
-    IOSDBG_HISTORY = fopen(histnamebuf, "a+");
-
-    if(!IOSDBG_HISTORY){
-        printf("warning: couldn't open command history file '%s'\n",
-                histnamebuf);
-        return;
+    while((ch = fgetc(histfp)) != EOF){
+        if(ch == '\n' || ch == '\r')
+            numlines++;
     }
 
-    rewind(IOSDBG_HISTORY);
+    long int sz = ftell(histfp);
+    fclose(histfp);
 
     /* Figure out if we need to resize the file. A 1mb limit seems fine.
-     * Since we still want to keep recent history, chop off the
-     * first half of this file.
+     * Since we still want to keep recent history, leave the most recent half.
      */
     const int limit = 1048576;
-    fseek(IOSDBG_HISTORY, 0, SEEK_END);
-    long int sz = ftell(IOSDBG_HISTORY);
 
-    rewind(IOSDBG_HISTORY);
-
-    if(sz >= limit){
-        char *entire_file = malloc(sz + 1);
-        fread(entire_file, sizeof(char), sz, IOSDBG_HISTORY);
-        entire_file[sz] = '\0';
-
-        char *truncated = entire_file + (sz / 2);
-        char *newline = strchr(truncated, '\n');
-
-        if(newline)
-            truncated += (newline - truncated) + 1;
-
-        freopen(histnamebuf, "w", IOSDBG_HISTORY);
-        fwrite(truncated, sizeof(char), strlen(truncated), IOSDBG_HISTORY);
-
-        free(entire_file);
-
-        freopen(histnamebuf, "a+", IOSDBG_HISTORY);
-        rewind(IOSDBG_HISTORY);
-    }
-
-    char *hist_line = NULL;
-    size_t hist_len;
-
-    while(getline(&hist_line, &hist_len, IOSDBG_HISTORY) != -1){
-        hist_line[strlen(hist_line) - 1] = '\0';
-        add_history(hist_line);
-    }
-
-    free(hist_line);
-
-    /* We aren't done with this file, it stays open
-     * until the user quits iosdbg.
-     */
+    if(sz >= limit)
+        history_truncate_file(HISTORY_PATH, numlines/2);
 }
 
 enum cmd_error_t do_cmdline_command(char *user_command_,

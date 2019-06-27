@@ -7,7 +7,6 @@
 #include <readline/readline.h>
 
 #include "debuggee.h"
-#include "printing.h"
 #include "strext.h"
 #include "tarrays.h"
 #include "trace.h"

@@ -198,6 +198,12 @@ void audit_memory_find(struct cmd_args_t *args, const char **groupnames,
     char *type = argcopy(args, groupnames[2]);
     char *target = argcopy(args, groupnames[3]);
 
+    if(!type){
+        concat(error, "missing type");
+        free_on_failure(4, start, count, type, target);
+        return;
+    }
+
     if(strcmp(type, "--s") == 0){
         if(!target){
             concat(error, "attempt to search for empty string");

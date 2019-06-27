@@ -5,7 +5,7 @@
 
 #include "argparse.h"       /* Defines MAX_GROUPS */
 
-extern FILE *IOSDBG_HISTORY;
+extern char *HISTORY_PATH;
 
 void initialize_commands(void);
 void load_history(void);

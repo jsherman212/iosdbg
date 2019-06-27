@@ -4,19 +4,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/sysctl.h>
-#include <sys/time.h>
-#include <sys/types.h>
 
 #include <readline/readline.h>
 #include <readline/history.h>
 
 #include "convvar.h"
+#include "dbgio.h"
 #include "dbgops.h"
 #include "debuggee.h"
 #include "handlers.h"
 #include "linkedlist.h"
 #include "memutils.h"
-#include "printing.h"
 #include "rlext.h"
 #include "sigsupport.h"
 #include "strext.h"
@@ -277,7 +275,6 @@ static void setup_initial_debuggee(void){
     debuggee->want_detach = 0;
     debuggee->tracing_disabled = 0;
     debuggee->currently_tracing = 0;
-    debuggee->pending_exceptions = 0;
 
     /* Figure out how many hardware breakpoints/watchpoints are supported. */
     size_t len = sizeof(int);
@@ -322,12 +319,7 @@ static void linecb(char *line){
             (!prevline || (prevline && strcmp(line, prevline) != 0)) &&
             !is_whitespace(line)){
         add_history(line);
-
-        if(IOSDBG_HISTORY){
-            fwrite(line, sizeof(char), linelen, IOSDBG_HISTORY);
-            fputc('\n', IOSDBG_HISTORY);
-            fflush(IOSDBG_HISTORY);
-        }
+        append_history(1, HISTORY_PATH);
     }
 
     int force_show_outbuffer = 0;
@@ -336,18 +328,18 @@ static void linecb(char *line){
             &linecpy, 1, &force_show_outbuffer, &outbuffer, &error);
 
     if(force_show_outbuffer){
-        rl_printf(MAIN_THREAD, "%s", outbuffer);
+        io_append("%s", outbuffer);
         free(outbuffer);
         outbuffer = NULL;
     }
 
     if(result == CMD_FAILURE && error){
-        rl_printf(MAIN_THREAD, "error: %s\n", error);
+        io_append("error: %s\n", error);
         free(error);
     }
     else{
         if(outbuffer){
-            rl_printf(MAIN_THREAD, "%s", outbuffer);
+            io_append("%s", outbuffer);
             free(outbuffer);
         }
 
@@ -375,24 +367,17 @@ static void linecb(char *line){
     free(line);
 }
 
-static inline long secs_to_usecs(double seconds){
-    return seconds * 1e+6;
-}
-
 static void inputloop(void){
     static const char *prompt = "\033[2m(iosdbg) \033[0m";
     rl_callback_handler_install(prompt, linecb);
 
     while(1){
-        fd_set fds;
-        FD_ZERO(&fds);
-        FD_SET(fileno(rl_instream), &fds);
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(fileno(rl_instream), &read_fds);
+        FD_SET(IOSDBG_IO_PIPE[0], &read_fds);
 
-        struct timeval tv = {0};
-        tv.tv_sec = 0;
-        tv.tv_usec = secs_to_usecs(0.001);
-
-        int ret = select(FD_SETSIZE, &fds, NULL, NULL, &tv);
+        int ret = select(FD_SETSIZE, &read_fds, NULL, NULL, NULL);
 
         if(ret < 0){
             if(errno != EINTR){
@@ -403,19 +388,14 @@ static void inputloop(void){
             continue;
         }
 
-        if(FD_ISSET(fileno(rl_instream), &fds)){
+        if(FD_ISSET(fileno(rl_instream), &read_fds))
             rl_callback_read_char();
 
-            if(QUIT)
-                return;
-        }
-        else if(ret == 0){
-            /* select only times out when we are issuing a command. When issuing
-             * commands, the prompt is visible, making this a good time to
-             * wake up any other threads waiting to print to stdout.
-             */
-            notify_of_reprompt();
-        }
+        if(FD_ISSET(IOSDBG_IO_PIPE[0], &read_fds))
+            io_flush();
+
+        if(QUIT)
+            return;
     }
 }
 
@@ -427,7 +407,7 @@ static void early_configuration(void){
     sigsettings(SIGINT, &notify, &pass, &stop, 1, &error);
 
     if(error){
-        printf("error: %s\n", error);
+        io_append("error: %s\n", error);
         free(error);
         error = NULL;
     }
@@ -435,13 +415,19 @@ static void early_configuration(void){
     sigsettings(SIGTRAP, &notify, &pass, &stop, 1, &error);
 
     if(error){
-        printf("error: %s\n", error);
+        io_append("error: %s\n", error);
         free(error);
     }
 }
 
 int main(int argc, char **argv, const char **envp){
     pthread_setname_np("iosdbg main thread");
+
+    if(initialize_iosdbg_io()){
+        printf("couldn't initialize iosdbg I/O pipe: %s\n", strerror(errno));
+        return 1;
+    }
+
     early_configuration();
     setup_initial_debuggee();
     install_handlers();
@@ -458,19 +444,14 @@ int main(int argc, char **argv, const char **envp){
 
     sigaction(SIGINT, &sa, NULL);
     
-    int err = setup_tracing();
+    if(setup_tracing())
+        io_append("Could not setup for future tracing. Tracing is disabled.\n");
 
-    if(err)
-        printf("Could not setup for future tracing. Tracing is disabled.\n");
-
-    printf("For help, type \"help\".\n"
+    io_append("For help, type \"help\".\n"
             "Command name abbreviations are allowed if unambiguous.\n"
             "Type '!' before your input to execute a shell command.\n");
 
     inputloop();
-
-    if(IOSDBG_HISTORY)
-        fclose(IOSDBG_HISTORY);
 
     return 0;
 }

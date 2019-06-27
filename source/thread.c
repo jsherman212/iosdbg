@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "breakpoint.h"
 #include "debuggee.h"
-#include "printing.h"
 #include "strext.h"
 #include "thread.h"
+#include "watchpoint.h"
 
 mach_port_t THREAD_DEATH_NOTIFY_PORT = MACH_PORT_NULL;
 pthread_mutex_t THREAD_LOCK = PTHREAD_MUTEX_INITIALIZER;
@@ -451,6 +452,35 @@ void update_thread_list(thread_act_port_array_t threads,
 
                     break;
                 }
+            }
+
+            get_debug_state(add);
+
+            /* Update non-thread specific breakpoints and watchpoints
+             * for any new threads.
+             */
+            if(i >= infos_cnt){
+                BP_LOCKED_FOREACH(current){
+                    struct breakpoint *b = current->data;
+
+                    if(b->threadinfo.all){
+                        add->debug_state.__bcr[b->hw_bp_reg] = b->bcr;
+                        add->debug_state.__bvr[b->hw_bp_reg] = b->bvr;
+                    }
+                }
+                BP_END_LOCKED_FOREACH;
+
+                WP_LOCKED_FOREACH(current){
+                    struct watchpoint *w = current->data;
+
+                    if(w->threadinfo.all){
+                        add->debug_state.__wcr[w->hw_wp_reg] = w->wcr;
+                        add->debug_state.__wvr[w->hw_wp_reg] = w->wvr;
+                    }
+                }
+                WP_END_LOCKED_FOREACH;
+
+                set_debug_state(add);
             }
 
             debuggee->thread_count = i+1;

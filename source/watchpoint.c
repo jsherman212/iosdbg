@@ -5,7 +5,6 @@
 #include "debuggee.h"
 #include "linkedlist.h"
 #include "memutils.h"
-#include "printing.h"
 #include "strext.h"
 #include "thread.h"
 #include "watchpoint.h"
