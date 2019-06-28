@@ -5,8 +5,6 @@
 #include <sys/event.h>
 #include <unistd.h>
 
-#include <readline/readline.h>
-
 #include "convvar.h"
 #include "dbgio.h"
 #include "dbgops.h"
@@ -14,9 +12,14 @@
 #include "exception.h"
 #include "linkedlist.h"
 #include "queue.h"
+#include "servers.h"
 #include "strext.h"
 #include "thread.h"
 #include "trace.h"
+
+pthread_mutex_t EXCEPTION_QUEUE_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+struct queue_t *EXCEPTION_QUEUE = NULL;
+int NEED_REPLY = 0;
 
 struct req {
     mach_msg_header_t hdr;
@@ -26,11 +29,14 @@ struct req {
 static void *exception_server(void *arg){
     pthread_setname_np("exception handling thread");
 
-    int num_exceptions = 0, will_auto_resume = 1;
+    int will_auto_resume = 1;
+
+    EXCEPTION_QUEUE = queue_new();
+    struct queue_t *exc_queue_internal = queue_new();
 
     while(MACH_PORT_VALID(debuggee->exception_port)){ 
         struct req *req = malloc(sizeof(struct req));
-        
+
         /* Set a one second timeout so we can check if we need to
          * shutdown this thread.
          * For whatever reason, after deallocating this exception port,
@@ -52,16 +58,19 @@ static void *exception_server(void *arg){
         /* We got something, suspend debuggee execution. */
         ops_suspend();
 
-        enqueue(debuggee->exc_requests, (Request *)req);
+        enqueue(exc_queue_internal, (Request *)req);
 
-        num_exceptions++;
+        pthread_mutex_lock(&EXCEPTION_QUEUE_MUTEX);
+        NEED_REPLY = 1;
+        enqueue(EXCEPTION_QUEUE, (Request *)req);
+        pthread_mutex_unlock(&EXCEPTION_QUEUE_MUTEX);
 
         err = KERN_SUCCESS;
 
         /* Gather up any more exceptions. */
         while(err != MACH_RCV_TIMED_OUT){
             req = malloc(sizeof(struct req));
-            
+
             err = mach_msg(&(req->hdr),
                     MACH_RCV_MSG | MACH_RCV_TIMEOUT,
                     0,
@@ -70,9 +79,12 @@ static void *exception_server(void *arg){
                     0,
                     MACH_PORT_NULL);
 
-            if(req && err == KERN_SUCCESS){
-                enqueue(debuggee->exc_requests, (Request *)req);
-                num_exceptions++;
+            if(err == KERN_SUCCESS){
+                enqueue(exc_queue_internal, (Request *)req);
+                
+                pthread_mutex_lock(&EXCEPTION_QUEUE_MUTEX);
+                enqueue(EXCEPTION_QUEUE, (Request *)req);
+                pthread_mutex_unlock(&EXCEPTION_QUEUE_MUTEX);
             }
         }
 
@@ -82,10 +94,9 @@ static void *exception_server(void *arg){
         will_auto_resume = 1;
         char *exception_buffer = NULL;
 
-        /* Display and reply to what we gathered. */
-        while(num_exceptions > 0){
-            Request *r = dequeue(debuggee->exc_requests);
+        Request *r = dequeue(exc_queue_internal);
 
+        while(r){
             int should_auto_resume = 1, should_print = 1;
             char *what = NULL;
 
@@ -100,12 +111,9 @@ static void *exception_server(void *arg){
             if(should_print)
                 concat(&exception_buffer, "%s", what);
 
-            reply_to_exception(r, KERN_SUCCESS);
-
             free(what);
-            free(r);
 
-            num_exceptions--;
+            r = dequeue(exc_queue_internal);
         }
 
         if(will_auto_resume)
@@ -116,6 +124,9 @@ static void *exception_server(void *arg){
             free(exception_buffer);
         }
     }
+
+    queue_free(EXCEPTION_QUEUE);
+    queue_free(exc_queue_internal);
 
     return NULL;
 }

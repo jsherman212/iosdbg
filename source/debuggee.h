@@ -11,9 +11,6 @@ struct debuggee {
     /* PID of the debuggee. */
     pid_t pid;
 
-    /* Exception requests from exception_server. */
-    struct queue_t *exc_requests;
-
     /* If this variable is non-zero, tracing is not supported. */
     int tracing_disabled;
 

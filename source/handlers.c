@@ -151,6 +151,9 @@ kern_return_t deallocate_ports(char **outbuffer){
 }
 
 kern_return_t suspend(void){
+    if(debuggee->suspended())
+        return KERN_FAILURE;
+
     return task_suspend(debuggee->task);
 }
 

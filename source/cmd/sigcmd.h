@@ -23,16 +23,17 @@ static const char *SIGNAL_HANDLE_COMMAND_DOCUMENTATION =
     "\nIf none of these arguments are given, the current policy is shown.\n"
     "\nSyntax:\n"
     "\tsignal handle signals --notify <boolean> --pass <boolean> --stop <boolean>\n"
+    "\tsignal handle signals -n <boolean> -p <boolean> -s <boolean>\n"
     "\n";
 
 /*
  * Regexes
  */
 static const char *SIGNAL_HANDLE_COMMAND_REGEX =
-    "(^(?<signals>[\\w\\s]+[^--])\\s+"
-    "--?(n(otify)?)\\s+(?<notify>0|1|(true|false)\\b)\\s+"
-    "--?(p(ass)?)\\s+(?<pass>0|1|(true|false)\\b)\\s+"
-    "--?(s(top)?)\\s+(?<stop>0|1|(true|false)\\b))?";
+    "^(?<signals>[\\w\\s]+)\\s+"
+    "--?(n(otify)?)\\s+(?<notify>1|0|true|false)\\s+"
+    "--?(p(ass)?)\\s+(?<pass>1|0|true|false)\\s+"
+    "--?(s(top)?)\\s+(?<stop>1|0|true|false)";
 
 /*
  * Regex groups

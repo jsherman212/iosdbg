@@ -162,8 +162,6 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         debuggee->debuggee_name = strdup(target);
     }
 
-    debuggee->exc_requests = queue_new();
-
     BP_LOCK;
     debuggee->breakpoints = linkedlist_new();
     BP_UNLOCK;
@@ -287,16 +285,8 @@ enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
         int from_death, char **outbuffer, char **error){
     if(!debuggee->tracing_disabled)
         stop_trace();
-    
-    char *n = strdup(debuggee->debuggee_name);
-    pid_t p = debuggee->pid;
 
     ops_detach(from_death, outbuffer);
-
-    if(!from_death)
-        concat(outbuffer, "Detached from %s (%d)\n", n, p);
-
-    free(n);
 
     return CMD_SUCCESS;
 }

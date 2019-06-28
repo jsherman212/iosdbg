@@ -46,7 +46,7 @@ static int find_ready_bp_reg(void){
 }
 
 struct breakpoint *breakpoint_new(unsigned long location, int temporary, 
-        int thread, char **error){
+        int thread, char **outbuffer, char **error){
     kern_return_t err = valid_location(location);
 
     if(err){
@@ -149,6 +149,14 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     }
     
     bp->location = location;
+    bp->hit_count = 0;
+    bp->disabled = 0;
+    bp->temporary = temporary;
+    bp->id = current_breakpoint_id;
+    
+    // XXX once I open up temp breakpoints as a feature this will cause issues
+    if(!bp->temporary)
+        current_breakpoint_id++;
 
     int sz = 4, orig_instruction = 0;
 
@@ -167,20 +175,25 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
         bp->old_instruction = orig_instruction;
     }
     else{
+        concat(outbuffer, "warning: breakpoint %d is set at the same location"
+                " as breakpoint %d", dup->id, bp->id);
+        
+        if(!bp->hw && dup->hw){
+            int len = (int)strlen("warning:");
+            concat(outbuffer, "\n%*sin addition, breakpoint %d is a hardware"
+                    " breakpoint, and breakpoint %d is a software breakpoint.\n"
+                    "%*sit is strongly recommended to remove breakpoint %d.\n",
+                    len, "", dup->id, bp->id, len, "", bp->id);
+        }
+        else{
+            concat(outbuffer, "\n");
+        }
+
         /* If two software breakpoints are set at the same place,
          * the second one will record the original instruction as BRK #0.
          */
         bp->old_instruction = dup->old_instruction;
     }
-    
-    bp->hit_count = 0;
-    bp->disabled = 0;
-    bp->temporary = temporary;
-    bp->id = current_breakpoint_id;
-    
-    // XXX once I open up temp breakpoints as a feature this will cause issues
-    if(!bp->temporary)
-        current_breakpoint_id++;
 
     return bp;
 }
@@ -266,7 +279,8 @@ static void bp_delete_internal(struct breakpoint *bp){
 
 void breakpoint_at_address(unsigned long address, int temporary,
         int thread, char **outbuffer, char **error){
-    struct breakpoint *bp = breakpoint_new(address, temporary, thread, error);
+    struct breakpoint *bp = breakpoint_new(address, temporary,
+            thread, outbuffer, error);
 
     if(!bp)
         return;

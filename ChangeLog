@@ -1,3 +1,8 @@
+6-28-19
+- revert back to replying to exceptions when the user issues the continue
+command
+- fix up signal handle regex
+
 6-27-19
 - use pipes for more efficient I/O
 - fixed up strext.c concat functions

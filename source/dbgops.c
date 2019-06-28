@@ -55,13 +55,30 @@ void ops_printsiginfo(char **outbuffer){
     }
 }
 
+static void reply_to_all_exceptions(void){
+    pthread_mutex_lock(&EXCEPTION_QUEUE_MUTEX);
+
+    if(NEED_REPLY){
+        Request *r = dequeue(EXCEPTION_QUEUE);
+
+        while(r){
+            reply_to_exception(r, KERN_SUCCESS);
+            free(r);
+            r = dequeue(EXCEPTION_QUEUE);
+        }
+
+        NEED_REPLY = 0;
+    }
+
+    pthread_mutex_unlock(&EXCEPTION_QUEUE_MUTEX);
+}
+
 void ops_detach(int from_death, char **outbuffer){
     ops_suspend();
 
     breakpoint_delete_all();
     watchpoint_delete_all();
 
-    /* Disable hardware single stepping on all threads. */
     TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
@@ -71,17 +88,11 @@ void ops_detach(int from_death, char **outbuffer){
     }
     TH_END_LOCKED_FOREACH;
 
-    void *request = dequeue(debuggee->exc_requests);
-    
-    /* Reply to any exceptions. */
-    while(request){
-        reply_to_exception(request, KERN_SUCCESS);
-        free(request);
-        request = dequeue(debuggee->exc_requests);
-    }
+    debuggee->restore_exception_ports();
+
+    reply_to_all_exceptions();
 
     debuggee->deallocate_ports(outbuffer);
-    debuggee->restore_exception_ports();
 
     /* Send SIGSTOP to set debuggee's process status to
      * SSTOP so we can detach. Calling ptrace with PT_THUPDATE
@@ -96,37 +107,42 @@ void ops_detach(int from_death, char **outbuffer){
          * SIGSTOP.
          */
         while(ret == -1){
-            ret = ptrace(PT_DETACH, debuggee->pid, 0, 0);
+            ret = ptrace(PT_DETACH, debuggee->pid, (caddr_t)1, 0);
             usleep(500);
         }
 
         kill(debuggee->pid, SIGCONT);
     }
 
-    queue_free(debuggee->exc_requests);
-    debuggee->exc_requests = NULL;
+    pthread_mutex_lock(&EXCEPTION_QUEUE_MUTEX);
+    queue_free(EXCEPTION_QUEUE);
+    EXCEPTION_QUEUE = NULL;
+    pthread_mutex_unlock(&EXCEPTION_QUEUE_MUTEX);
 
     BP_LOCK;
     linkedlist_free(debuggee->breakpoints);
     debuggee->breakpoints = NULL;
     BP_UNLOCK;
 
-    TH_LOCK;
-    linkedlist_free(debuggee->threads);
-    debuggee->threads = NULL;
-    TH_UNLOCK;
-
     WP_LOCK;
     linkedlist_free(debuggee->watchpoints);
     debuggee->watchpoints = NULL;
     WP_UNLOCK;
 
-    debuggee->num_breakpoints = 0;
-    debuggee->num_watchpoints = 0;
-    debuggee->pid = -1;
+    TH_LOCK;
+    linkedlist_free(debuggee->threads);
+    debuggee->threads = NULL;
+    TH_UNLOCK;
+
+    concat(outbuffer, "Detached from %s (%d)\n",
+            debuggee->debuggee_name, debuggee->pid);
 
     free(debuggee->debuggee_name);
     debuggee->debuggee_name = NULL;
+
+    debuggee->num_breakpoints = 0;
+    debuggee->num_watchpoints = 0;
+    debuggee->pid = -1;
 
     void_convvar("$_");
     void_convvar("$__");
@@ -136,6 +152,8 @@ void ops_detach(int from_death, char **outbuffer){
 }
 
 kern_return_t ops_resume(void){
+    reply_to_all_exceptions();
+    
     return debuggee->resume();
 }
 
@@ -143,10 +161,7 @@ kern_return_t ops_suspend(void){
     return debuggee->suspend();
 }
 
-enum {
-    BP,
-    WP
-};
+enum { BP, WP };
 
 static void delete_invalid_bp_or_wp(int which, void *data, char **out){
     concat(out, "\n[The thread assigned to %s %d has gone"
@@ -260,6 +275,13 @@ static void fetch_bp_or_wp_threads(int which, void *data,
 }
 
 static void adjust_breakpoints(char **out){
+    BP_LOCK;
+    if(!debuggee->breakpoints){
+        BP_UNLOCK;
+        return;
+    }
+    BP_UNLOCK;
+
     BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
 
@@ -284,6 +306,13 @@ static void adjust_breakpoints(char **out){
 }
 
 static void adjust_watchpoints(char **out){
+    WP_LOCK;
+    if(!debuggee->watchpoints){
+        WP_UNLOCK;
+        return;
+    }
+    WP_UNLOCK;
+
     WP_LOCKED_FOREACH(current){
         struct watchpoint *wp = current->data;
 

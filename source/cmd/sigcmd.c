@@ -63,7 +63,7 @@ enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args,
     char *stop_str = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[3]);
     
     /* If no arguments were given, the user wants to see settings. */
-    if(!signals || !notify_str || !pass_str || !stop_str){
+    if(!signals && !notify_str && !pass_str && !stop_str){
         free(signals);
         free(notify_str);
         free(pass_str);
