@@ -1,11 +1,41 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+#include <readline/readline.h>
 
 #include "documentation.h"
 
 #include "../queue.h"
 #include "../strext.h"
+
+static void get_matches(char **array, int len, int longestelem,
+        char **outbuffer){
+    int rl_outstream_backup = dup(fileno(rl_outstream));
+
+    int tempfds[2];
+    pipe(tempfds);
+
+    dup2(tempfds[1], fileno(rl_outstream));
+
+    rl_display_match_list(array, len, longestelem);
+
+    write(tempfds[1], "\003", sizeof(char));
+    close(tempfds[1]);
+
+    char ch;
+    while(read(tempfds[0], &ch, sizeof(ch)) > 0){
+        if(ch == '\003')
+            break;
+
+        concat(outbuffer, "%c", ch);
+    }
+
+    close(tempfds[0]);
+
+    dup2(rl_outstream_backup, fileno(rl_outstream));
+}
 
 void show_all_top_level_cmds(char **outbuffer){
     concat(outbuffer, "List of top level commands:\n");
@@ -34,9 +64,8 @@ void show_all_top_level_cmds(char **outbuffer){
         }
     }
 
-    for(int i=1; i<len; i++)
-        concat(outbuffer, "%d. %s\n", i, cmds[i]);
-    
+    get_matches(cmds, len, largest_cmd_len, outbuffer);
+
     token_array_free(cmds, len);
 }
 
@@ -87,10 +116,8 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd, char **outbuffer){
             if(cursubcmd->parentcmd)
                 enqueue(cmdqueue, cursubcmd);
         }
-        
-        for(int i=1; i<subcmdnum; i++)
-            concat(outbuffer, "%d. %s\n", i, subcmds[i]);
 
+        get_matches(subcmds, subcmdnum, largest_subcmd_len, outbuffer);
         token_array_free(subcmds, subcmdnum);
         queue_free(cmdqueue);
 

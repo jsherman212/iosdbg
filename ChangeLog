@@ -1,3 +1,8 @@
+6-29-19
+- use rl_display_match_list in documentation.c
+- do away with repairing the cmd_args_t struct and just pass a copy to the
+audit functions
+
 6-28-19
 - revert back to replying to exceptions when the user issues the continue
 command

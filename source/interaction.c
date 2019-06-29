@@ -11,7 +11,7 @@ char answer(const char *question, ...){
     vprintf(question, args);
 
     va_end(args);
-    
+
     char *answer = NULL;
     size_t len;
     

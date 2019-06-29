@@ -391,8 +391,10 @@ static void inputloop(void){
         if(FD_ISSET(fileno(rl_instream), &read_fds))
             rl_callback_read_char();
 
+        pthread_mutex_lock(&IO_PIPE_LOCK);
         if(FD_ISSET(IOSDBG_IO_PIPE[0], &read_fds))
             io_flush();
+        pthread_mutex_unlock(&IO_PIPE_LOCK);
 
         if(QUIT)
             return;

@@ -8,12 +8,11 @@
 
 #include "strext.h"
 
-static pthread_mutex_t pipe_lock = PTHREAD_MUTEX_INITIALIZER;
-
 int IOSDBG_IO_PIPE[2];
+pthread_mutex_t IO_PIPE_LOCK = PTHREAD_MUTEX_INITIALIZER;
 
 int io_append(const char *fmt, ...){
-    pthread_mutex_lock(&pipe_lock);
+    pthread_mutex_lock(&IO_PIPE_LOCK);
 
     va_list args;
     va_start(args, fmt);
@@ -21,22 +20,22 @@ int io_append(const char *fmt, ...){
     char *dst = NULL;
     vconcat(&dst, fmt, args);
 
-    /* Use ETX to know our message is finished. */
-    concat(&dst, "\003");
-
     va_end(args);
 
     int w = write(IOSDBG_IO_PIPE[1], dst, strlen(dst));
 
+    /* Use ETX to know our message is finished. */
+    w += write(IOSDBG_IO_PIPE[1], "\003", sizeof(char));
+
     free(dst);
 
-    pthread_mutex_unlock(&pipe_lock);
+    pthread_mutex_unlock(&IO_PIPE_LOCK);
 
     return w;
 }
 
 int io_flush(void){
-    pthread_mutex_lock(&pipe_lock);
+    /* We already hold the mutex when this is called. */
 
     int saved_point = rl_point;
     char *saved_line = rl_copy_text(0, rl_end);
@@ -61,8 +60,6 @@ int io_flush(void){
     rl_redisplay();
 
     free(saved_line);
-
-    pthread_mutex_unlock(&pipe_lock);
 
     return written;
 }

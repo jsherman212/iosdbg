@@ -187,10 +187,44 @@ struct cmd_args_t *parse_and_create_args(char *_args,
     return arguments;
 }
 
+struct cmd_args_t *argdup(struct cmd_args_t *with){
+    struct cmd_args_t *duped = malloc(sizeof(struct cmd_args_t));
+    duped->argmaps = linkedlist_new();
+    duped->num_args = with->num_args;
+    
+    for(struct node_t *current = with->argmaps->front;
+            current;
+            current = current->next){
+        struct argmap *with_map = current->data;
+
+        struct argmap *duped_map = malloc(sizeof(struct argmap));
+        duped_map->arggroup = strdup(with_map->arggroup);
+        duped_map->argvals = queue_new();
+        duped_map->argvalcnt = with_map->argvalcnt;
+
+        for(int i=0; i<duped_map->argvalcnt; i++){
+            char *with_arg = dequeue(with_map->argvals);
+
+            if(with_arg){
+                char *duped_arg = strdup(with_arg);
+                enqueue(duped_map->argvals, duped_arg);
+            }
+            else{
+                enqueue(duped_map->argvals, NULL);
+            }
+
+            enqueue(with_map->argvals, with_arg);
+        }
+
+        linkedlist_add(duped->argmaps, duped_map);
+    }
+
+    return duped;
+}
+
 void argins(struct cmd_args_t *args, const char *arggroup, char *argval){
     if(!args || !arggroup)
         return;
-
     for(struct node_t *current = args->argmaps->front;
             current;
             current = current->next){
@@ -198,6 +232,7 @@ void argins(struct cmd_args_t *args, const char *arggroup, char *argval){
 
         if(strcmp(map->arggroup, arggroup) == 0){
             enqueue(map->argvals, argval);
+            map->argvalcnt++;
             return;
         }
     }
@@ -206,10 +241,9 @@ void argins(struct cmd_args_t *args, const char *arggroup, char *argval){
     map->arggroup = strdup(arggroup);
     map->argvals = queue_new();
 
-    if(argval)
-        enqueue(map->argvals, argval);
-    else
-        enqueue(map->argvals, NULL);
+    enqueue(map->argvals, argval);
+
+    map->argvalcnt = 1;
 
     linkedlist_add(args->argmaps, map);
 }

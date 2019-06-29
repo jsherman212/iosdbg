@@ -24,35 +24,6 @@ static void free_on_failure(int argcount, ...){
     va_end(args);
 }
 
-static void repair_cmd_args(struct cmd_args_t *_args, int unlim,
-        const char **groupnames, int argcount, ...){
-    va_list args;
-    va_start(args, argcount);
-
-    if(unlim)
-        argcount--;
-
-    for(int i=0; i<argcount; i++){
-        char *arg = va_arg(args, char *);
-
-        if(arg)
-            argins(_args, groupnames[i], arg);
-    }
-
-    if(unlim){
-        char *arg = va_arg(args, char *);
-
-        while(arg){
-            if(arg)
-                argins(_args, groupnames[argcount - 1], arg);
-
-            arg = va_arg(args, char *);
-        }
-    }
-
-    va_end(args);
-}
-
 void audit_aslr(struct cmd_args_t *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
@@ -92,8 +63,6 @@ void audit_attach(struct cmd_args_t *args, const char **groupnames,
         free_on_failure(2, waitfor, target);
         return;
     }
-
-    repair_cmd_args(args, 0, groupnames, 2, waitfor, target);
 }
 
 void audit_backtrace(struct cmd_args_t *args, const char **groupnames,
@@ -108,6 +77,15 @@ void audit_breakpoint_set(struct cmd_args_t *args, const char **groupnames,
     // later, this will cause problems
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
+
+    char *tidstr = argcopy(args, groupnames[0]);
+    char *locations = argcopy(args, groupnames[1]);
+
+    if(!locations){
+        concat(error, "need location");
+        free_on_failure(1, locations);
+        return;
+    }
 }
 
 void audit_continue(struct cmd_args_t *args, const char **groupnames,
@@ -151,8 +129,6 @@ void audit_disassemble(struct cmd_args_t *args, const char **groupnames,
         free_on_failure(2, location, count);
         return;
     }
-
-    repair_cmd_args(args, 0, groupnames, 2, location, count);
 }
 
 void audit_examine(struct cmd_args_t *args, const char **groupnames,
@@ -178,8 +154,6 @@ void audit_examine(struct cmd_args_t *args, const char **groupnames,
         free_on_failure(2, location, count);
         return;
     }
-
-    repair_cmd_args(args, 0, groupnames, 2, location, count);
 }
 
 void audit_kill(struct cmd_args_t *args, const char **groupnames,
@@ -223,8 +197,6 @@ void audit_memory_find(struct cmd_args_t *args, const char **groupnames,
             return;
         }
     }
-
-    repair_cmd_args(args, 0, groupnames, 4, start, count, type, target);
 }
 
 void audit_memory_write(struct cmd_args_t *args, const char **groupnames,
@@ -286,8 +258,6 @@ void audit_thread_select(struct cmd_args_t *args, const char **groupnames,
         free_on_failure(1, tid);
         return;
     }
-
-    repair_cmd_args(args, 0, groupnames, 1, tid);
 }
 
 void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
@@ -299,7 +269,6 @@ void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
 
     /* tid doesn't need to be checked. */
     char *tid = argcopy(args, groupnames[0]);
-
     char *type = argcopy(args, groupnames[1]);
 
     if(type && (strcmp(type, "r") != 0 &&
@@ -324,6 +293,4 @@ void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
         concat(error, "missing data size");
         free_on_failure(4, tid, type, location, size);
     }
-
-    repair_cmd_args(args, 0, groupnames, 4, tid, type, location, size);
 }

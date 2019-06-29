@@ -45,9 +45,11 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args,
         goto out1;
     }
 
+    const char **groupnames = (const char **)(CURRENT_MATCH_INFO.rinfo.groupnames);
+
     struct cmd_args_t *parsed_args = parse_and_create_args(args,
             CURRENT_MATCH_INFO.rinfo.argregex,
-            (const char **)(CURRENT_MATCH_INFO.rinfo.groupnames),
+            groupnames,
             CURRENT_MATCH_INFO.rinfo.num_groups,
             CURRENT_MATCH_INFO.rinfo.unk_num_args,
             error);
@@ -66,8 +68,9 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args,
         CURRENT_MATCH_INFO.audit_function;
     
     if(audit_function){
-        audit_function(parsed_args,
-                (const char **)(CURRENT_MATCH_INFO.rinfo.groupnames), error);
+        struct cmd_args_t *duped_args = argdup(parsed_args);
+        audit_function(duped_args, groupnames, error);
+        argfree(duped_args);
     }
 
     if(*error){
@@ -78,7 +81,10 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args,
         goto out;
     }
 
-    result = (CURRENT_MATCH_INFO.cmd_function)(parsed_args, 0, outbuffer, error);
+    enum cmd_error_t (*cmdfunc)(struct cmd_args_t *, int, char **, char **) =
+        CURRENT_MATCH_INFO.cmd_function;
+
+    result = cmdfunc(parsed_args, 0, outbuffer, error);
 
 out:;
     _reset_matchedcmdinfo();
