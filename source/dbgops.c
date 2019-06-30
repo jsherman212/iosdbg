@@ -56,7 +56,7 @@ void ops_printsiginfo(char **outbuffer){
 }
 
 static void reply_to_all_exceptions(void){
-    pthread_mutex_lock(&EXCEPTION_QUEUE_MUTEX);
+    EXC_QUEUE_LOCK;
 
     if(NEED_REPLY){
         Request *r = dequeue(EXCEPTION_QUEUE);
@@ -114,10 +114,10 @@ void ops_detach(int from_death, char **outbuffer){
         kill(debuggee->pid, SIGCONT);
     }
 
-    pthread_mutex_lock(&EXCEPTION_QUEUE_MUTEX);
+    EXC_QUEUE_LOCK;
     queue_free(EXCEPTION_QUEUE);
     EXCEPTION_QUEUE = NULL;
-    pthread_mutex_unlock(&EXCEPTION_QUEUE_MUTEX);
+    EXC_QUEUE_UNLOCK;
 
     BP_LOCK;
     linkedlist_free(debuggee->breakpoints);

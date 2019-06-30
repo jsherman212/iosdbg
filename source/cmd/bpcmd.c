@@ -80,9 +80,14 @@ enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
                 "", b->id, b->location, b->hit_count, b->hw);
 
         if(!(b->threadinfo.all)){
-            concat(outbuffer, "%8sfor thread %d (tid: %#llx), '%s'\n",
+            concat(outbuffer, "%8sfor thread %d (tid: %#llx), '%s'",
                     "", b->threadinfo.iosdbg_tid, b->threadinfo.pthread_tid,
                     b->threadinfo.tname);
+
+            if(!b->hw)
+                concat(outbuffer, " (emulated thread-specific)\n");
+            else
+                concat(outbuffer, "\n");
         }
     }
     BP_END_LOCKED_FOREACH;

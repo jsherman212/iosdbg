@@ -217,19 +217,3 @@ kern_return_t write_memory_to_location(vm_address_t location,
     
     return ret;
 }
-
-kern_return_t valid_location(long location){
-    vm_region_basic_info_data_64_t info;
-    vm_address_t loc = location;
-    vm_size_t region_size;
-    mach_port_t object_name;
-    mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
-    
-    return vm_region_64(debuggee->task, 
-            &loc,
-            &region_size,
-            VM_REGION_BASIC_INFO,
-            (vm_region_info_t)&info,
-            &info_count,
-            &object_name);
-}

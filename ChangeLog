@@ -1,3 +1,7 @@
+6-30-19
+- "thread specific" software breakpoints
+- fixed up signal handling
+
 6-29-19
 - use rl_display_match_list in documentation.c
 - do away with repairing the cmd_args_t struct and just pass a copy to the

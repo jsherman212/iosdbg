@@ -47,14 +47,6 @@ static int find_ready_bp_reg(void){
 
 struct breakpoint *breakpoint_new(unsigned long location, int temporary, 
         int thread, char **outbuffer, char **error){
-    kern_return_t err = valid_location(location);
-
-    if(err){
-        concat(error, "could not set breakpoint: %s",
-                mach_error_string(err));
-        return NULL;
-    }
-    
     struct breakpoint *bp = malloc(sizeof(struct breakpoint));
 
     bp->threadinfo.tname = NULL;
@@ -163,7 +155,8 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     struct breakpoint *dup = find_bp_with_address(bp->location);
 
     if(!dup){
-        err = read_memory_at_location((void *)bp->location, &orig_instruction, sz);
+        kern_return_t err =
+            read_memory_at_location((void *)bp->location, &orig_instruction, sz);
 
         if(err){
             concat(error, "could not set breakpoint:"
@@ -262,7 +255,7 @@ static void bp_set_state_internal(struct breakpoint *bp, int disabled){
         if(disabled)
             write_memory_to_location(bp->location, bp->old_instruction, 4);   
         else
-            write_memory_to_location(bp->location, CFSwapInt32(BRK), 4);
+            write_memory_to_location(bp->location, BRK, 4);
     }
 
     bp->disabled = disabled;
@@ -293,9 +286,14 @@ void breakpoint_at_address(unsigned long address, int temporary,
         concat(outbuffer, "Breakpoint %d at %#lx", bp->id, bp->location);
 
         if(!bp->threadinfo.all){
-            concat(outbuffer, ", for thread #%d (tid: %#llx), '%s'\n",
+            concat(outbuffer, ", for thread #%d (tid: %#llx), '%s'",
                     bp->threadinfo.iosdbg_tid, bp->threadinfo.pthread_tid,
                     bp->threadinfo.tname);
+
+            if(!bp->hw)
+                concat(outbuffer, " (emulated thread-specific)\n");
+            else
+                concat(outbuffer, "\n");
         }
         else{
             concat(outbuffer, "\n");
@@ -306,7 +304,7 @@ void breakpoint_at_address(unsigned long address, int temporary,
      * by writing BRK #0 to bp->location.
      */
     if(!bp->hw)
-        write_memory_to_location(bp->location, CFSwapInt32(BRK), 4);
+        write_memory_to_location(bp->location, BRK, 4);
 
     debuggee->num_breakpoints++;
 }

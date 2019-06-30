@@ -50,14 +50,6 @@ static struct watchpoint *watchpoint_new(unsigned long location,
         return NULL;
     }
 
-    kern_return_t result = valid_location(location);
-    
-    if(result){
-        concat(error, "could not set watchpoint: %s",
-                mach_error_string(result));
-        return NULL;
-    }
-    
     struct watchpoint *wp = malloc(sizeof(struct watchpoint));
 
     wp->threadinfo.tname = NULL;
@@ -88,7 +80,8 @@ static struct watchpoint *watchpoint_new(unsigned long location,
     wp->data_len = data_len;
     wp->data = malloc(wp->data_len);
 
-    result = read_memory_at_location((void *)wp->user_location, wp->data,
+    kern_return_t result =
+        read_memory_at_location((void *)wp->user_location, wp->data,
             wp->data_len);
 
     if(result){

@@ -60,10 +60,10 @@ static void *exception_server(void *arg){
 
         enqueue(exc_queue_internal, (Request *)req);
 
-        pthread_mutex_lock(&EXCEPTION_QUEUE_MUTEX);
+        EXC_QUEUE_LOCK;
         NEED_REPLY = 1;
         enqueue(EXCEPTION_QUEUE, (Request *)req);
-        pthread_mutex_unlock(&EXCEPTION_QUEUE_MUTEX);
+        EXC_QUEUE_UNLOCK;
 
         err = KERN_SUCCESS;
 
@@ -82,9 +82,9 @@ static void *exception_server(void *arg){
             if(err == KERN_SUCCESS){
                 enqueue(exc_queue_internal, (Request *)req);
                 
-                pthread_mutex_lock(&EXCEPTION_QUEUE_MUTEX);
+                EXC_QUEUE_LOCK;
                 enqueue(EXCEPTION_QUEUE, (Request *)req);
-                pthread_mutex_unlock(&EXCEPTION_QUEUE_MUTEX);
+                EXC_QUEUE_UNLOCK;
             }
         }
 

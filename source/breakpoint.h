@@ -54,7 +54,7 @@ struct breakpoint {
 static int current_breakpoint_id = 1;
 
 /* BRK #0 */
-static const unsigned long long BRK = 0x000020D4;
+static const unsigned long long BRK = 0xd4200000;
 
 void breakpoint_at_address(unsigned long, int, int, char **, char **);
 void breakpoint_hit(struct breakpoint *);

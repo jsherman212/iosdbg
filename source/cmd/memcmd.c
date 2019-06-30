@@ -88,13 +88,6 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
     
-    kern_return_t err = valid_location(start);
-
-    if(err){
-        concat(error, "invalid starting point: %s", mach_error_string(err));
-        return CMD_FAILURE;
-    }
-
     char *count_str = argcopy(args, MEMORY_FIND_COMMAND_REGEX_GROUPS[1]);
     long count = LONG_MIN;
 

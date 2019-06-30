@@ -115,7 +115,7 @@ static void handle_hit_watchpoint(struct machthread *t, int *should_auto_resume,
     struct watchpoint *hit = find_wp_with_address(t->last_hit_wp_loc);
 
     if(!hit){
-        /* should auto resume, shouldn't print */
+        /* should auto resume, should not print */
         *should_print = 0;
         return;
     }
@@ -202,9 +202,20 @@ static void handle_hit_breakpoint(struct machthread *t,
      * we'll end up with hit being NULL.
      */
     if(!hit){
-        /* should auto resume, shouldn't print */
+        /* should auto resume, should not print */
         *should_print = 0;
         return;
+    }
+
+    /* Of course we can't really have real thread-specific software
+     * breakpoints... but we can emulate them.
+     */
+    if(!hit->threadinfo.all && !hit->hw){
+        if(t->tid != hit->threadinfo.pthread_tid){
+            /* should not print, should auto resume */
+            *should_print = 0;
+            return;
+        }
     }
 
     breakpoint_hit(hit);
@@ -259,41 +270,36 @@ void handle_exception(Request *request, int *should_auto_resume,
     /* Unix soft signal. */
     if(exception == EXC_SOFTWARE && code == EXC_SOFT_SIGNAL){
         int notify, pass, stop;
-        char *error = NULL;
+        char *e = NULL;
 
-        sigsettings(subcode, &notify, &pass, &stop, 0, &error);
+        sigsettings(subcode, &notify, &pass, &stop, 0, &e);
 
-        free(error);
+        free(e);
         
         concat(desc, ", '%s' received signal ", focused->tname);
+
         handle_soft_signal(focused->port, subcode,
                 desc, notify, pass, stop);
-        
-        if(stop){
-            /* should print, should not auto resume */
-            *should_auto_resume = 0;
-            
-            concat(desc, "%#llx in debuggee.", focused->thread_state.__pc);
-        }
-        else{
-            /* should print, should auto resume */
-            concat(desc, "Resuming execution.");
-        }
-        
-        /* Don't print any of this if we're detaching. */
-        if(notify && !debuggee->want_detach){
-            concat(desc, "\n");
 
-            if(stop)
-                disassemble_at_location(focused->thread_state.__pc, 4, desc);
-
-            /* should print, should not auto resume */
-            *should_auto_resume = 0;
-        }
-        else if(!notify){
-            /* should not print, should not auto resume */
-            *should_auto_resume = 0;
+        if(!notify && !stop){
+            /* should not print, should auto resume */
             *should_print = 0;
+        }
+        else if(!notify && stop){
+            /* should not print, should not auto resume */
+            *should_print = 0;
+            *should_auto_resume = 0;
+        }
+        else if(notify && !stop){
+            /* should print, should auto resume */
+            concat(desc, "Resuming execution.\n");
+        }
+        else if(notify && stop){
+            /* should print, should not auto resume */
+            *should_auto_resume = 0;
+
+            concat(desc, "%#llx in debuggee.\n", focused->thread_state.__pc);
+            disassemble_at_location(focused->thread_state.__pc, 4, desc);
         }
     }
     /* A hardware watchpoint hit. However, we need to single step in 
