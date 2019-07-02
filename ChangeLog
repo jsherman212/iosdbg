@@ -1,3 +1,10 @@
+7-2-19
+- new command: 'evaluate'
+
+7-1-19
+- new command: 'signal deliver'
+- fixed some memory leaks in the audit functions
+
 6-30-19
 - "thread specific" software breakpoints
 - fixed up signal handling

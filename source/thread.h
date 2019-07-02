@@ -66,6 +66,8 @@ struct machthread {
 
     /* Keeps track of the ID of the last breakpoint that hit on this thread. */
     int last_hit_bkpt_ID;
+
+    int is_single_stepping;
 };
 
 enum comparison {

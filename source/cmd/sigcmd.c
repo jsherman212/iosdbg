@@ -5,7 +5,9 @@
 
 #include "sigcmd.h"
 
+#include "../dbgio.h"
 #include "../dbgops.h"
+#include "../debuggee.h"
 #include "../sigsupport.h"
 #include "../strext.h"
 
@@ -49,10 +51,25 @@ static int sigstr_to_signum(const char *sigstr){
 }
 
 static int preference(char *str){
-    if(strstr(str, "true") || strstr(str, "1"))
-        return 1;
+    return strstr(str, "true") || strstr(str, "1");
+}
 
-    return 0;
+enum cmd_error_t cmdfunc_signal_deliver(struct cmd_args_t *args, 
+        int arg1, char **outbuffer, char **error){
+    char *sigstr = argcopy(args, SIGNAL_DELIVER_COMMAND_REGEX_GROUPS[0]);
+    int signum = sigstr_to_signum(sigstr);
+
+    if(signum == UNKNOWN_SIGNAL){
+        concat(error, "unknown signal '%s'", sigstr);
+        free(sigstr);
+        return CMD_FAILURE;
+    }
+
+    free(sigstr);
+
+    kill(debuggee->pid, signum);
+
+    return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args, 

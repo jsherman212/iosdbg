@@ -23,11 +23,10 @@ int io_append(const char *fmt, ...){
     va_end(args);
 
     int w = write(IOSDBG_IO_PIPE[1], dst, strlen(dst));
+    free(dst);
 
     /* Use ETX to know our message is finished. */
     w += write(IOSDBG_IO_PIPE[1], "\003", sizeof(char));
-
-    free(dst);
 
     pthread_mutex_unlock(&IO_PIPE_LOCK);
 

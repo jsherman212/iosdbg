@@ -32,12 +32,6 @@ struct debuggee {
     /* How many hardware watchpoints the device supports. */
     int num_hw_wps;
 
-    /* Whether or not the debuggee is single stepping. */
-    int is_single_stepping;
-
-    /* Whether or not the debuggee wants to detach. */
-    int want_detach;
-
     /* Count of threads for the debuggee. */
     mach_msg_type_number_t thread_count;
 

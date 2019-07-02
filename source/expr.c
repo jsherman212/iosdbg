@@ -174,22 +174,30 @@ static void sub_conv_vars(char **expr, char **error){
                     /* Remove the convenience variable. */
                     strcut(expr, idx, end_of_operand - idx);
 
-                    char *varval_s = convvar_strval(varstr, error);
+                    char *e1 = NULL;
+                    char *varval_s = convvar_strval(varstr, &e1);
                     
                     /* If this convenience variable doesn't exist, it
                      * may be a register.
                      */
-                    if(error && *error){
-                        *error = NULL;
-                        
+                    if(e1){
+                        free(e1);
+
                         enum regtype rt = NONE;
                         struct machthread *focused = get_focused_thread();
-                        char *e = NULL;
+
+                        if(!focused){
+                            concat(error, "no focused thread");
+                            free(varval_s);
+                            return;
+                        }
+
+                        char *e2 = NULL;
 
                         regtol(focused, HEXADECIMAL, &rt, varstr,
-                                NULL, &varval_s, &e);
+                                NULL, &varval_s, &e2);
 
-                        free(e);
+                        free(e2);
                     }
 
                     /* Insert the value of that convenience variable. */

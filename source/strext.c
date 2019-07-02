@@ -11,7 +11,7 @@ static int _concat_internal(char **dst, const char *src, va_list args){
         return 0;
 
     if(!(*dst)){
-        *dst = malloc(0);
+        *dst = malloc(1);
         *(*dst) = '\0';
     }
     

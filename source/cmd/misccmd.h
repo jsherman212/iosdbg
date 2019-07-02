@@ -11,6 +11,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_continue(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_detach(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_evaluate(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_help(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_kill(struct cmd_args_t *, int, char **, char **);
@@ -59,6 +60,17 @@ static const char *DETACH_COMMAND_DOCUMENTATION =
     "This command has no arguments.\n"
     "\nSyntax:\n"
     "\tdetach\n"
+    "\n";
+
+static const char *EVALUATE_COMMAND_DOCUMENTATION =
+    "Evaluate an expression on the current thread.\n"
+    "This command has one mandatory argument and no optional arguments.\n"
+    "\nMandatory arguments:\n"
+    "\texpr\n"
+    "\t\tThe expression.\n"
+    "\t\tThis command accepts an arbitrary amount of this argument.\n"
+    "\nSyntax:\n"
+    "\tevaluate expr\n"
     "\n";
 
 static const char *HELP_COMMAND_DOCUMENTATION =
@@ -117,6 +129,8 @@ static const char *ATTACH_COMMAND_REGEX =
     "^\\s*((\"(?<target>.*)\")|"
     "(?!.*\")(?<target>\\w+))";
 
+static const char *EVALUATE_COMMAND_REGEX =
+    "(?<expr>[^\\s]+)";
 
 static const char *HELP_COMMAND_REGEX =
     "(?<cmd>[\\w\\s]+)?";
@@ -126,6 +140,9 @@ static const char *HELP_COMMAND_REGEX =
  */
 static const char *ATTACH_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "waitfor", "target" };
+
+static const char *EVALUATE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
+    { "expr" };
 
 static const char *HELP_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "cmd" };

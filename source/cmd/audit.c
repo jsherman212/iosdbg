@@ -12,11 +12,11 @@
 #include "../strext.h"
 #include "../thread.h"
 
-static void free_on_failure(int argcount, ...){
+static void nfree(int n, ...){
     va_list args;
-    va_start(args, argcount);
+    va_start(args, n);
 
-    for(int i=0; i<argcount; i++){
+    for(int i=0; i<n; i++){
         char *arg = va_arg(args, char *);
         free(arg);
     }
@@ -36,7 +36,7 @@ void audit_attach(struct cmd_args_t *args, const char **groupnames,
 
     if(!target){
         concat(error, "no target");
-        free_on_failure(1, target);
+        nfree(1, target);
         return;
     }
 
@@ -44,25 +44,25 @@ void audit_attach(struct cmd_args_t *args, const char **groupnames,
 
     if(waitfor && is_number_fast(target)){
         concat(error, "cannot wait for PIDs");
-        free_on_failure(2, waitfor, target);
+        nfree(2, waitfor, target);
         return;
     }
 
-    /* We cannot debug the kernel. */
     if(strcmp(target, "0") == 0 || strcmp(target, "kernel_task") == 0){
         concat(error, "cannot debug the kernel");
-        free_on_failure(2, waitfor, target);
+        nfree(2, waitfor, target);
         return;
     }
 
     pid_t target_pid = strtol(target, NULL, 10);
 
-    /* We cannot debug ourselves. */
     if(strcmp(target, "iosdbg") == 0 || target_pid == getpid()){
         concat(error, "cannot attach to myself! Use another iosdbg instance");
-        free_on_failure(2, waitfor, target);
+        nfree(2, waitfor, target);
         return;
     }
+
+    nfree(2, waitfor, target);
 }
 
 void audit_backtrace(struct cmd_args_t *args, const char **groupnames,
@@ -83,9 +83,11 @@ void audit_breakpoint_set(struct cmd_args_t *args, const char **groupnames,
 
     if(!locations){
         concat(error, "need location");
-        free_on_failure(1, locations);
+        nfree(1, locations);
         return;
     }
+
+    nfree(2, tidstr, locations);
 }
 
 void audit_continue(struct cmd_args_t *args, const char **groupnames,
@@ -111,7 +113,7 @@ void audit_disassemble(struct cmd_args_t *args, const char **groupnames,
 
     if(!location){
         concat(error, "need location");
-        free_on_failure(1, location);
+        nfree(1, location);
         return;
     }
 
@@ -119,16 +121,28 @@ void audit_disassemble(struct cmd_args_t *args, const char **groupnames,
 
     if(!count){
         concat(error, "need count");
-        free_on_failure(2, location, count);
+        nfree(2, location, count);
         return;
     }
 
     int amount = (int)strtol_err(count, error);
 
     if(*error){
-        free_on_failure(2, location, count);
+        nfree(2, location, count);
         return;
     }
+
+    nfree(2, location, count);
+}
+
+void audit_evaluate(struct cmd_args_t *args, const char **groupnames,
+        char **error){
+    char *expr = argcopy(args, groupnames[0]);
+
+    if(!expr)
+        concat(error, "need expression(s)");
+
+    nfree(1, expr);
 }
 
 void audit_examine(struct cmd_args_t *args, const char **groupnames,
@@ -142,18 +156,19 @@ void audit_examine(struct cmd_args_t *args, const char **groupnames,
 
     if(!location){
         concat(error, "need location");
-        free_on_failure(1, location);
+        nfree(1, location);
         return;
     }
 
-    /* Next argument is the amount of bytes to display. */
     char *count = argcopy(args, groupnames[1]);
 
     if(!count){
         concat(error, "need amount");
-        free_on_failure(2, location, count);
+        nfree(2, location, count);
         return;
     }
+
+    nfree(2, location, count);
 }
 
 void audit_kill(struct cmd_args_t *args, const char **groupnames,
@@ -174,14 +189,14 @@ void audit_memory_find(struct cmd_args_t *args, const char **groupnames,
 
     if(!type){
         concat(error, "missing type");
-        free_on_failure(4, start, count, type, target);
+        nfree(4, start, count, type, target);
         return;
     }
 
     if(strcmp(type, "--s") == 0){
         if(!target){
             concat(error, "attempt to search for empty string");
-            free_on_failure(4, start, count, type, target);
+            nfree(4, start, count, type, target);
             return;
         }
     }
@@ -193,10 +208,12 @@ void audit_memory_find(struct cmd_args_t *args, const char **groupnames,
         strtold_err(target, error);
 
         if(*error){
-            free_on_failure(4, start, count, type, target);
+            nfree(4, start, count, type, target);
             return;
         }
     }
+
+    nfree(4, start, count, type, target);
 }
 
 void audit_memory_write(struct cmd_args_t *args, const char **groupnames,
@@ -215,6 +232,24 @@ void audit_register_write(struct cmd_args_t *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
+}
+
+void audit_signal_deliver(struct cmd_args_t *args, const char **groupnames,
+        char **error){
+    if(debuggee->pid == -1){
+        concat(error, "no debuggee");
+        return;
+    }
+
+    char *sigstr = argcopy(args, groupnames[0]);
+
+    if(!sigstr){
+        concat(error, "need signal number");
+        nfree(1, sigstr);
+        return;
+    }
+
+    nfree(1, sigstr);
 }
 
 void audit_stepi(struct cmd_args_t *args, const char **groupnames,
@@ -255,9 +290,11 @@ void audit_thread_select(struct cmd_args_t *args, const char **groupnames,
 
     if(!tid){
         concat(error, "need thread ID");
-        free_on_failure(1, tid);
+        nfree(1, tid);
         return;
     }
+
+    nfree(1, tid);
 }
 
 void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
@@ -275,7 +312,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
             strcmp(type, "w") != 0 &&
             strcmp(type, "rw") != 0)){
         concat(error, "invalid watchpoint type '%s'", type);
-        free_on_failure(2, tid, type);
+        nfree(2, tid, type);
         return;
     }
 
@@ -283,7 +320,7 @@ void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
 
     if(!location){
         concat(error, "need location");
-        free_on_failure(3, tid, type, location);
+        nfree(3, tid, type, location);
         return;
     }
 
@@ -291,6 +328,8 @@ void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
 
     if(!size){
         concat(error, "missing data size");
-        free_on_failure(4, tid, type, location, size);
+        nfree(4, tid, type, location, size);
     }
+
+    nfree(4, tid, type, location, size);
 }

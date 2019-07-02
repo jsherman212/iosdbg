@@ -271,10 +271,14 @@ static void setup_initial_debuggee(void){
 
     debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
-    debuggee->is_single_stepping = 0;
-    debuggee->want_detach = 0;
+    debuggee->thread_count = 0;
+
     debuggee->tracing_disabled = 0;
     debuggee->currently_tracing = 0;
+
+    debuggee->breakpoints = NULL;
+    debuggee->watchpoints = NULL;
+    debuggee->threads = NULL;
 
     /* Figure out how many hardware breakpoints/watchpoints are supported. */
     size_t len = sizeof(int);

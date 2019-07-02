@@ -255,6 +255,14 @@ void initialize_commands(void){
 
     ADD_CMD(disassemble);
 
+    struct dbg_cmd_t *evaluate = create_parent_cmd("evaluate",
+            NULL, EVALUATE_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            EVALUATE_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(1),
+            EVALUATE_COMMAND_REGEX_GROUPS, _NUM_SUBCMDS(0), cmdfunc_evaluate,
+            audit_evaluate);
+
+    ADD_CMD(evaluate);
+
     struct dbg_cmd_t *examine = create_parent_cmd("examine",
             "x", EXAMINE_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
             EXAMINE_COMMAND_REGEX, _NUM_GROUPS(2), _UNK_ARGS(0),
@@ -342,15 +350,21 @@ void initialize_commands(void){
     struct dbg_cmd_t *signal = create_parent_cmd("signal",
             NULL, SIGNAL_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
             NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
-            NO_GROUPS, _NUM_SUBCMDS(1), NULL, NULL);
+            NO_GROUPS, _NUM_SUBCMDS(2), NULL, NULL);
     {
+        struct dbg_cmd_t *deliver = create_child_cmd("deliver",
+                NULL, SIGNAL_DELIVER_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+                SIGNAL_DELIVER_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(0),
+                SIGNAL_DELIVER_COMMAND_REGEX_GROUPS, cmdfunc_signal_deliver,
+                audit_signal_deliver);
         struct dbg_cmd_t *handle = create_child_cmd("handle",
                 NULL, SIGNAL_HANDLE_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
                 SIGNAL_HANDLE_COMMAND_REGEX, _NUM_GROUPS(4), _UNK_ARGS(0),
                 SIGNAL_HANDLE_COMMAND_REGEX_GROUPS, cmdfunc_signal_handle,
                 NULL);
 
-        signal->subcmds[0] = handle;
+        signal->subcmds[0] = deliver;
+        signal->subcmds[1] = handle;
     }
 
     ADD_CMD(signal);

@@ -151,7 +151,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
      * single step. This function is called when the CPU raises the software
      * step exception after the single step occurs.
      */
-    if(debuggee->is_single_stepping)
+    if(t->is_single_stepping)
         breakpoint_enable_all();
 
     if(t->just_hit_breakpoint){
@@ -166,7 +166,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
          * just continue as normal. Otherwise, if we manually single step
          * right after a breakpoint hit, just print the disassembly.
          */
-        if(!debuggee->is_single_stepping){
+        if(!t->is_single_stepping){
             /* should not print, should auto resume */
             *should_print = 0;
         }
@@ -178,8 +178,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         }
 
         t->just_hit_breakpoint = 0;
-
-        debuggee->is_single_stepping = 0;
+        t->is_single_stepping = 0;
 
         return;
     }
@@ -187,7 +186,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
     concat(desc, "\n");
     disassemble_at_location(t->thread_state.__pc, 4, desc);
 
-    debuggee->is_single_stepping = 0;
+    t->is_single_stepping = 0;
 
     /* should print, should not auto resume */
     *should_auto_resume = 0;
@@ -336,7 +335,7 @@ void handle_exception(Request *request, int *should_auto_resume,
             struct breakpoint *hit = find_bp_with_address(
                     focused->thread_state.__pc);
 
-            if(debuggee->is_single_stepping && hit){
+            if(focused->is_single_stepping && hit){
                 breakpoint_hit(hit);
 
                 concat(desc, ": '%s': breakpoint %d at %#lx hit %d time(s).",

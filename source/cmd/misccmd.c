@@ -193,8 +193,6 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     setup_servers(outbuffer);
 
-    debuggee->want_detach = 0;
-
     concat(outbuffer, "Attached to %s (pid: %d), slide: %#lx.\n",
             debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
@@ -287,6 +285,47 @@ enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
         stop_trace();
 
     ops_detach(from_death, outbuffer);
+
+    return CMD_SUCCESS;
+}
+
+enum cmd_error_t cmdfunc_evaluate(struct cmd_args_t *args, 
+        int from_death, char **outbuffer, char **error){
+    char *expr = argcopy(args, EVALUATE_COMMAND_REGEX_GROUPS[0]);
+
+    static int cnt = 0;
+
+    while(expr){
+        char *e = NULL;
+        long result = eval_expr(expr, &e);
+
+        if(e){
+            concat(outbuffer, "could not evaluate expr %d: %s\n", cnt, e);
+            free(e);
+        }
+        else{
+            concat(outbuffer, "$%d = %ld\n", cnt, result);
+
+            char *name = NULL;
+            char *value = NULL;
+
+            concat(&name, "$%d", cnt);
+            concat(&value, "%ld", result);
+
+            char *e = NULL;
+
+            set_convvar(name, value, &e);
+
+            free(e);
+            free(name);
+            free(value);
+
+            cnt++;
+        }
+
+        free(expr);
+        expr = argcopy(args, EVALUATE_COMMAND_REGEX_GROUPS[0]);
+    }
 
     return CMD_SUCCESS;
 }
@@ -404,7 +443,7 @@ enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args,
     focused->debug_state.__mdscr_el1 |= 1;
     set_debug_state(focused);
 
-    debuggee->is_single_stepping = 1;
+    focused->is_single_stepping = 1;
 
     ops_resume();
 
