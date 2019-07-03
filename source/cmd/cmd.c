@@ -19,6 +19,7 @@
 #include "memcmd.h"
 #include "regcmd.h"
 #include "sigcmd.h"
+#include "stepcmd.h"
 #include "tcmd.h"
 #include "wpcmd.h"
 #include "varcmd.h"
@@ -369,6 +370,7 @@ void initialize_commands(void){
 
     ADD_CMD(signal);
 
+    /*
     struct dbg_cmd_t *stepi = create_parent_cmd("stepi",
             NULL, STEPI_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
             NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
@@ -376,6 +378,23 @@ void initialize_commands(void){
             audit_stepi);
 
     ADD_CMD(stepi);
+    */
+
+    struct dbg_cmd_t *step = create_parent_cmd("step",
+            NULL, STEP_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(1), NULL, NULL);
+    {
+        struct dbg_cmd_t *into = create_child_cmd("into",
+                NULL, STEP_INTO_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+                NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+                NO_GROUPS, cmdfunc_step_into,
+                audit_step_into);
+
+        step->subcmds[0] = into;
+    }
+
+    ADD_CMD(step);
 
     struct dbg_cmd_t *thread = create_parent_cmd("thread",
             NULL, THREAD_COMMAND_DOCUMENTATION, _AT_LEVEL(0),

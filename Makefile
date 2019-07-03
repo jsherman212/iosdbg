@@ -5,13 +5,15 @@ CFLAGS=-g -arch arm64 -isysroot $(SDK) -pedantic
 LDFLAGS=-arch arm64 -lreadline8.0 -lhistory8.0 -lncurses -larmadillo -lpcre2-8.0 -miphoneos-version-min=12.2 -fsanitize=address -rpath $(IPHONESDK)/usr/lib
 SRC=source
 CMDSRC=$(SRC)/cmd
+DISASSRC=$(SRC)/disas
 
 ROOT_OBJECT_FILES = $(patsubst $(SRC)/%.c,$(SRC)/%.o,$(wildcard $(SRC)/*.c))
 CMD_OBJECT_FILES = $(patsubst $(CMDSRC)/%.c,$(CMDSRC)/%.o,$(wildcard $(CMDSRC)/*.c))
+DISAS_OBJECT_FILES = $(patsubst $(DISASSRC)/%.c,$(DISASSRC)/%.o,$(wildcard $(DISASSRC)/*.c))
 CRITICAL_HEADER_FILES = $(SRC)/debuggee.h $(CMDSRC)/cmd.h
 
-iosdbg : $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES)
-	$(CC) -isysroot $(SDK) $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES) $(LDFLAGS) -o iosdbg
+iosdbg : $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES) $(DISAS_OBJECT_FILES)
+	$(CC) -isysroot $(SDK) $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES) $(DISAS_OBJECT_FILES) $(LDFLAGS) -o iosdbg
 	dsymutil ./iosdbg
 
 $(SRC)/%.o : $(SRC)/%.c $(SRC)/%.h $(CRITICAL_HEADER_FILES)
@@ -20,7 +22,13 @@ $(SRC)/%.o : $(SRC)/%.c $(SRC)/%.h $(CRITICAL_HEADER_FILES)
 CMD_SOURCES = $(wildcard $(SRC)/cmd/*.c)
 
 cmds : $(CMD_SOURCES) $(CRITICAL_HEADER_FILES)
-	cd $(SRC)/cmd
+	cd $(CMDSRC)
+	$(MAKE) -B
+
+DISAS_SOURCES = $(wildcard $(SRC)/cmd/*.c)
+
+disas : $(DISAS_SOURCES)
+	cd $(DISASSRC)
 	$(MAKE) -B
 
 BUILD-DEVICE=pink

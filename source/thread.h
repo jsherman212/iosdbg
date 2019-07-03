@@ -68,6 +68,8 @@ struct machthread {
     int last_hit_bkpt_ID;
 
     int is_single_stepping;
+
+    // XXX XXX stepconfig
 };
 
 enum comparison {

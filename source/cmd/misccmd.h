@@ -16,7 +16,6 @@ enum cmd_error_t cmdfunc_help(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_kill(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_quit(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *, int, char **, char **);
 enum cmd_error_t cmdfunc_trace(struct cmd_args_t *, int, char **, char **);
 
 static const char *ASLR_COMMAND_DOCUMENTATION = 
@@ -103,13 +102,6 @@ static const char *QUIT_COMMAND_DOCUMENTATION =
     "This command has no arguments.\n"
     "\nSyntax:\n"
     "\tquit\n"
-    "\n";
-
-static const char *STEPI_COMMAND_DOCUMENTATION =
-    "Step into the next machine instruction.\n"
-    "This command has no arguments.\n"
-    "\nSyntax:\n"
-    "\tstepi\n"
     "\n";
 
 static const char *TRACE_COMMAND_DOCUMENTATION =

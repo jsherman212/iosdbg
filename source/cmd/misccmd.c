@@ -429,27 +429,6 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
     return CMD_QUIT;
 }
 
-enum cmd_error_t cmdfunc_stepi(struct cmd_args_t *args, 
-        int arg1, char **outbuffer, char **error){
-    /* Disable breakpoints when single stepping so we don't have to deal
-     * with more exceptions being raised. Instead, just check if we're at
-     * a breakpointed address every time we step.
-     */
-    breakpoint_disable_all();
-
-    struct machthread *focused = get_focused_thread();
-
-    get_debug_state(focused);
-    focused->debug_state.__mdscr_el1 |= 1;
-    set_debug_state(focused);
-
-    focused->is_single_stepping = 1;
-
-    ops_resume();
-
-    return CMD_SUCCESS;
-}
-
 enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
         int arg1, char **outbuffer, char **error){
     if(debuggee->tracing_disabled){

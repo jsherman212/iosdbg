@@ -18,7 +18,7 @@ void audit_memory_write(struct cmd_args_t *, const char **, char **);
 void audit_register_view(struct cmd_args_t *, const char **, char **);
 void audit_register_write(struct cmd_args_t *, const char **, char **);
 void audit_signal_deliver(struct cmd_args_t *, const char **, char **);
-void audit_stepi(struct cmd_args_t *, const char **, char **);
+void audit_step_into(struct cmd_args_t *, const char **, char **);
 void audit_thread_list(struct cmd_args_t *, const char **, char **);
 void audit_thread_select(struct cmd_args_t *, const char **, char **);
 void audit_watchpoint_set(struct cmd_args_t *, const char **, char **);
