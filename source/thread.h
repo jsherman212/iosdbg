@@ -6,6 +6,12 @@
 
 #include "linkedlist.h"
 
+enum {
+    STEP_NONE,
+    INST_STEP_INTO,
+    INST_STEP_OVER
+};
+
 #define TH_FOREACH(var) \
     for(struct node_t *var = debuggee->threads->front; \
             var; \
@@ -67,9 +73,11 @@ struct machthread {
     /* Keeps track of the ID of the last breakpoint that hit on this thread. */
     int last_hit_bkpt_ID;
 
-    int is_single_stepping;
-
-    // XXX XXX stepconfig
+    struct {
+        int is_stepping;
+        int step_kind;
+        int keep_stepping;
+    } stepconfig;
 };
 
 enum comparison {

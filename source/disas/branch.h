@@ -45,6 +45,8 @@ struct branchinfo {
     int imm;
 
     enum birn rn;
+
+    int is_subroutine_call;
 };
 
 int is_branch(unsigned int, struct branchinfo *);

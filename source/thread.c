@@ -86,7 +86,9 @@ static struct machthread *machthread_new(mach_port_t thread_port,
     mt->last_hit_wp_loc = 0;
     mt->last_hit_wp_PC = 0;
     mt->last_hit_bkpt_ID = 0;
-    mt->is_single_stepping = 0;
+    mt->stepconfig.is_stepping = 0;
+    mt->stepconfig.step_kind = STEP_NONE;
+    mt->stepconfig.keep_stepping = 0;
 
     kern_return_t kret = KERN_SUCCESS;
 
@@ -402,7 +404,9 @@ void update_thread_list(thread_act_port_array_t threads,
         unsigned long last_hit_wp_loc;
         unsigned long last_hit_wp_PC;
         int last_hit_bkpt_ID;
-        int is_single_stepping;
+        int is_stepping;
+        int step_kind;
+        int keep_stepping;
     };
 
     int infos_cnt = 0;
@@ -428,7 +432,9 @@ void update_thread_list(thread_act_port_array_t threads,
         info->last_hit_wp_loc = t->last_hit_wp_loc;
         info->last_hit_wp_PC = t->last_hit_wp_PC;
         info->last_hit_bkpt_ID = t->last_hit_bkpt_ID;
-        info->is_single_stepping = t->is_single_stepping;
+        info->is_stepping = t->stepconfig.is_stepping;
+        info->step_kind = t->stepconfig.step_kind;
+        info->keep_stepping = t->stepconfig.keep_stepping;
 
         infos[infos_cnt - 1] = info;
 
@@ -452,7 +458,9 @@ void update_thread_list(thread_act_port_array_t threads,
                     add->last_hit_wp_loc = infos[j]->last_hit_wp_loc;
                     add->last_hit_wp_PC = infos[j]->last_hit_wp_PC;
                     add->last_hit_bkpt_ID = infos[j]->last_hit_bkpt_ID;
-                    add->is_single_stepping = infos[j]->is_single_stepping;
+                    add->stepconfig.is_stepping = infos[j]->is_stepping;
+                    add->stepconfig.step_kind = infos[j]->step_kind;
+                    add->stepconfig.keep_stepping = infos[j]->keep_stepping;
 
                     break;
                 }

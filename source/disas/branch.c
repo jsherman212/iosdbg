@@ -1,7 +1,6 @@
-#include <string.h>
-
-#include <stdio.h>
 #include <limits.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "branch.h"
 
@@ -89,23 +88,33 @@ int is_branch(unsigned int opcode, struct branchinfo *binfo){
 
     binfo->kind = figure_kind(opcode);
 
+    binfo->is_subroutine_call = 1;
+
     binfo->conditional = 0;
     binfo->cond = UNKNOWN_COND;
 
     if(binfo->kind == COND_BRANCH_IMMEDIATE){
         binfo->conditional = 1;
         binfo->cond = figure_cond(opcode);
+        binfo->is_subroutine_call = 0;
     }
 
     binfo->imm = INT_MAX;
 
     /* Both have 19 bit immediates */
-    if(binfo->kind == COND_BRANCH_IMMEDIATE || binfo->kind == COMP_AND_BRANCH_IMMEDIATE)
+    if(binfo->kind == COND_BRANCH_IMMEDIATE ||
+            binfo->kind == COMP_AND_BRANCH_IMMEDIATE){
         binfo->imm = ((opcode & 0xffffe0) >> 5) * 4;
-    else if(binfo->kind == UNCOND_BRANCH_IMMEDIATE)
+        binfo->is_subroutine_call = 0;
+    }
+    else if(binfo->kind == UNCOND_BRANCH_IMMEDIATE){
         binfo->imm = (opcode & 0x3ffffff) * 4;
-    else if(binfo->kind == TEST_AND_BRANCH_IMMEDIATE)
+        binfo->is_subroutine_call = opcode >> 31;
+    }
+    else if(binfo->kind == TEST_AND_BRANCH_IMMEDIATE){
         binfo->imm = ((opcode & 0x3fff) >> 5) * 4;
+        binfo->is_subroutine_call = 0;
+    }
 
     binfo->rn = NONE;
 

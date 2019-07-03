@@ -370,28 +370,24 @@ void initialize_commands(void){
 
     ADD_CMD(signal);
 
-    /*
-    struct dbg_cmd_t *stepi = create_parent_cmd("stepi",
-            NULL, STEPI_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
-            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
-            NO_GROUPS, _NUM_SUBCMDS(0), cmdfunc_stepi,
-            audit_stepi);
-
-    ADD_CMD(stepi);
-    */
-
     struct dbg_cmd_t *step = create_parent_cmd("step",
             NULL, STEP_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
             NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
-            NO_GROUPS, _NUM_SUBCMDS(1), NULL, NULL);
+            NO_GROUPS, _NUM_SUBCMDS(2), NULL, NULL);
     {
-        struct dbg_cmd_t *into = create_child_cmd("into",
-                NULL, STEP_INTO_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+        struct dbg_cmd_t *inst_into = create_child_cmd("inst-into",
+                NULL, STEP_INST_INTO_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
                 NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
-                NO_GROUPS, cmdfunc_step_into,
-                audit_step_into);
+                NO_GROUPS, cmdfunc_step_inst_into,
+                audit_step_inst_into);
+        struct dbg_cmd_t *inst_over = create_child_cmd("inst-over",
+                NULL, STEP_INST_OVER_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+                NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+                NO_GROUPS, cmdfunc_step_inst_over,
+                audit_step_inst_over);
 
-        step->subcmds[0] = into;
+        step->subcmds[0] = inst_into;
+        step->subcmds[1] = inst_over;
     }
 
     ADD_CMD(step);

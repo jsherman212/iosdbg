@@ -252,7 +252,13 @@ void audit_signal_deliver(struct cmd_args_t *args, const char **groupnames,
     nfree(1, sigstr);
 }
 
-void audit_step_into(struct cmd_args_t *args, const char **groupnames,
+void audit_step_inst_into(struct cmd_args_t *args, const char **groupnames,
+        char **error){
+    if(debuggee->pid == -1)
+        concat(error, "no debuggee");
+}
+
+void audit_step_inst_over(struct cmd_args_t *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");

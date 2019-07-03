@@ -16,6 +16,8 @@
 #include "trace.h"
 #include "watchpoint.h"
 
+#include "disas/branch.h"
+
 static const char *exc_str(exception_type_t exception){
     switch(exception){
         case EXC_BAD_ACCESS:
@@ -151,7 +153,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
      * single step. This function is called when the CPU raises the software
      * step exception after the single step occurs.
      */
-    if(t->is_single_stepping)
+    if(t->stepconfig.is_stepping)
         breakpoint_enable_all();
 
     if(t->just_hit_breakpoint){
@@ -166,7 +168,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
          * just continue as normal. Otherwise, if we manually single step
          * right after a breakpoint hit, just print the disassembly.
          */
-        if(!t->is_single_stepping){
+        if(!t->stepconfig.is_stepping){
             /* should not print, should auto resume */
             *should_print = 0;
         }
@@ -178,18 +180,50 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         }
 
         t->just_hit_breakpoint = 0;
-        t->is_single_stepping = 0;
+        t->stepconfig.is_stepping = 0;
 
         return;
     }
 
+    if(t->stepconfig.step_kind == INST_STEP_OVER){
+        unsigned int opcode = 0;
+        read_memory_at_location((void *)t->thread_state.__pc, &opcode, sizeof(opcode));
+
+        struct branchinfo info = {0};
+        int branch = is_branch(opcode, &info);
+
+        if(branch && info.is_subroutine_call){
+            if(info.rn != X30){
+                printf("%s: Rn isnt X30, gonna step over this branch\n",
+                        __func__);
+                enable_single_step(t);
+                t->stepconfig.keep_stepping = 1;
+                //*should_print = 0;
+            }
+            else{
+                printf("%s: Rn is X30, we don't need to keep stepping\n",
+                        __func__);
+                t->stepconfig.keep_stepping = 0;
+            }
+
+            //*should_print = 0;
+            
+        }
+        else{
+            *should_auto_resume = 0;
+        }
+    }
+    else{
+    /*    concat(desc, "\n");
+        disassemble_at_location(t->thread_state.__pc, 4, desc);
+        t->stepconfig.is_stepping = 0;
+    */
+        /* should print, should not auto resume */
+        *should_auto_resume = 0;
+    }
     concat(desc, "\n");
     disassemble_at_location(t->thread_state.__pc, 4, desc);
-
-    t->is_single_stepping = 0;
-
-    /* should print, should not auto resume */
-    *should_auto_resume = 0;
+    t->stepconfig.is_stepping = 0;
 }
 
 static void handle_hit_breakpoint(struct machthread *t,
@@ -335,14 +369,16 @@ void handle_exception(Request *request, int *should_auto_resume,
             struct breakpoint *hit = find_bp_with_address(
                     focused->thread_state.__pc);
 
-            if(focused->is_single_stepping && hit){
-                breakpoint_hit(hit);
+            if(focused->stepconfig.is_stepping){
+                if(hit){
+                    breakpoint_hit(hit);
 
-                concat(desc, ": '%s': breakpoint %d at %#lx hit %d time(s).",
-                        focused->tname, hit->id, hit->location, hit->hit_count);
-            }
-            else{
-                concat(desc, ": '%s': single step.", focused->tname);
+                    concat(desc, ": '%s': breakpoint %d at %#lx hit %d time(s).",
+                            focused->tname, hit->id, hit->location, hit->hit_count);
+                }
+                else{
+                    concat(desc, ": '%s': single step.", focused->tname);
+                }
             }
     
             handle_single_step(focused, should_auto_resume, should_print, desc);
