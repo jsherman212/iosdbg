@@ -91,6 +91,7 @@ static struct machthread *machthread_new(mach_port_t thread_port,
     mt->stepconfig.keep_stepping = 0;
     mt->stepconfig.LR_to_step_to = -1;
     mt->stepconfig.need_to_save_LR = 0;
+    mt->stepconfig.just_hit_ss_breakpoint = 0;
 
     kern_return_t kret = KERN_SUCCESS;
 
@@ -411,6 +412,7 @@ void update_thread_list(thread_act_port_array_t threads,
         int keep_stepping;
         unsigned long LR_to_step_to;
         int need_to_save_LR;
+        int just_hit_ss_breakpoint;
     };
 
     int infos_cnt = 0;
@@ -441,6 +443,7 @@ void update_thread_list(thread_act_port_array_t threads,
         info->keep_stepping = t->stepconfig.keep_stepping;
         info->LR_to_step_to = t->stepconfig.LR_to_step_to;
         info->need_to_save_LR = t->stepconfig.need_to_save_LR;
+        info->just_hit_ss_breakpoint = t->stepconfig.just_hit_ss_breakpoint;
 
         infos[infos_cnt - 1] = info;
 
@@ -469,6 +472,7 @@ void update_thread_list(thread_act_port_array_t threads,
                     add->stepconfig.keep_stepping = infos[j]->keep_stepping;
                     add->stepconfig.LR_to_step_to = infos[j]->LR_to_step_to;
                     add->stepconfig.need_to_save_LR = infos[j]->need_to_save_LR;
+                    add->stepconfig.just_hit_ss_breakpoint = infos[j]->just_hit_ss_breakpoint;
 
                     break;
                 }

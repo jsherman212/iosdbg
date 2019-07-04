@@ -10,7 +10,7 @@
 #include "../disas/branch.h"
 
 static void prepare(int kind){
-    breakpoint_disable_all();
+//    breakpoint_disable_all();
 
     struct machthread *focused = get_focused_thread();
 

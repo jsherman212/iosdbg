@@ -201,6 +201,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         /* We auto resume so the temporary breakpoint at LR will hit. */
         // XXX racy, figure out another way
         //*should_print = 0;
+        //return;
     }
 
     //printf("%s: LR %#llx\n", __func__, t->thread_state.__lr);
@@ -219,6 +220,12 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
             // XXX XXX on second thought, we should just let the inferior run
             //          until the breakpoint hits
             //enable_single_step(t);
+
+            // XXX don't print if we just stepped into a branch to figure out LR
+            printf("%s: t->stepconfig.LR_to_step_to != -1, it is %#lx, PC: %#llx, "
+                    " shouldn't print\n",
+                    __func__, t->stepconfig.LR_to_step_to, t->thread_state.__pc);
+            *should_print = 0;
         }
         else if(branch && info.is_subroutine_call && t->stepconfig.LR_to_step_to == -1){
             // XXX not a RET, BLR X30, etc
@@ -227,6 +234,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
                 // XXX we need to take the branch in order to figure out LR we need
                 t->stepconfig.need_to_save_LR = 1;
                 *should_auto_resume = 0;
+                //enable_single_step(t);
             }
         }
         else{
@@ -246,6 +254,11 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
     concat(desc, "\n");
     disassemble_at_location(t->thread_state.__pc, 4, desc);
     t->stepconfig.is_stepping = 0;
+
+    /*if(t->stepconfig.just_hit_ss_breakpoint){
+        *should_print = 0;
+        t->stepconfig.just_hit_ss_breakpoint = 0;
+    }*/
 }
 
 static void handle_hit_breakpoint(struct machthread *t,
@@ -277,9 +290,11 @@ static void handle_hit_breakpoint(struct machthread *t,
 
         concat(desc, " instruction step over.\n");
 
-        // XXX should not auto resume, should not print
+        // XXX should not auto resume, should print
         //*should_print = 0;
         *should_auto_resume = 0;
+
+        t->stepconfig.just_hit_ss_breakpoint = 1;
 
         // XXX XXX XXX
         return;
