@@ -187,10 +187,14 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
 
     if(t->stepconfig.need_to_save_LR){
         t->stepconfig.LR_to_step_to = t->thread_state.__lr;
-        printf("%s: took the branch, saved LR: %#lx\n", __func__,
+        printf("%s: took the branch, saved LR: %#lx, setting bp\n", __func__,
                 t->stepconfig.LR_to_step_to);
         t->stepconfig.need_to_save_LR = 0;
         set_stepping_breakpoint(t->stepconfig.LR_to_step_to, t->ID);
+
+        // XXX need to auto resume so the breakpoint hits
+
+        //*should_auto_resume = 0;
 
         // XXX racy, figure out another way
         *should_print = 0;
@@ -217,13 +221,13 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
                 printf("%s: need to save LR\n", __func__);
                 // XXX we need to take the branch in order to figure out LR we need
                 t->stepconfig.need_to_save_LR = 1;
+                *should_auto_resume = 0;
             }
         }
         else{
+            printf("%s: not auto resuming\n", __func__);
             *should_auto_resume = 0;
         }
-        
-        
     }
     else{
         /*concat(desc, "\n");
