@@ -77,6 +77,8 @@ struct machthread {
         int is_stepping;
         int step_kind;
         int keep_stepping;
+        unsigned long LR_to_step_to;
+        int need_to_save_LR;
     } stepconfig;
 };
 

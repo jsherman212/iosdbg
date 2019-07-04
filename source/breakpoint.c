@@ -278,6 +278,9 @@ void breakpoint_at_address(unsigned long address, int temporary,
     if(!bp)
         return;
 
+    // XXX
+    bp->for_stepping = 0;
+
     BP_LOCK;
     linkedlist_add(debuggee->breakpoints, bp);
     BP_UNLOCK;
@@ -303,6 +306,34 @@ void breakpoint_at_address(unsigned long address, int temporary,
     /* If we ran out of hardware breakpoints, set a software breakpoint
      * by writing BRK #0 to bp->location.
      */
+    if(!bp->hw)
+        write_memory_to_location(bp->location, BRK, 4);
+
+    debuggee->num_breakpoints++;
+}
+
+void set_stepping_breakpoint(unsigned long address, int thread){
+    char *ob = NULL, *e = NULL;
+
+    struct breakpoint *bp = breakpoint_new(address, BP_TEMP, thread, &ob, &e);
+    free(ob);
+
+    // XXX
+    if(e){
+        printf("%s: error while setting bp for single step: '%s'\n", __func__, e);
+        free(e);
+        return;
+    }
+
+    free(e);
+
+    // XXX
+    bp->for_stepping = 1;
+
+    BP_LOCK;
+    linkedlist_add(debuggee->breakpoints, bp);
+    BP_UNLOCK;
+
     if(!bp->hw)
         write_memory_to_location(bp->location, BRK, 4);
 

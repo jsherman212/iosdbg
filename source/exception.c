@@ -185,40 +185,53 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         return;
     }
 
+    if(t->stepconfig.need_to_save_LR){
+        t->stepconfig.LR_to_step_to = t->thread_state.__lr;
+        printf("%s: took the branch, saved LR: %#lx\n", __func__,
+                t->stepconfig.LR_to_step_to);
+        t->stepconfig.need_to_save_LR = 0;
+        set_stepping_breakpoint(t->stepconfig.LR_to_step_to, t->ID);
+
+        // XXX racy, figure out another way
+        *should_print = 0;
+    }
+
+    //printf("%s: LR %#llx\n", __func__, t->thread_state.__lr);
     if(t->stepconfig.step_kind == INST_STEP_OVER){
+        printf("%s: LR_to_step_to %#lx real LR %#llx real PC %#llx\n",
+                __func__, t->stepconfig.LR_to_step_to, t->thread_state.__lr, 
+                t->thread_state.__pc);
         unsigned int opcode = 0;
         read_memory_at_location((void *)t->thread_state.__pc, &opcode, sizeof(opcode));
 
         struct branchinfo info = {0};
         int branch = is_branch(opcode, &info);
 
-        if(branch && info.is_subroutine_call){
+        if(t->stepconfig.LR_to_step_to != -1){
+            // XXX need to keep stepping until that breakpoint hits
+            //enable_single_step(t);
+        }
+        else if(branch && info.is_subroutine_call && t->stepconfig.LR_to_step_to == -1){
+            // XXX not a RET, BLR X30, etc
             if(info.rn != X30){
-                printf("%s: Rn isnt X30, gonna step over this branch\n",
-                        __func__);
-                enable_single_step(t);
-                t->stepconfig.keep_stepping = 1;
-                //*should_print = 0;
+                printf("%s: need to save LR\n", __func__);
+                // XXX we need to take the branch in order to figure out LR we need
+                t->stepconfig.need_to_save_LR = 1;
             }
-            else{
-                printf("%s: Rn is X30, we don't need to keep stepping\n",
-                        __func__);
-                t->stepconfig.keep_stepping = 0;
-            }
-
-            //*should_print = 0;
-            
         }
         else{
             *should_auto_resume = 0;
         }
+        
+        
     }
     else{
-    /*    concat(desc, "\n");
+        /*concat(desc, "\n");
         disassemble_at_location(t->thread_state.__pc, 4, desc);
-        t->stepconfig.is_stepping = 0;
-    */
+        */
         /* should print, should not auto resume */
+        //*should_auto_resume = 0;
+        //t->stepconfig.is_stepping = 0;
         *should_auto_resume = 0;
     }
     concat(desc, "\n");
@@ -227,7 +240,8 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
 }
 
 static void handle_hit_breakpoint(struct machthread *t,
-        int *should_auto_resume, int *should_print, long subcode, char **desc){
+        int *should_auto_resume, int *should_print, long subcode,
+        int *need_single_step_now, char **desc){
     struct breakpoint *hit = find_bp_with_address(subcode);
 
     /* This could be possible. If the user deletes all breakpoints before
@@ -237,6 +251,28 @@ static void handle_hit_breakpoint(struct machthread *t,
     if(!hit){
         /* should auto resume, should not print */
         *should_print = 0;
+        return;
+    }
+
+    // XXX fake single step output for step inst-over when we come back to
+    // saved LR
+    if(hit->for_stepping){
+        t->stepconfig.LR_to_step_to = -1;
+        printf("%s: the temp breakpoint on LR for inst step over has hit,"
+                " we should be at the instruction right after the branch, "
+                " fake single step output here? resetting LR_to_step_to "
+                " PC: %#llx\n",
+                __func__, t->thread_state.__pc);
+        //hit->temporary = 0;
+        breakpoint_hit(hit);
+
+        concat(desc, " instruction step over.\n");
+
+        // XXX should not auto resume, should not print
+        //*should_print = 0;
+        *should_auto_resume = 0;
+
+        // XXX XXX XXX
         return;
     }
 
@@ -265,6 +301,8 @@ static void handle_hit_breakpoint(struct machthread *t,
 
     /* should print, should not auto resume */
     *should_auto_resume = 0;
+
+    *need_single_step_now = 1;
 }
 
 void handle_exception(Request *request, int *should_auto_resume,
@@ -287,6 +325,11 @@ void handle_exception(Request *request, int *should_auto_resume,
     if(!focused || focused->port != thread){
         set_focused_thread(thread);
         focused = get_focused_thread();
+    }
+
+    if(!focused){
+        *should_print = 0;
+        return;
     }
 
     get_thread_state(focused);
@@ -363,18 +406,23 @@ void handle_exception(Request *request, int *should_auto_resume,
                 return;
             }
 
-            /* If we single step over where a breakpoint is set,
-             * we should report it and count it as hit.
-             */ 
-            struct breakpoint *hit = find_bp_with_address(
-                    focused->thread_state.__pc);
-
             if(focused->stepconfig.is_stepping){
+                /* If we single step over where a breakpoint is set,
+                 * we should report it and count it as hit.
+                 */ 
+                struct breakpoint *hit = find_bp_with_address(
+                        focused->thread_state.__pc);
+
                 if(hit){
                     breakpoint_hit(hit);
 
                     concat(desc, ": '%s': breakpoint %d at %#lx hit %d time(s).",
                             focused->tname, hit->id, hit->location, hit->hit_count);
+                }
+                // XXX not needed, does nothing?
+                else if(hit && hit->for_stepping){
+                    concat(desc, ": '%s': single step breakpoint");
+                    return;
                 }
                 else{
                     concat(desc, ": '%s': single step.", focused->tname);
@@ -386,12 +434,22 @@ void handle_exception(Request *request, int *should_auto_resume,
             return;
         }
         
+        /* In order to implement instruction level step over, we need to
+         * set a temporary breakpoint at LR right after the subroutine
+         * call is taken. When this breakpoint hits, we fake single
+         * step output in handle_hit_breakpoint.
+         */
+        int need_single_step_now = 0;
+        
         focused->just_hit_breakpoint = 1;
 
         concat(desc, ": '%s':", focused->tname);
-        handle_hit_breakpoint(focused, should_auto_resume, should_print, subcode, desc);
+        handle_hit_breakpoint(focused, should_auto_resume, should_print,
+                subcode, &need_single_step_now, desc);
         disassemble_at_location(focused->thread_state.__pc, 4, desc);
-        enable_single_step(focused);
+
+        if(need_single_step_now)
+            enable_single_step(focused);
     }
     /* Something else occured. */
     else{
