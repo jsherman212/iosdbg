@@ -80,7 +80,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     int available_bp_reg = find_ready_bp_reg();
 
     /* We have an available breakpoint register, use it. */
-    if(available_bp_reg != -1){
+    if(0){//available_bp_reg != -1){
         bp->hw = 1;
         bp->hw_bp_reg = available_bp_reg;
 

@@ -4,7 +4,10 @@
 
 #include "../breakpoint.h"
 #include "../dbgops.h"
+#include "../memutils.h"
 #include "../thread.h"
+
+#include "../disas/branch.h"
 
 static void prepare(int kind){
     breakpoint_disable_all();
@@ -19,8 +22,25 @@ static void prepare(int kind){
 
     if(kind == INST_STEP_INTO)
         focused->stepconfig.step_kind = INST_STEP_INTO;
-    else
+    else{
+        /* Check if we're currently at a subroutine call. */
         focused->stepconfig.step_kind = INST_STEP_OVER;
+
+        unsigned int opcode = 0;
+        read_memory_at_location((void *)focused->thread_state.__pc,
+                &opcode, sizeof(opcode));
+
+        struct branchinfo info = {0};
+        int branch = is_branch(opcode, &info);
+
+        if(branch && info.is_subroutine_call &&
+                focused->stepconfig.LR_to_step_to == -1){
+            if(info.rn != X30){
+                printf("%s: we need to save LR\n", __func__);
+                focused->stepconfig.need_to_save_LR = 1;
+            }
+        }
+    }
 }
 
 enum cmd_error_t cmdfunc_step_inst_into(struct cmd_args_t *args, 

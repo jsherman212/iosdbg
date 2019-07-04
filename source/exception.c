@@ -162,6 +162,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
             t->just_hit_sw_breakpoint = 0;
         }
 
+        // XXX not needed, called earlier?
         get_thread_state(t);
 
         /* If we caused a software step exception to get past a breakpoint,
@@ -196,8 +197,10 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
 
         //*should_auto_resume = 0;
 
+        /* should not print, should auto resume */
+        /* We auto resume so the temporary breakpoint at LR will hit. */
         // XXX racy, figure out another way
-        *should_print = 0;
+        //*should_print = 0;
     }
 
     //printf("%s: LR %#llx\n", __func__, t->thread_state.__lr);
@@ -213,6 +216,8 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
 
         if(t->stepconfig.LR_to_step_to != -1){
             // XXX need to keep stepping until that breakpoint hits
+            // XXX XXX on second thought, we should just let the inferior run
+            //          until the breakpoint hits
             //enable_single_step(t);
         }
         else if(branch && info.is_subroutine_call && t->stepconfig.LR_to_step_to == -1){
