@@ -266,6 +266,7 @@ enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args,
     if(!debuggee->suspended())
         return CMD_FAILURE;
 
+    breakpoint_delete_all_specific(BP_COND_STEPPING);
     ops_resume();
 
     concat(outbuffer, "Process %d resuming\n", debuggee->pid);

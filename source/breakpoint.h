@@ -52,6 +52,13 @@ struct breakpoint {
 #define BP_ENABLED 0
 #define BP_DISABLED 1
 
+enum {
+    /* not a temporary or stepping breakpoint */
+    BP_COND_NORMAL,
+    BP_COND_TEMP,
+    BP_COND_STEPPING
+};
+
 static int current_breakpoint_id = 1;
 
 /* BRK #0 */
@@ -65,12 +72,16 @@ void set_stepping_breakpoint(unsigned long, int);
 void breakpoint_hit(struct breakpoint *);
 void breakpoint_delete(int, char **);
 void breakpoint_delete_specific(struct breakpoint *);
+void breakpoint_disable_specific(struct breakpoint *);
 void breakpoint_disable(int, char **);
 void breakpoint_enable(int, char **);
 void breakpoint_disable_all(void);
 void breakpoint_enable_all(void);
 int breakpoint_disabled(int);
 void breakpoint_delete_all(void);
+void breakpoint_delete_all_specific(int);
 struct breakpoint *find_bp_with_address(unsigned long);
+struct breakpoint *find_bp_with_cond(unsigned long, int);
+void breakpoint_disable_all_except(int);
 
 #endif

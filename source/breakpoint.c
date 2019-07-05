@@ -79,7 +79,6 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
 
     int available_bp_reg = find_ready_bp_reg();
 
-    /* We have an available breakpoint register, use it. */
     if(available_bp_reg != -1){
         bp->hw = 1;
         bp->hw_bp_reg = available_bp_reg;
@@ -168,18 +167,20 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
         bp->old_instruction = orig_instruction;
     }
     else{
-        concat(outbuffer, "warning: breakpoint %d is set at the same location"
-                " as breakpoint %d", dup->id, bp->id);
-        
-        if(!bp->hw && dup->hw){
-            int len = (int)strlen("warning:");
-            concat(outbuffer, "\n%*sin addition, breakpoint %d is a hardware"
-                    " breakpoint, and breakpoint %d is a software breakpoint.\n"
-                    "%*sit is strongly recommended to remove breakpoint %d.\n",
-                    len, "", dup->id, bp->id, len, "", bp->id);
-        }
-        else{
-            concat(outbuffer, "\n");
+        if(!dup->for_stepping){
+            concat(outbuffer, "warning: breakpoint %d is set at the same location"
+                    " as breakpoint %d", dup->id, bp->id);
+
+            if(!bp->hw && dup->hw){
+                int len = (int)strlen("warning:");
+                concat(outbuffer, "\n%*sin addition, breakpoint %d is a hardware"
+                        " breakpoint, and breakpoint %d is a software breakpoint.\n"
+                        "%*sit is strongly recommended to remove breakpoint %d.\n",
+                        len, "", dup->id, bp->id, len, "", bp->id);
+            }
+            else{
+                concat(outbuffer, "\n");
+            }
         }
 
         /* If two software breakpoints are set at the same place,
@@ -262,12 +263,15 @@ static void bp_set_state_internal(struct breakpoint *bp, int disabled){
 }
 
 static void bp_delete_internal(struct breakpoint *bp){
+    printf("%s: deleting breakpoint %p\n", __func__, bp);
     bp_set_state_internal(bp, BP_DISABLED);
     
     free(bp->threadinfo.tname);
 
     linkedlist_delete(debuggee->breakpoints, bp);    
     debuggee->num_breakpoints--;
+
+    bp = NULL;
 }
 
 void breakpoint_at_address(unsigned long address, int temporary,
@@ -373,6 +377,13 @@ void breakpoint_delete_specific(struct breakpoint *bp){
     bp_delete_internal(bp);
 }
 
+void breakpoint_disable_specific(struct breakpoint *bp){
+    if(!bp)
+        return;
+
+    bp_set_state_internal(bp, BP_DISABLED);
+}
+
 void breakpoint_disable(int breakpoint_id, char **error){
     BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
@@ -444,6 +455,25 @@ void breakpoint_delete_all(void){
     BP_END_LOCKED_FOREACH;
 }
 
+void breakpoint_delete_all_specific(int way){
+    BP_LOCKED_FOREACH(current){
+        struct breakpoint *bp = current->data;
+
+        if(way == BP_COND_NORMAL){
+            if(!bp->temporary && !bp->for_stepping){
+                breakpoint_delete_specific(bp);
+            }
+        }
+
+        if(way == BP_COND_STEPPING){
+            if(bp->for_stepping){
+                breakpoint_delete_specific(bp);
+            }
+        }
+    }
+    BP_END_LOCKED_FOREACH;
+}
+
 struct breakpoint *find_bp_with_address(unsigned long addr){
     BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
@@ -457,4 +487,54 @@ struct breakpoint *find_bp_with_address(unsigned long addr){
     BP_END_LOCKED_FOREACH;
 
     return NULL;
+}
+
+struct breakpoint *find_bp_with_cond(unsigned long addr, int way){
+    BP_LOCKED_FOREACH(current){
+        struct breakpoint *bp = current->data;
+        
+        if(bp->location == addr){
+            struct breakpoint *found = bp;
+            printf("%s: found->for_stepping %d\n", __func__, found->for_stepping);
+
+            if(way == BP_COND_NORMAL){
+                if(!found->temporary && !found->for_stepping){
+                    BP_END_LOCKED_FOREACH;
+                    return found;
+                }
+            }
+
+            if(way == BP_COND_STEPPING){
+                if(found->for_stepping){
+                    BP_END_LOCKED_FOREACH;
+                    return found;
+                }
+            }
+        }
+    }
+    BP_END_LOCKED_FOREACH;
+
+    return NULL;
+}
+
+void breakpoint_disable_all_except(int except){
+    //printf("%s: don't call this anymore\n", __func__);
+    //abort();
+    BP_LOCKED_FOREACH(current){
+        struct breakpoint *bp = current->data;
+
+        int needs_disable = 0;
+
+        if(except == BP_COND_NORMAL)
+            needs_disable = 1;
+        else if(except == BP_COND_STEPPING)
+            needs_disable = !bp->for_stepping;
+
+        if(needs_disable){
+            printf("%s: disabling breakpoint %d\n", __func__, bp->id);
+            bp_set_state_internal(bp, BP_DISABLED);
+        }
+    }
+    BP_END_LOCKED_FOREACH;
+    
 }

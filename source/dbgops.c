@@ -153,7 +153,7 @@ void ops_detach(int from_death, char **outbuffer){
 
 kern_return_t ops_resume(void){
     reply_to_all_exceptions();
-    
+
     return debuggee->resume();
 }
 

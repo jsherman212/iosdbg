@@ -10,24 +10,33 @@
 #include "../disas/branch.h"
 
 static void prepare(int kind){
-    struct machthread *focused = get_focused_thread();
-
     int need_ss = 1;
+
+    struct machthread *focused = get_focused_thread();
 
     if(kind == INST_STEP_INTO)
         focused->stepconfig.step_kind = INST_STEP_INTO;
     else{
+        //breakpoint_disable_all_except(BP_COND_STEPPING);
+        //breakpoint_disable_all();
         focused->stepconfig.step_kind = INST_STEP_OVER;
 
         unsigned int opcode = 0;
+        
         read_memory_at_location((void *)focused->thread_state.__pc,
                 &opcode, sizeof(opcode));
 
+        struct breakpoint *b = find_bp_with_cond(focused->thread_state.__pc, BP_COND_NORMAL);
+
+        if(b)
+            opcode = b->old_instruction;
+
+        printf("%s: opcode %#x\n", __func__, opcode);
+
         struct branchinfo info = {0};
         int branch = is_branch(opcode, &info);
-        if(branch && info.is_subroutine_call ){//&&
-                //!focused->stepconfig.set_temp_ss_breakpoint){
 
+        if(branch && info.is_subroutine_call){
             if(info.rn != X30){
                 if(!focused->stepconfig.set_temp_ss_breakpoint){
                     printf("%s: at a subroutine call, will set bp on LR,"
@@ -39,13 +48,24 @@ static void prepare(int kind){
                     focused->stepconfig.set_temp_ss_breakpoint = 1;
                 }
 
+                // XXX don't need to single step if we're gonna be
+                //      setting a breakpoint anyway
                 need_ss = 0;
+
+                // XXX if we're at a software breakpoint disable it
+                // so we can get past it
+                if(b && !b->hw){
+                    BP_LOCK;
+                    breakpoint_disable_specific(b);
+                    BP_UNLOCK;
+                }
             }
         }
     }
 
+
+    //breakpoint_disable_all();
     if(need_ss){
-        breakpoint_disable_all();
 
         get_debug_state(focused);
         focused->debug_state.__mdscr_el1 |= 1;
@@ -54,8 +74,6 @@ static void prepare(int kind){
         focused->stepconfig.is_stepping = 1;
     }
 }
-
-
 
 enum cmd_error_t cmdfunc_step_inst_into(struct cmd_args_t *args, 
         int arg1, char **outbuffer, char **error){
