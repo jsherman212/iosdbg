@@ -186,24 +186,6 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         return;
     }
 
-    if(t->stepconfig.need_to_save_LR){
-        t->stepconfig.LR_to_step_to = t->thread_state.__lr;
-        printf("%s: took the branch, saved LR: %#lx, setting bp\n", __func__,
-                t->stepconfig.LR_to_step_to);
-        t->stepconfig.need_to_save_LR = 0;
-        set_stepping_breakpoint(t->stepconfig.LR_to_step_to, t->ID);
-
-        // XXX need to auto resume so the breakpoint hits
-
-        //*should_auto_resume = 0;
-
-        /* should not print, should auto resume */
-        /* We auto resume so the temporary breakpoint at LR will hit. */
-        // XXX racy, figure out another way
-        //*should_print = 0;
-        //return;
-    }
-
     //printf("%s: LR %#llx\n", __func__, t->thread_state.__lr);
     if(t->stepconfig.step_kind == INST_STEP_OVER){
         printf("%s: LR_to_step_to %#lx real LR %#llx real PC %#llx\n",
@@ -215,32 +197,31 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         struct branchinfo info = {0};
         int branch = is_branch(opcode, &info);
 
-        if(t->stepconfig.LR_to_step_to != -1){
-            // XXX need to keep stepping until that breakpoint hits
-            // XXX XXX on second thought, we should just let the inferior run
-            //          until the breakpoint hits
-            //enable_single_step(t);
-
-            // XXX don't print if we just stepped into a branch to figure out LR
-            printf("%s: t->stepconfig.LR_to_step_to != -1, it is %#lx, PC: %#llx, "
-                    " shouldn't print\n",
-                    __func__, t->stepconfig.LR_to_step_to, t->thread_state.__pc);
-            *should_print = 0;
-        }
-        else if(branch && info.is_subroutine_call && t->stepconfig.LR_to_step_to == -1){
-            // XXX not a RET, BLR X30, etc
+        if(branch && info.is_subroutine_call && !t->stepconfig.set_temp_ss_breakpoint){
             if(info.rn != X30){
-                printf("%s: need to save LR\n", __func__);
-                // XXX we need to take the branch in order to figure out LR we need
-                t->stepconfig.need_to_save_LR = 1;
+                printf("%s: at a subroutine call, will set bp on LR,"
+                        " which will be PC+4 aka %#llx, now: LR = %#llx PC = %#llx\n",
+                        __func__, t->thread_state.__pc + 4,
+                        t->thread_state.__lr, t->thread_state.__pc);
+                
+                // XXX as defined in the ARMv8 instruction manual,
+                //      X30 is set to PC+4 upon subroutine call
+                __uint64_t future_lr = t->thread_state.__pc + 4;
+                set_stepping_breakpoint(future_lr, t->ID);
+                t->stepconfig.set_temp_ss_breakpoint = 1;
                 *should_auto_resume = 0;
-                //enable_single_step(t);
             }
+        }
+        else if(t->stepconfig.set_temp_ss_breakpoint){
+            printf("%s: t->stepconfig.set_temp_ss_breakpoint is true,"
+                    " not printing\n", __func__);
+            *should_print = 0;
         }
         else{
             printf("%s: not auto resuming\n", __func__);
             *should_auto_resume = 0;
         }
+
     }
     else{
         /*concat(desc, "\n");
@@ -251,6 +232,7 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         //t->stepconfig.is_stepping = 0;
         *should_auto_resume = 0;
     }
+
     concat(desc, "\n");
     disassemble_at_location(t->thread_state.__pc, 4, desc);
     t->stepconfig.is_stepping = 0;
@@ -290,12 +272,33 @@ static void handle_hit_breakpoint(struct machthread *t,
 
         concat(desc, " instruction step over.\n");
 
-        // XXX should not auto resume, should print
-        //*should_print = 0;
+        /* should print, should not auto resume */
         *should_auto_resume = 0;
 
         t->stepconfig.just_hit_ss_breakpoint = 1;
+        t->stepconfig.set_temp_ss_breakpoint = 0;
 
+        // XXX Gotta check if there's a branch here as well.
+        /*unsigned int opcode = 0;
+        read_memory_at_location((void *)t->thread_state.__pc, &opcode, sizeof(opcode));
+
+        struct branchinfo info = {0};
+        int branch = is_branch(opcode, &info);
+
+        //if(branch && info.is_subroutine_call && t->stepconfig.LR_to_step_to == -1){
+        if(branch && info.is_subroutine_call && !t->stepconfig.set_temp_ss_breakpoint){
+            // XXX not a RET, BLR X30, etc
+            if(info.rn != X30){
+                printf("%s: we just hit the ss bp, but we're on another branch."
+                        " we need to save LR again?\n", __func__);
+                __uint64_t future_lr = t->thread_state.__pc + 4;
+                set_stepping_breakpoint(future_lr, t->ID);
+                t->stepconfig.set_temp_ss_breakpoint = 1;
+                *should_auto_resume = 0;
+            }
+        }*/
+
+        //*need_single_step_now = 0;
         // XXX XXX XXX
         return;
     }
@@ -326,7 +329,7 @@ static void handle_hit_breakpoint(struct machthread *t,
     /* should print, should not auto resume */
     *should_auto_resume = 0;
 
-    *need_single_step_now = 1;
+    //*need_single_step_now = 1;
 }
 
 void handle_exception(Request *request, int *should_auto_resume,
@@ -472,8 +475,8 @@ void handle_exception(Request *request, int *should_auto_resume,
                 subcode, &need_single_step_now, desc);
         disassemble_at_location(focused->thread_state.__pc, 4, desc);
 
-        if(need_single_step_now)
-            enable_single_step(focused);
+        //if(need_single_step_now)
+        enable_single_step(focused);
     }
     /* Something else occured. */
     else{

@@ -80,6 +80,7 @@ struct machthread {
         unsigned long LR_to_step_to;
         int need_to_save_LR;
         int just_hit_ss_breakpoint;
+        int set_temp_ss_breakpoint;
     } stepconfig;
 };
 

@@ -111,6 +111,13 @@ int is_branch(unsigned int opcode, struct branchinfo *binfo){
         binfo->imm = ((opcode & 0x3fff) >> 5) * 4;
     }
 
+    if(binfo->kind == UNCOND_BRANCH_REGISTER){
+        unsigned int opc = (opcode >> 21) & 0xf;
+
+        if(opc == 1 || opc == 9)
+            binfo->is_subroutine_call = 1;
+    }
+
     binfo->rn = NONE;
 
     if(binfo->kind == UNCOND_BRANCH_REGISTER)
