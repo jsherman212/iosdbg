@@ -9,6 +9,9 @@
 
 #include "../disas/branch.h"
 
+
+// XXX
+#include "../exception.h"
 static void prepare(int kind){
     int need_ss = 1;
 
@@ -33,12 +36,13 @@ static void prepare(int kind){
 
         printf("%s: opcode %#x\n", __func__, opcode);
 
+        SS_BP_LOCK;
         struct branchinfo info = {0};
         int branch = is_branch(opcode, &info);
 
         if(branch && info.is_subroutine_call){
             if(info.rn != X30){
-                if(!focused->stepconfig.set_temp_ss_breakpoint){
+                //if(!focused->stepconfig.set_temp_ss_breakpoint){
                     printf("%s: at a subroutine call, will set bp on LR,"
                             " which will be PC+4 aka %#llx, now: LR = %#llx PC = %#llx\n",
                             __func__, focused->thread_state.__pc + 4,
@@ -46,7 +50,7 @@ static void prepare(int kind){
                     __uint64_t future_lr = focused->thread_state.__pc + 4;
                     set_stepping_breakpoint(future_lr, focused->ID);
                     focused->stepconfig.set_temp_ss_breakpoint = 1;
-                }
+                //}
 
                 // XXX don't need to single step if we're gonna be
                 //      setting a breakpoint anyway
@@ -55,9 +59,10 @@ static void prepare(int kind){
                 // XXX if we're at a software breakpoint disable it
                 // so we can get past it
                 if(b && !b->hw){
-                    BP_LOCK;
+                    /*BP_LOCK;
                     breakpoint_disable_specific(b);
-                    BP_UNLOCK;
+                    BP_UNLOCK;*/
+                //    need_ss = 1;
                 }
             }
         }
@@ -73,6 +78,7 @@ static void prepare(int kind){
 
         focused->stepconfig.is_stepping = 1;
     }
+    SS_BP_UNLOCK;
 }
 
 enum cmd_error_t cmdfunc_step_inst_into(struct cmd_args_t *args, 

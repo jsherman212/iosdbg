@@ -146,7 +146,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
     bp->id = current_breakpoint_id;
     
     // XXX once I open up temp breakpoints as a feature this will cause issues
-    if(!bp->temporary)
+    //if(!bp->temporary)
         current_breakpoint_id++;
 
     int sz = 4, orig_instruction = 0;
