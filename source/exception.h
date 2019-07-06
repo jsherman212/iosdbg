@@ -6,8 +6,10 @@
 
 extern pthread_mutex_t SET_SS_BP_LOCK_MUTEX;
 
-#define SS_BP_LOCK pthread_mutex_lock(&SET_SS_BP_LOCK_MUTEX)
-#define SS_BP_UNLOCK pthread_mutex_unlock(&SET_SS_BP_LOCK_MUTEX)
+//#define SS_BP_LOCK pthread_mutex_lock(&SET_SS_BP_LOCK_MUTEX)
+#define SS_BP_LOCK
+//#define SS_BP_UNLOCK pthread_mutex_unlock(&SET_SS_BP_LOCK_MUTEX)
+#define SS_BP_UNLOCK
 
 typedef struct {
     mach_msg_header_t Head;

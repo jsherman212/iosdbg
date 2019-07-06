@@ -17,11 +17,11 @@ static void prepare(int kind){
 
     struct machthread *focused = get_focused_thread();
     breakpoint_disable_all_except(BP_COND_STEPPING);
+    //breakpoint_disable_all();
 
     if(kind == INST_STEP_INTO)
         focused->stepconfig.step_kind = INST_STEP_INTO;
     else{
-        //breakpoint_disable_all();
         focused->stepconfig.step_kind = INST_STEP_OVER;
 
         unsigned int opcode = 0;
@@ -53,23 +53,12 @@ static void prepare(int kind){
                     focused->stepconfig.set_temp_ss_breakpoint = 1;
                 }
 
-                // XXX don't need to single step if we're gonna be
-                //      setting a breakpoint anyway
+                /* Do not single step if we're at a subroutine call. */
                 need_ss = 0;
-
-                // XXX if we're at a software breakpoint disable it
-                // so we can get past it
-                if(b && !b->hw){
-                    /*BP_LOCK;
-                    breakpoint_disable_specific(b);
-                    BP_UNLOCK;*/
-                //    need_ss = 1;
-                }
             }
         }
     }
 
-    //breakpoint_disable_all();
     if(need_ss){
         get_debug_state(focused);
         focused->debug_state.__mdscr_el1 |= 1;
@@ -77,6 +66,7 @@ static void prepare(int kind){
 
         focused->stepconfig.is_stepping = 1;
     }
+
     SS_BP_UNLOCK;
 }
 

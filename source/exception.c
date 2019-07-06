@@ -149,92 +149,6 @@ static void handle_hit_watchpoint(struct machthread *t, int *should_auto_resume,
 
 pthread_mutex_t SET_SS_BP_LOCK_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
-static void handle_single_step(struct machthread *t, int *should_auto_resume,
-        int *should_print, char **desc){
-    /* Re-enable all the breakpoints we disabled while performing the
-     * single step. This function is called when the CPU raises the software
-     * step exception after the single step occurs.
-     */
-    //if(t->stepconfig.is_stepping){
-    //if(t->stepconfig.step_kind != STEP_NONE){
-        //breakpoint_enable_all();
-      /*  printf("%s: t->stepconfig.step_kind != STEP_NONE, "
-                "so re-enabling all normal breakpoints\n",
-                __func__);
-        */
-    breakpoint_enable_all_specific(BP_COND_NORMAL);
-    //}
-
-    printf("%s: t->just_hit_breakpoint %d t->stepconfig.just_hit_ss_breakpoint %d\n",
-            __func__, t->just_hit_breakpoint, t->stepconfig.just_hit_ss_breakpoint);
-
-/*    if(t->stepconfig.just_hit_ss_breakpoint){
-        printf("%s: will auto resume and not print cuz ss bp was hit. Returning\n",
-                __func__);
-        *should_print = 0;
-        return;
-    }
-*/
-    if(t->just_hit_breakpoint){
-        if(t->just_hit_sw_breakpoint){
-            breakpoint_enable(t->last_hit_bkpt_ID, NULL);
-            t->just_hit_sw_breakpoint = 0;
-        }
-
-        /* If we caused a software step exception to get past a breakpoint,
-         * just continue as normal. Otherwise, if we manually single step
-         * right after a breakpoint hit, just print the disassembly.
-         */
-        if(!t->stepconfig.is_stepping){
-            printf("%s: we are stepping to get past a breakpoint, not printing\n",
-                    __func__);
-            /* should not print, should auto resume */
-            *should_print = 0;
-            
-            if(t->stepconfig.step_kind == INST_STEP_OVER){
-                if(t->stepconfig.just_hit_ss_breakpoint){
-                    //printf("*****%s: not auto resuming, just hit ss bp\n",
-                            //__func__);
-                    //*should_auto_resume = 0;
-
-                    t->stepconfig.just_hit_ss_breakpoint = 0;
-                }
-            }
-        }
-        else{
-            /* should print, should not auto resume */
-            *should_auto_resume = 0;
-            concat(desc, "\n");
-            disassemble_at_location(t->thread_state.__pc, 4, desc);
-        }
-
-        t->just_hit_breakpoint = 0;
-        //t->stepconfig.is_stepping = 0;
-
-        return;
-    }
-
-    if(t->stepconfig.step_kind == INST_STEP_OVER){
-        if(t->stepconfig.set_temp_ss_breakpoint){
-            printf("*****%s: t->stepconfig.set_temp_ss_breakpoint is true,"
-                    " not printing\n", __func__);
-            *should_print = 0;
-        }
-        else{
-            printf("*****%s: not auto resuming\n", __func__);
-            *should_auto_resume = 0;
-        }
-
-    }
-    else{
-        *should_auto_resume = 0;
-    }
-
-    concat(desc, "\n");
-    disassemble_at_location(t->thread_state.__pc, 4, desc);
-    //t->stepconfig.is_stepping = 0;
-}
-
 static void handle_hit_breakpoint(struct machthread *t,
         int *should_auto_resume, int *should_print, long subcode,
         int *need_single_step_now, char **desc){
@@ -314,6 +228,92 @@ static void handle_hit_breakpoint(struct machthread *t,
     *should_auto_resume = 0;
 
     //*need_single_step_now = 1;
+}
+
+static void handle_single_step(struct machthread *t, int *should_auto_resume,
+        int *should_print, char **desc){
+    /* Re-enable all the breakpoints we disabled while performing the
+     * single step. This function is called when the CPU raises the software
+     * step exception after the single step occurs.
+     */
+    //if(t->stepconfig.is_stepping){
+    //if(t->stepconfig.step_kind != STEP_NONE){
+    //breakpoint_enable_all();
+      /*  printf("%s: t->stepconfig.step_kind != STEP_NONE, "
+                "so re-enabling all normal breakpoints\n",
+                __func__);
+        */
+    breakpoint_enable_all_specific(BP_COND_NORMAL);
+    //}
+
+    printf("%s: t->just_hit_breakpoint %d t->stepconfig.just_hit_ss_breakpoint %d\n",
+            __func__, t->just_hit_breakpoint, t->stepconfig.just_hit_ss_breakpoint);
+
+/*    if(t->stepconfig.just_hit_ss_breakpoint){
+        printf("%s: will auto resume and not print cuz ss bp was hit. Returning\n",
+                __func__);
+        *should_print = 0;
+        return;
+    }
+*/
+    if(t->just_hit_breakpoint){
+        if(t->just_hit_sw_breakpoint){
+            breakpoint_enable(t->last_hit_bkpt_ID, NULL);
+            t->just_hit_sw_breakpoint = 0;
+        }
+
+        /* If we caused a software step exception to get past a breakpoint,
+         * just continue as normal. Otherwise, if we manually single step
+         * right after a breakpoint hit, just print the disassembly.
+         */
+        if(!t->stepconfig.is_stepping){
+            printf("%s: we are stepping to get past a breakpoint, not printing\n",
+                    __func__);
+            /* should not print, should auto resume */
+            *should_print = 0;
+            
+            if(t->stepconfig.step_kind == INST_STEP_OVER){
+                if(t->stepconfig.just_hit_ss_breakpoint){
+                    //printf("*****%s: not auto resuming, just hit ss bp\n",
+                            //__func__);
+                    //*should_auto_resume = 0;
+
+                    t->stepconfig.just_hit_ss_breakpoint = 0;
+                }
+            }
+        }
+        else{
+            /* should print, should not auto resume */
+            *should_auto_resume = 0;
+            concat(desc, "\n");
+            disassemble_at_location(t->thread_state.__pc, 4, desc);
+        }
+
+        t->just_hit_breakpoint = 0;
+        //t->stepconfig.is_stepping = 0;
+
+        return;
+    }
+
+    if(t->stepconfig.step_kind == INST_STEP_OVER){
+        if(t->stepconfig.set_temp_ss_breakpoint){
+            printf("*****%s: t->stepconfig.set_temp_ss_breakpoint is true,"
+                    " not printing\n", __func__);
+            *should_print = 0;
+        }
+        else{
+            printf("*****%s: not auto resuming\n", __func__);
+            *should_auto_resume = 0;
+        }
+
+    }
+    else{
+        *should_auto_resume = 0;
+    }
+
+    concat(desc, "\n");
+    disassemble_at_location(t->thread_state.__pc, 4, desc);
+    //t->stepconfig.is_stepping = 0;
 }
 
 void handle_exception(Request *request, int *should_auto_resume,
