@@ -1,3 +1,6 @@
+7-6-19
+- new command: 'step inst-over', instruction level step over
+
 7-2-19
 - new command: 'evaluate'
 

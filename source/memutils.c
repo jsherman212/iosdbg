@@ -195,36 +195,25 @@ kern_return_t write_memory_to_location(vm_address_t location,
     if(ret)
         return ret;
     
-    /*
-    printf("%s: location %#lx data %#lx size %#lx\n",
-            __func__, location, data, size);
-    */
     /* Get raw bytes from this number. */
     void *data_ptr = (uint8_t *)&data;
 
-    ret = vm_protect(debuggee->task,
+    vm_protect(debuggee->task,
             location,
             size,
             0,
             VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
 
-    //printf("%s: first vm_protect says %s\n", __func__, mach_error_string(ret));
-
     ret = vm_write(debuggee->task,
             location,
             (pointer_t)data_ptr,
             size);
-    
-    //printf("%s: vm_write says %s\n", __func__, mach_error_string(ret));
 
-    ret = vm_protect(debuggee->task,
+    vm_protect(debuggee->task,
             location,
             size,
             0,
             info.protection);
-    
-    //printf("%s: second vm_protect says %s\n", __func__, mach_error_string(ret));
 
-    return KERN_SUCCESS;
-//    return ret;
+    return ret;
 }

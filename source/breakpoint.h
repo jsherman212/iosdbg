@@ -65,14 +65,11 @@ static int current_breakpoint_id = 1;
 static const unsigned long long BRK = 0xd4200000;
 
 void breakpoint_at_address(unsigned long, int, int, char **, char **);
-
-// XXX
 void set_stepping_breakpoint(unsigned long, int);
 
 void breakpoint_hit(struct breakpoint *);
 void breakpoint_delete(int, char **);
 void breakpoint_delete_specific(struct breakpoint *);
-void breakpoint_disable_specific(struct breakpoint *);
 void breakpoint_disable(int, char **);
 void breakpoint_enable(int, char **);
 void breakpoint_disable_all(void);

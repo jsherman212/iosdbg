@@ -109,7 +109,7 @@ static void handle_soft_signal(mach_port_t thread, long subcode, char **desc,
     if(pass)
         return;
 
-    ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(unsigned long long)thread, 0);
+    ptrace(PT_THUPDATE, debuggee->pid, (caddr_t)(uint64_t)thread, 0);
 }
 
 static void handle_hit_watchpoint(struct machthread *t, int *should_auto_resume,
@@ -147,51 +147,22 @@ static void handle_hit_watchpoint(struct machthread *t, int *should_auto_resume,
     *should_auto_resume = 0;
 }
 
-pthread_mutex_t SET_SS_BP_LOCK_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-
 static void handle_hit_breakpoint(struct machthread *t,
-        int *should_auto_resume, int *should_print, long subcode,
-        int *need_single_step_now, char **desc){
+        int *should_auto_resume, int *should_print, long subcode, char **desc){
     struct breakpoint *hit = find_bp_with_cond(subcode, BP_COND_NORMAL);
     struct breakpoint *step = find_bp_with_cond(subcode, BP_COND_STEPPING);
-
-    printf("%s: hit %p step %p\n", __func__, hit, step);
 
     if(!hit && !step){
         *should_print = 0;
         return;
     }
 
-    // XXX fake single step output for step inst-over when we come back to
-    // saved LR
-    // XXX XXX shouldn't need to check step->for_stepping now because of
-    //          how we fetch this breakpoint
-    if(step){// && step->for_stepping){
-    //if(hit && hit->for_stepping){
-        t->stepconfig.LR_to_step_to = -1;
-/*        printf("%s: the temp breakpoint on LR for inst step over has hit,"
-                " we should be at the instruction right after the branch, "
-                " fake single step output here? resetting LR_to_step_to "
-                " PC: %#llx\n",
-                __func__, t->thread_state.__pc);
-   */
-        printf("%s: just hit the single step temp bp PC: %#llx\n",
-                __func__, t->thread_state.__pc);
-        //hit->temporary = 0;
-        //breakpoint_hit(hit);
+    if(step){
+        /* temporary breakpoint, deleted when hit */
         breakpoint_hit(step);
-
-        //concat(desc, " instruction step over.\n");
-
-        /* should print, should not auto resume */
-    //    *should_auto_resume = 0;
 
         t->stepconfig.just_hit_ss_breakpoint = 1;
         t->stepconfig.set_temp_ss_breakpoint = 0;
-
-        //*need_single_step_now = 0;
-        // XXX XXX XXX
-        //return;
     }
 
     /* Of course we can't really have real thread-specific software
@@ -226,36 +197,12 @@ static void handle_hit_breakpoint(struct machthread *t,
 
     /* should print, should not auto resume */
     *should_auto_resume = 0;
-
-    //*need_single_step_now = 1;
 }
 
 static void handle_single_step(struct machthread *t, int *should_auto_resume,
         int *should_print, char **desc){
-    /* Re-enable all the breakpoints we disabled while performing the
-     * single step. This function is called when the CPU raises the software
-     * step exception after the single step occurs.
-     */
-    //if(t->stepconfig.is_stepping){
-    //if(t->stepconfig.step_kind != STEP_NONE){
-    //breakpoint_enable_all();
-      /*  printf("%s: t->stepconfig.step_kind != STEP_NONE, "
-                "so re-enabling all normal breakpoints\n",
-                __func__);
-        */
     breakpoint_enable_all_specific(BP_COND_NORMAL);
-    //}
 
-    printf("%s: t->just_hit_breakpoint %d t->stepconfig.just_hit_ss_breakpoint %d\n",
-            __func__, t->just_hit_breakpoint, t->stepconfig.just_hit_ss_breakpoint);
-
-/*    if(t->stepconfig.just_hit_ss_breakpoint){
-        printf("%s: will auto resume and not print cuz ss bp was hit. Returning\n",
-                __func__);
-        *should_print = 0;
-        return;
-    }
-*/
     if(t->just_hit_breakpoint){
         if(t->just_hit_sw_breakpoint){
             breakpoint_enable(t->last_hit_bkpt_ID, NULL);
@@ -267,20 +214,13 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
          * right after a breakpoint hit, just print the disassembly.
          */
         if(!t->stepconfig.is_stepping){
-            printf("%s: we are stepping to get past a breakpoint, not printing\n",
-                    __func__);
+            if(t->stepconfig.step_kind == INST_STEP_OVER){
+                if(t->stepconfig.just_hit_ss_breakpoint)
+                    t->stepconfig.just_hit_ss_breakpoint = 0;
+            }
+
             /* should not print, should auto resume */
             *should_print = 0;
-            
-            if(t->stepconfig.step_kind == INST_STEP_OVER){
-                if(t->stepconfig.just_hit_ss_breakpoint){
-                    //printf("*****%s: not auto resuming, just hit ss bp\n",
-                            //__func__);
-                    //*should_auto_resume = 0;
-
-                    t->stepconfig.just_hit_ss_breakpoint = 0;
-                }
-            }
         }
         else{
             /* should print, should not auto resume */
@@ -290,22 +230,13 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
         }
 
         t->just_hit_breakpoint = 0;
-        //t->stepconfig.is_stepping = 0;
 
         return;
     }
 
     if(t->stepconfig.step_kind == INST_STEP_OVER){
-        if(t->stepconfig.set_temp_ss_breakpoint){
-            printf("*****%s: t->stepconfig.set_temp_ss_breakpoint is true,"
-                    " not printing\n", __func__);
-            *should_print = 0;
-        }
-        else{
-            printf("*****%s: not auto resuming\n", __func__);
+        if(!t->stepconfig.set_temp_ss_breakpoint)
             *should_auto_resume = 0;
-        }
-
     }
     else{
         *should_auto_resume = 0;
@@ -313,7 +244,6 @@ static void handle_single_step(struct machthread *t, int *should_auto_resume,
 
     concat(desc, "\n");
     disassemble_at_location(t->thread_state.__pc, 4, desc);
-    //t->stepconfig.is_stepping = 0;
 }
 
 void handle_exception(Request *request, int *should_auto_resume,
@@ -329,8 +259,6 @@ void handle_exception(Request *request, int *should_auto_resume,
     const char *exc = exc_str(exception);
     long code = ((long *)request->code)[0];
     long subcode = ((long *)request->code)[1];
-    
-    printf("%s: exc '%s' code %#lx subcode %#lx\n", __func__, exc, code, subcode);
 
     /* Give focus to whatever caused this exception. */
     struct machthread *focused = get_focused_thread();
@@ -348,8 +276,6 @@ void handle_exception(Request *request, int *should_auto_resume,
     get_thread_state(focused);
 
     concat(desc, "\n * Thread #%d (tid = %#llx)", focused->ID, focused->tid);
-
-    SS_BP_LOCK;
 
     /* A number of things could have happened to cause an exception:
      *      - hardware breakpoint
@@ -395,7 +321,7 @@ void handle_exception(Request *request, int *should_auto_resume,
     }
     /* A hardware watchpoint hit. However, we need to single step in 
      * order for the CPU to execute the instruction at this address
-     * so the value actually changes.
+     * so the value actually changes (if it will at all).
      */
     else if(code == EXC_ARM_DA_DEBUG){
         focused->just_hit_watchpoint = 1;
@@ -418,26 +344,14 @@ void handle_exception(Request *request, int *should_auto_resume,
             if(focused->just_hit_watchpoint){
                 handle_hit_watchpoint(focused, should_auto_resume, should_print, desc);
                 focused->just_hit_watchpoint = 0;
-
-                SS_BP_UNLOCK;
-
                 return;
             }
 
-   //         int should_print_override = 0;
-
             if(focused->stepconfig.is_stepping){
-                /*struct breakpoint *hit = find_bp_with_address(
-                        focused->thread_state.__pc);
-                 */
                 struct breakpoint *hit = find_bp_with_cond(
                         focused->thread_state.__pc, BP_COND_NORMAL);
-                printf("%s: hit %p\n", __func__, hit);
-
                 
                 if(hit){
-                //    printf("*****%s: setting should_print_override\n", __func__);
-                  //  should_print_override = 1;
                     breakpoint_hit(hit);
 
                     concat(desc, ": '%s': breakpoint %d at %#lx hit %d time(s).",
@@ -449,41 +363,24 @@ void handle_exception(Request *request, int *should_auto_resume,
                     if(focused->stepconfig.step_kind == INST_STEP_OVER)
                         step_kind = "instruction step over";
 
-                    concat(desc, ": '%s': %s!!.", focused->tname, step_kind);
+                    concat(desc, ": '%s': %s.", focused->tname, step_kind);
                 }
             }
     
             handle_single_step(focused, should_auto_resume, should_print, desc);
-/*
-            if(should_print_override){
-                *should_print = 0;
-                *should_auto_resume = 1;
-            }
-*/
+
             focused->stepconfig.step_kind = STEP_NONE;
             focused->stepconfig.is_stepping = 0;
 
-            SS_BP_UNLOCK;
-
             return;
         }
-        
-        /* In order to implement instruction level step over, we need to
-         * set a temporary breakpoint at LR right after the subroutine
-         * call is taken. When this breakpoint hits, we fake single
-         * step output in handle_hit_breakpoint.
-         * XXX nope
-         */
-        int need_single_step_now = 0;
         
         focused->just_hit_breakpoint = 1;
 
         concat(desc, ": '%s':", focused->tname);
         handle_hit_breakpoint(focused, should_auto_resume, should_print,
-                subcode, &need_single_step_now, desc);
+                subcode, desc);
         disassemble_at_location(focused->thread_state.__pc, 4, desc);
-
-        //if(need_single_step_now)
         enable_single_step(focused);
     }
     /* Something else occured. */
@@ -496,8 +393,6 @@ void handle_exception(Request *request, int *should_auto_resume,
         /* should print, should not auto resume */
         *should_auto_resume = 0;
     }
-
-    SS_BP_UNLOCK;
 }
 
 void reply_to_exception(Request *req, kern_return_t retcode){
