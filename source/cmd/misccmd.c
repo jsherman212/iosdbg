@@ -267,6 +267,12 @@ enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args,
         return CMD_FAILURE;
 
     breakpoint_delete_all_specific(BP_COND_STEPPING);
+    //breakpoint_enable_all_specific(BP_COND_NORMAL);
+
+    //struct machthread *focused = get_focused_thread();
+//    focused->stepconfig.is_stepping = 0;
+    //focused->stepconfig.step_kind = STEP_NONE;
+
     ops_resume();
 
     concat(outbuffer, "Process %d resuming\n", debuggee->pid);

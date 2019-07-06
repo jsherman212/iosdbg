@@ -16,11 +16,11 @@ static void prepare(int kind){
     int need_ss = 1;
 
     struct machthread *focused = get_focused_thread();
+    breakpoint_disable_all_except(BP_COND_STEPPING);
 
     if(kind == INST_STEP_INTO)
         focused->stepconfig.step_kind = INST_STEP_INTO;
     else{
-        //breakpoint_disable_all_except(BP_COND_STEPPING);
         //breakpoint_disable_all();
         focused->stepconfig.step_kind = INST_STEP_OVER;
 
@@ -29,7 +29,8 @@ static void prepare(int kind){
         read_memory_at_location((void *)focused->thread_state.__pc,
                 &opcode, sizeof(opcode));
 
-        struct breakpoint *b = find_bp_with_cond(focused->thread_state.__pc, BP_COND_NORMAL);
+        struct breakpoint *b = find_bp_with_cond(focused->thread_state.__pc,
+                BP_COND_NORMAL);
 
         if(b)
             opcode = b->old_instruction;
@@ -42,7 +43,7 @@ static void prepare(int kind){
 
         if(branch && info.is_subroutine_call){
             if(info.rn != X30){
-                //if(!focused->stepconfig.set_temp_ss_breakpoint){
+                if(!focused->stepconfig.set_temp_ss_breakpoint){
                     printf("%s: at a subroutine call, will set bp on LR,"
                             " which will be PC+4 aka %#llx, now: LR = %#llx PC = %#llx\n",
                             __func__, focused->thread_state.__pc + 4,
@@ -50,7 +51,7 @@ static void prepare(int kind){
                     __uint64_t future_lr = focused->thread_state.__pc + 4;
                     set_stepping_breakpoint(future_lr, focused->ID);
                     focused->stepconfig.set_temp_ss_breakpoint = 1;
-                //}
+                }
 
                 // XXX don't need to single step if we're gonna be
                 //      setting a breakpoint anyway
@@ -68,10 +69,8 @@ static void prepare(int kind){
         }
     }
 
-
     //breakpoint_disable_all();
     if(need_ss){
-
         get_debug_state(focused);
         focused->debug_state.__mdscr_el1 |= 1;
         set_debug_state(focused);

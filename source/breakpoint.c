@@ -167,7 +167,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
         bp->old_instruction = orig_instruction;
     }
     else{
-        if(!dup->for_stepping){
+        //if(!dup->for_stepping){
             concat(outbuffer, "warning: breakpoint %d is set at the same location"
                     " as breakpoint %d", dup->id, bp->id);
 
@@ -181,7 +181,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
             else{
                 concat(outbuffer, "\n");
             }
-        }
+        //}
 
         /* If two software breakpoints are set at the same place,
          * the second one will record the original instruction as BRK #0.
@@ -428,6 +428,25 @@ void breakpoint_enable_all(void){
     BP_LOCKED_FOREACH(current){
         struct breakpoint *bp = current->data;
         bp_set_state_internal(bp, BP_ENABLED);
+    }
+    BP_END_LOCKED_FOREACH;
+}
+
+void breakpoint_enable_all_specific(int way){
+    BP_LOCKED_FOREACH(current){
+        struct breakpoint *bp = current->data;
+
+        if(way == BP_COND_NORMAL){
+            if(!bp->temporary && !bp->for_stepping){
+                bp_set_state_internal(bp, BP_ENABLED);
+            }
+        }
+
+        if(way == BP_COND_STEPPING){
+            if(bp->for_stepping){
+                bp_set_state_internal(bp, BP_ENABLED);
+            }
+        }
     }
     BP_END_LOCKED_FOREACH;
 }

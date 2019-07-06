@@ -77,6 +77,7 @@ void breakpoint_disable(int, char **);
 void breakpoint_enable(int, char **);
 void breakpoint_disable_all(void);
 void breakpoint_enable_all(void);
+void breakpoint_enable_all_specific(int);
 int breakpoint_disabled(int);
 void breakpoint_delete_all(void);
 void breakpoint_delete_all_specific(int);
