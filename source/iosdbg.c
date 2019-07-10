@@ -27,8 +27,8 @@
 
 struct debuggee *debuggee = NULL;
 
-char **bsd_syscalls = NULL, **mach_traps = NULL, **mach_messages = NULL;
-int bsd_syscalls_arr_len = 0, mach_traps_arr_len = 0, mach_messages_arr_len = 0;
+char **bsd_syscalls = NULL, **mach_traps = NULL, **mach_traps2 = NULL;
+int bsd_syscalls_arr_len = 0, mach_traps_arr_len = 0, mach_traps2_arr_len = 0;
 
 static void interrupt(int x1){
     if(KEEP_CHECKING_FOR_PROCESS)
@@ -134,11 +134,11 @@ static int setup_tracing(void){
     /* For safety, allocate everything and set first element to NULL. */
     bsd_syscalls = malloc(sizeof(char *));
     mach_traps = malloc(sizeof(char *));
-    mach_messages = malloc(sizeof(char *));
+    mach_traps2 = malloc(sizeof(char *));
 
     bsd_syscalls[0] = NULL;
     mach_traps[0] = NULL;
-    mach_messages[0] = NULL;
+    mach_traps2[0] = NULL;
 
     char *line = NULL;
     size_t len;
@@ -193,14 +193,14 @@ static int setup_tracing(void){
                 int num_ptrs_to_allocate = eventidx - largest_mach_msg_entry;
                 int cur_array_size = largest_mach_msg_entry;
 
-                char **mach_messages_rea = realloc(mach_messages, sizeof(char *) *
+                char **mach_traps2_rea = realloc(mach_traps2, sizeof(char *) *
                         (cur_array_size + num_ptrs_to_allocate + 1));
 
-                mach_messages = mach_messages_rea;
+                mach_traps2 = mach_traps2_rea;
                 largest_mach_msg_entry = eventidx + 1;
             }
 
-            mach_messages_arr_len = largest_mach_msg_entry;
+            mach_traps2_arr_len = largest_mach_msg_entry;
         }
 
         free(freethis);
@@ -215,8 +215,8 @@ static int setup_tracing(void){
     for(int i=0; i<mach_traps_arr_len; i++)
         mach_traps[i] = NULL;
 
-    for(int i=0; i<mach_messages_arr_len; i++)
-        mach_messages[i] = NULL;
+    for(int i=0; i<mach_traps2_arr_len; i++)
+        mach_traps2[i] = NULL;
 
     rewind(tracecodes);
 
@@ -249,8 +249,8 @@ static int setup_tracing(void){
         else if(strnstr(event, "MSG", 3)){
             int eventidx = (codenum & ~0xff000000) / 4;
 
-            mach_messages[eventidx] = malloc(strlen(event + 4) + 1);
-            strcpy(mach_messages[eventidx], event + 4);
+            mach_traps2[eventidx] = malloc(strlen(event + 4) + 1);
+            strcpy(mach_traps2[eventidx], event + 4);
         }
 
         free(freethis);

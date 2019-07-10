@@ -389,12 +389,14 @@ enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
     if(*error)
         return CMD_FAILURE;
 
-    kill(debuggee->pid, SIGKILL);
-
-    int status;
-    waitpid(debuggee->pid, &status, 0);
+    pid_t p = debuggee->pid;
 
     ops_detach(0, outbuffer);
+
+    kill(p, SIGKILL);
+
+    int status;
+    waitpid(p, &status, 0);
 
     sigsettings(SIGKILL, &notify_backup, &pass_backup, &stop_backup, 1, error);
 
@@ -420,10 +422,10 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
 
         free(mach_traps);
 
-        for(int i=0; i<mach_messages_arr_len; i++)
-            free(mach_messages[i]);
+        for(int i=0; i<mach_traps2_arr_len; i++)
+            free(mach_traps2[i]);
 
-        free(mach_messages);
+        free(mach_traps2);
     }
 
     free(debuggee);

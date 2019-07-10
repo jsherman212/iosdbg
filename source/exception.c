@@ -16,8 +16,6 @@
 #include "trace.h"
 #include "watchpoint.h"
 
-#include "disas/branch.h"
-
 static const char *exc_str(exception_type_t exception){
     switch(exception){
         case EXC_BAD_ACCESS:

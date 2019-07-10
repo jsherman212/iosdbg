@@ -1,7 +1,7 @@
 #ifndef _DBGOPS_H_
 #define _DBGOPS_H_
 
-#include <mach/kmod.h>
+#include <mach/kern_return.h>
 
 void ops_printsiginfo(char **);
 void ops_detach(int, char **);

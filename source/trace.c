@@ -200,7 +200,7 @@ static void *trace(void *arg){
             else if(stype == MACH_Msg){
                 idx = (code & ~0xff000000) / 4;
 
-                event = mach_messages[idx];
+                event = mach_traps2[idx];
 
                 if(!event)
                     continue;

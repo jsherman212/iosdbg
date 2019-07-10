@@ -225,6 +225,7 @@ struct cmd_args_t *argdup(struct cmd_args_t *with){
 void argins(struct cmd_args_t *args, const char *arggroup, char *argval){
     if(!args || !arggroup)
         return;
+
     for(struct node_t *current = args->argmaps->front;
             current;
             current = current->next){

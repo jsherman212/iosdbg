@@ -1,3 +1,6 @@
+7-10-19
+- fix up cmdfunc_kill logic so we don't get stuck in wait4
+
 7-6-19
 - new command: 'step inst-over', instruction level step over
 
