@@ -1,8 +1,14 @@
+#include <mach/mach.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <dwarf.h>
+
+#include "../expr.h"
+#include "../memutils.h"
+#include "../strext.h"
+#include "../thread.h"
 
 #include "common.h"
 
@@ -379,6 +385,22 @@ static char *get_register_name(Dwarf_Half op){
     return strdup(regstr);
 }
 
+static uint64_t get_register_value(int rn){
+    if(rn < 0 || rn > 31)
+        return 0;
+
+    struct machthread *focused = get_focused_thread();
+
+    if(rn < 29)
+        return focused->thread_state.__x[rn];
+    else if(rn == 29)
+        return focused->thread_state.__fp;
+    else if(rn == 30)
+        return focused->thread_state.__lr;
+    else
+        return focused->thread_state.__sp;
+}
+
 void add_additional_location_description(Dwarf_Half whichattr,
         struct dwarf_locdesc **locs, struct dwarf_locdesc *add,
         int idx){
@@ -476,13 +498,14 @@ static char *evaluate_frame_base(struct dwarf_locdesc *framebaselocdesc){
 // location descriptions
 // XXX TODO when added inside iosdbg, this will not create a string for my expression
 // evaluator, will return a computed location
-char *decode_location_description(struct dwarf_locdesc *framebaselocdesc,
-        struct dwarf_locdesc *locdesc, uint64_t pc, uint64_t *resultout){
+int decode_location_description(struct dwarf_locdesc *framebaselocdesc,
+        struct dwarf_locdesc *locdesc, uint64_t pc, char **outbuffer,
+        int64_t *resultout){
     char exprstr[1024] = {0};
 
     /* 512 to support extreme operands of DW_OP_pick */
     intptr_t stack[512] = {0};
-    unsigned int sp = 0;
+    unsigned sp = 0;
 
     struct dwarf_locdesc *ld = locdesc;
 
@@ -509,9 +532,15 @@ char *decode_location_description(struct dwarf_locdesc *framebaselocdesc,
                 {
                     snprintf(operatorbuf, sizeof(operatorbuf), " %s", get_op_name(ld->locdesc_op));
 
-                    // XXX pop top of stack, read memory at that location,
-                    // and then push that value onto the stack
                     intptr_t addr = stack[sp];
+                    intptr_t data = 0;
+
+                    if(read_memory_at_location(addr, &data, sizeof(data))){
+                        concat(outbuffer, "warning: could not read memory at"
+                                " %#llx for DW_OP_deref\n", addr);
+                    }
+
+                    stack[++sp] = data;
 
                     break;
                 } 
@@ -869,8 +898,7 @@ char *decode_location_description(struct dwarf_locdesc *framebaselocdesc,
                     snprintf(operatorbuf, sizeof(operatorbuf), "%s", regname);
                     free(regname);
 
-                    // XXX call eval_expr on this string, then push result 
-                    // onto the stack
+                    stack[++sp] = get_register_value(op - DW_OP_reg0);
 
                     break;
                 }
@@ -882,8 +910,8 @@ char *decode_location_description(struct dwarf_locdesc *framebaselocdesc,
 
                     snprintf(operandbuf, sizeof(operandbuf), "%+lld", (Dwarf_Signed)opd1);
 
-                    // XXX concat these two strings, call eval_expr,
-                    // and then push that value onto the stack
+                    stack[++sp] = get_register_value(op - DW_OP_breg0) +
+                        (Dwarf_Signed)opd1;
 
                     break;
                 }
@@ -893,31 +921,37 @@ char *decode_location_description(struct dwarf_locdesc *framebaselocdesc,
                     snprintf(operatorbuf, sizeof(operatorbuf), "%s", regname);
                     free(regname);
 
-                    // XXX call eval_expr on this string, then push result 
-                    // onto the stack
-
+                    stack[++sp] = get_register_value(opd1);
 
                     break;
                 }
             case DW_OP_fbreg:
                 {
+                    // XXX why is this here again?
                     memset(operatorbuf, 0, sizeof(operatorbuf));
 
-                    /* Fetch what fbreg actually is. */
+                    /* Fetch what fbreg actually is */
                     char *fbregexpr = evaluate_frame_base(framebaselocdesc);
-                        //decode_location_description(framebaselocdesc, framebaselocdesc, pc);
 
                     snprintf(operatorbuf, sizeof(operatorbuf), "%s", fbregexpr);
-
-                    free(fbregexpr);
-                    //dprintf("exprstr '%s' fbregexpr '%s'\n", exprstr, fbregexpr);
-                    //exit(0);
-
                     snprintf(operandbuf, sizeof(operandbuf), "%+lld", opd1);
 
-                    // XXX concat these two strings, call eval_expr,
-                    // read memory at the resulting location, and
-                    // then push that value onto the stack
+                    char *expr = NULL, *e = NULL;
+                    concat(&expr, "%s%+lld", fbregexpr, (Dwarf_Signed)opd1);
+
+                    free(fbregexpr);
+
+                    intptr_t result = eval_expr(expr, &e);
+
+                    if(e){
+                        concat(outbuffer, "warning: could not evaluate"
+                                " '%s' for DW_OP_fbreg\n", expr);
+                    }
+
+                    free(e);
+                    free(expr);
+
+                    stack[++sp] = result;
 
                     break;
                 }
@@ -929,15 +963,13 @@ char *decode_location_description(struct dwarf_locdesc *framebaselocdesc,
                     
                     snprintf(operandbuf, sizeof(operandbuf), "%+lld", (Dwarf_Signed)opd2);
 
-                    // XXX concat these two strings, call eval_expr,
-                    // read memory at the resulting location, and
-                    // then push that value onto the stack
+                    stack[++sp] = get_register_value(opd1) + (Dwarf_Signed)opd2;
 
                     break;
                 }
             case DW_OP_piece:
                 {
-                    printf("DW_OP_piece not implemented\n");
+                    concat(outbuffer, "DW_OP_piece not implemented\n");
                     break;
                 }
             case DW_OP_deref_size:
@@ -946,60 +978,97 @@ char *decode_location_description(struct dwarf_locdesc *framebaselocdesc,
                     uint8_t deref_size = (uint8_t)opd1;
 
                     snprintf(operandbuf, sizeof(operandbuf), " %d", deref_size);
-                    // XXX pop top of stack, read memory at that location
-                    // and then cast the result specified by deref_size
-                    // and push that value onto the stack
+
+                    intptr_t addr = stack[sp];
+                    intptr_t data = 0;
+
+                    if(read_memory_at_location(addr, &data, sizeof(data))){
+                        concat(outbuffer, "warning: could not read memory at"
+                                " %#llx for DW_OP_deref_size\n", addr);
+                    }
+
+                    switch(deref_size){
+                        case 1:
+                            stack[++sp] = *(uint8_t *)&data;
+                            break;
+                        case 2:
+                            stack[++sp] = *(uint16_t *)&data;
+                            break;
+                        case 3:
+                            stack[++sp] = data & 0xffffff;
+                            break;
+                        case 4:
+                            stack[++sp] = *(uint32_t *)&data;
+                            break;
+                        case 5:
+                            stack[++sp] = data & 0xffffffffffULL;
+                            break;
+                        case 6:
+                            stack[++sp] = data & 0xffffffffffffULL;
+                            break;
+                        case 7:
+                            stack[++sp] = data & 0xffffffffffffffULL;
+                            break;
+                        case 8:
+                            stack[++sp] = data;
+                            break;
+                        default:
+                            {
+                                concat(outbuffer, "warning: second operand for"
+                                        " DW_OP_deref_size is 0\n");
+                                break;
+                            }
+                    };
 
                     break;
                 }
             case DW_OP_xderef_size:
                 {
-                    printf("DW_OP_xderef_size not implemented\n");
+                    concat(outbuffer, "DW_OP_xderef_size not implemented\n");
                     break;
                 }
             case DW_OP_nop:
                 {
-                    /* do nothing */
                     break;
                 }
             case DW_OP_push_object_address:
                 {
-                    printf("DW_OP_push_object_address not implemented\n");
+                    concat(outbuffer, "DW_OP_push_object_address not implemented\n");
                     break;
                 }
             case DW_OP_call2:
                 {
-                    printf("DW_OP_call2 not implemented\n");
+                    concat(outbuffer, "DW_OP_call2 not implemented\n");
                     break;
                 }
             case DW_OP_call4:
                 {
-                    printf("DW_OP_call4 not implemented\n");
+                    concat(outbuffer, "DW_OP_call4 not implemented\n");
                     break;
                 }
             case DW_OP_call_ref:
                 {
-                    printf("DW_OP_call_ref not implemented\n");
+                    concat(outbuffer, "DW_OP_call_ref not implemented\n");
                     break;
                 }
             case DW_OP_form_tls_address:
                 {
-                    printf("DW_OP_form_tls_address not implemented\n");
+                    concat(outbuffer, "DW_OP_form_tls_address not implemented\n");
                     break;
                 }
             case DW_OP_call_frame_cfa:
                 {
-                    printf("DW_OP_call_frame_cfa not implemented\n");
+                    concat(outbuffer, "DW_OP_call_frame_cfa not implemented\n");
                     break;
                 }
             case DW_OP_bit_piece:
                 {
-                    printf("DW_OP_bit_piece not implemented\n");
+                    concat(outbuffer, "DW_OP_bit_piece not implemented\n");
                     break;
                 }
             case DW_OP_implicit_value:
                 {
-                    printf("DW_OP_implicit_value not implemented\n");
+                    concat(outbuffer, "DW_OP_implicit_value not implemented\n");
                     break;
                 }
             case DW_OP_stack_value:
@@ -1008,9 +1077,10 @@ char *decode_location_description(struct dwarf_locdesc *framebaselocdesc,
                     goto done;
                 }
             default:
-                dprintf("Unhandled op %#x\n", op);
-                // XXX
-                abort();
+                {
+                    concat(outbuffer, "Unhanded DWARF operation %#x\n", op);
+                    break;
+                }
         };
 
         strcat(exprstr, operatorbuf);
@@ -1024,57 +1094,7 @@ done:
 
     *resultout = stack[sp];
 
-    return strdup(exprstr);
-}
-
-void describe_location_description(struct dwarf_locdesc *locdesc,
-        int is_fb, int idx, int idx2, int level, int *byteswritten){
-    write_tabs(level);
-    write_spaces(level+4);
-
-    int add = 0;
-
-    if(is_fb){
-        printf(RED"|"RESET" DW_AT_frame_base:%n", &add);
-        *byteswritten += (add - strlen(RED) - strlen(RESET));
-    }
-    else{
-        printf(RED"|"RESET" DW_AT_location ["GREEN"%d"RESET"]["RED"%d"RESET"]:%n", idx, idx2, &add);
-        *byteswritten += (add - strlen(RED) - strlen(RESET) - strlen(GREEN) - strlen(RESET) -
-                strlen(RED) - strlen(RESET));
-    }
-
-    printf(" bounded: "YELLOW"%d"RESET"%n", locdesc->locdesc_bounded, &add);
-    *byteswritten += (add - strlen(YELLOW) - strlen(RESET));
-
-    if(locdesc->locdesc_bounded){
-        printf(" lopc = "LIGHT_BLUE"%#llx"RESET", hipc = "LIGHT_YELLOW"%#llx"RESET"%n",
-                locdesc->locdesc_lopc, locdesc->locdesc_hipc, &add);
-        *byteswritten += (add - strlen(LIGHT_BLUE) - strlen(RESET) - strlen(LIGHT_YELLOW) - strlen(RESET));
-    }
-
-    printf(", op = "CYAN"0x%04x"RESET"%n", locdesc->locdesc_op, &add);
-    *byteswritten += (add - strlen(CYAN) - strlen(RESET));
-
-    printf(", opd1 = "LIGHT_YELLOW_BG""BLACK"%s0x%llx"RESET""RESET_BG"%n",
-            (long)locdesc->locdesc_opd1<0?"-":"",
-            (long)locdesc->locdesc_opd1<0?(long)-locdesc->locdesc_opd1:locdesc->locdesc_opd1, &add);
-    *byteswritten += (add - strlen(LIGHT_YELLOW_BG) - strlen(BLACK) - strlen(RESET) - strlen(RESET_BG));
-
-    printf(", opd2 = "LIGHT_YELLOW_BG""BLACK"%s0x%llx"RESET""RESET_BG"%n",
-            (long)locdesc->locdesc_opd2<0?"-":"",
-            (long)locdesc->locdesc_opd2<0?(long)-locdesc->locdesc_opd2:locdesc->locdesc_opd2, &add);
-    *byteswritten += (add - strlen(LIGHT_YELLOW_BG) - strlen(BLACK) - strlen(RESET) - strlen(RESET_BG));
-
-    printf(", opd3 = "LIGHT_YELLOW_BG""BLACK"%s0x%llx"RESET""RESET_BG"%n",
-            (long)locdesc->locdesc_opd3<0?"-":"",
-            (long)locdesc->locdesc_opd3<0?(long)-locdesc->locdesc_opd3:locdesc->locdesc_opd3, &add);
-    *byteswritten += (add - strlen(LIGHT_YELLOW_BG) - strlen(BLACK) - strlen(RESET) - strlen(RESET_BG));
-
-    printf(", offsetforbranch = "LIGHT_GREEN_BG""BLACK"%s0x%llx"RESET""RESET_BG"%n",
-            (long)locdesc->locdesc_offsetforbranch<0?"-":"",
-            (long)locdesc->locdesc_offsetforbranch<0?(long)-locdesc->locdesc_offsetforbranch:locdesc->locdesc_offsetforbranch, &add);
-    *byteswritten += (add - strlen(LIGHT_YELLOW_BG) - strlen(BLACK) - strlen(RESET) - strlen(RESET_BG));
+    return 0;
 }
 
 void *get_next_location_description(struct dwarf_locdesc *ld){

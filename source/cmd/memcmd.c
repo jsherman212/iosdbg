@@ -209,7 +209,7 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
 
     while(start <= end && read_ret == KERN_SUCCESS){
         uint8_t read_buffer[target_len];
-        read_ret = read_memory_at_location((void *)start, read_buffer, target_len);
+        read_ret = read_memory_at_location(start, read_buffer, target_len);
 
         if(memcmp(read_buffer, target, target_len) == 0){
             results_cnt++;

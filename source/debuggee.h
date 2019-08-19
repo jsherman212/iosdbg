@@ -11,6 +11,9 @@ struct debuggee {
     /* PID of the debuggee. */
     pid_t pid;
 
+    /* dwarfinfo pointer for the debuggee. */
+    void *dwarfinfo;
+
     /* If this variable is non-zero, tracing is not supported. */
     int tracing_disabled;
 

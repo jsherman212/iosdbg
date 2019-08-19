@@ -51,7 +51,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
     while(current_location < (location + (num_instrs * data_size))){
         uint8_t data[data_size];
 
-        kern_return_t err = read_memory_at_location((void *)current_location,
+        kern_return_t err = read_memory_at_location(current_location,
                 data, data_size);
 
         if(err){
@@ -122,7 +122,7 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount,
 
         uint8_t membuffer[row_size];
 
-        kern_return_t ret = read_memory_at_location((void *)current_location,
+        kern_return_t ret = read_memory_at_location(current_location,
                 membuffer, row_size);
 
         if(ret)
@@ -164,7 +164,7 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount,
     return KERN_SUCCESS;
 }
 
-kern_return_t read_memory_at_location(void *location, void *buffer,
+kern_return_t read_memory_at_location(unsigned long location, void *buffer,
         vm_size_t length){
     return vm_read_overwrite(debuggee->task,
             (vm_address_t)location,

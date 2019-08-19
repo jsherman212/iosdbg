@@ -234,9 +234,8 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     };
 
     struct frame_t *current_frame = malloc(sizeof(struct frame_t));
-    kern_return_t err = read_memory_at_location(
-            (void *)focused->thread_state.__fp, current_frame, 
-            sizeof(struct frame_t));
+    kern_return_t err = read_memory_at_location( focused->thread_state.__fp,
+            current_frame, sizeof(struct frame_t));
     
     if(err){
         concat(error, "backtrace failed: %s", mach_error_string(err));
@@ -249,7 +248,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
         concat(outbuffer, "%4sframe #%d: 0x%16.16lx\n", "", frame_counter,
                 current_frame->frame);
 
-        read_memory_at_location((void *)current_frame->next, 
+        read_memory_at_location((uintptr_t)current_frame->next, 
                 (void *)current_frame, sizeof(struct frame_t)); 
         frame_counter++;
     }

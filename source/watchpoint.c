@@ -81,7 +81,7 @@ static struct watchpoint *watchpoint_new(unsigned long location,
     wp->data = malloc(wp->data_len);
 
     kern_return_t result =
-        read_memory_at_location((void *)wp->user_location, wp->data,
+        read_memory_at_location(wp->user_location, wp->data,
             wp->data_len);
 
     if(result){

@@ -159,7 +159,7 @@ struct breakpoint *breakpoint_new(unsigned long location, int temporary,
 
     if(!dup){
         kern_return_t err =
-            read_memory_at_location((void *)bp->location, &orig_instruction, sz);
+            read_memory_at_location(bp->location, &orig_instruction, sz);
 
         if(err){
             if(error){

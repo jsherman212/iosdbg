@@ -128,7 +128,7 @@ static void handle_hit_watchpoint(struct machthread *t, int *should_auto_resume,
     void *prev_data = malloc(sz);
     memcpy(prev_data, hit->data, sz);
 
-    read_memory_at_location((void *)hit->user_location, hit->data, sz);
+    read_memory_at_location(hit->user_location, hit->data, sz);
     
     concat(desc, ": '%s': watchpoint %d at %#lx hit %d time(s).\n\n",
             t->tname, hit->id, hit->user_location, hit->hit_count);

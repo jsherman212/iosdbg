@@ -27,7 +27,7 @@ unsigned long find_slide(void){
         if(err)
             return 0;
 
-        err = read_memory_at_location((void *)addr, &mh, sizeof(mh));
+        err = read_memory_at_location(addr, &mh, sizeof(mh));
 
         if(err == KERN_SUCCESS){
             if(mh.magic == MH_MAGIC_64 && mh.filetype == MH_EXECUTE){
@@ -46,11 +46,11 @@ unsigned long find_slide(void){
 
     addr += sizeof(mh);
 
-    err = read_memory_at_location((void *)addr, cmd, sizeof(struct load_command));
+    err = read_memory_at_location(addr, cmd, sizeof(struct load_command));
 
     for(int i=0; i<mh.ncmds; i++){
         struct segment_command_64 *segcmd = malloc(sizeof(struct segment_command_64));
-        read_memory_at_location((void *)addr, segcmd, sizeof(struct segment_command_64));
+        read_memory_at_location(addr, segcmd, sizeof(struct segment_command_64));
 
         if(segcmd && segcmd->cmd == LC_SEGMENT_64){
             if(strcmp(segcmd->segname, "__TEXT") == 0){

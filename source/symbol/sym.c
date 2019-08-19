@@ -99,17 +99,9 @@ int sym_create_variable_or_parameter_die_desc(void *die, void *cu,
     return die_create_variable_or_parameter_desc(die, root_die, desc, e, 0);
 }
 
-void sym_display_die(void *die){
-    die_display(die);
-}
-
-void sym_display_die_tree_starting_from(void *die){
-    die_display_die_tree_starting_from(die);
-}
-
 int sym_evaluate_die_location_description(void *die, uint64_t pc,
-        uint64_t *resultout, sym_error_t *e){
-    return die_evaluate_location_description(die, pc, resultout, e);
+        char **outbuffer, int64_t *resultout, sym_error_t *e){
+    return die_evaluate_location_description(die, pc, outbuffer, resultout, e);
 }
 
 int sym_find_die_by_name(void *cu, const char *name, void **dieout,
@@ -140,7 +132,8 @@ int sym_find_function_die_by_pc(void *cu, uint64_t pc, void **dieout,
     return ret;
 }
 
-int sym_get_die_array_elem_size(void *die, uint64_t *elemszout, sym_error_t *e){
+int sym_get_die_array_elem_size(void *die, uint64_t *elemszout,
+        sym_error_t *e){
     return die_get_array_elem_size(die, elemszout, e);
 }
 
@@ -279,7 +272,7 @@ int sym_get_pc_values_from_lineno(dwarfinfo_t *dwarfinfo, void *cu,
 
 int sym_lineno_to_pc_a(dwarfinfo_t *dwarfinfo,
         char *srcfilename, uint64_t *srcfilelineno, uint64_t *pcout,
-        sym_error_t *e){
+        char **outbuffer, sym_error_t *e){
     void *cu = NULL;
     if(cu_find_compilation_unit_by_name(dwarfinfo, &cu, srcfilename, e))
         return 1;
@@ -289,17 +282,18 @@ int sym_lineno_to_pc_a(dwarfinfo_t *dwarfinfo,
         return 1;
 
     return die_lineno_to_pc(dwarfinfo->di_dbg, root_die, srcfilelineno,
-            pcout, e);
+            pcout, outbuffer, e);
 }
 
 int sym_lineno_to_pc_b(dwarfinfo_t *dwarfinfo, void *cu,
-        uint64_t *srcfilelineno, uint64_t *pcout, sym_error_t *e){
+        uint64_t *srcfilelineno, uint64_t *pcout, char **outbuffer,
+        sym_error_t *e){
     void *root_die = NULL;
     if(cu_get_root_die(cu, &root_die, e))
         return 1;
 
     return die_lineno_to_pc(dwarfinfo->di_dbg, root_die, srcfilelineno,
-            pcout, e);
+            pcout, outbuffer, e);
 }
 
 int sym_pc_to_lineno_a(dwarfinfo_t *dwarfinfo, uint64_t pc,

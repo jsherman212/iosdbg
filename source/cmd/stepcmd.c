@@ -31,8 +31,8 @@ static void prepare(int kind){
         if(b)
             opcode = b->old_instruction;
         else{
-            read_memory_at_location((void *)focused->thread_state.__pc,
-                    &opcode, sizeof(opcode));
+            read_memory_at_location(focused->thread_state.__pc, &opcode,
+                    sizeof(opcode));
         }
 
         struct branchinfo info = {0};

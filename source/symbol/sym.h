@@ -46,16 +46,11 @@ int sym_create_variable_or_parameter_die_desc(
         char **     /* return description */,
         void *      /* return error ptr */);
 
-void sym_display_die(
-        void *      /* die */);
-
-void sym_display_die_tree_starting_from(
-        void *      /* die */);
-
 int sym_evaluate_die_location_description(
         void *      /* die */,
         uint64_t    /* pc */,
-        uint64_t *  /* return result */,
+        char **     /* outbuffer */,
+        int64_t *   /* return result */,
         void *      /* return error ptr */);
 
 int sym_find_die_by_name(
@@ -213,6 +208,7 @@ int sym_lineno_to_pc_a(
         char *      /* srcfilename */,
         uint64_t *  /* return srcfilelineno actually used */,
         uint64_t *  /* return PC */,
+        char **     /* outbuffer */,
         void *      /* return error ptr */);
 
 /* CU DIE given as second argument */
@@ -221,6 +217,7 @@ int sym_lineno_to_pc_b(
         void *      /* compilation unit */,
         uint64_t *  /* return srcfilelineno actually used */,
         uint64_t *  /* return PC */,
+        char **     /* outbuffer */,
         void *      /* return error ptr */);
 
 /* Finds CU DIE based on srcfilename */

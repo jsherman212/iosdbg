@@ -1052,199 +1052,6 @@ static Dwarf_Half die_has_children(Dwarf_Die die){
     return result;
 }
 
-static void describe_die_internal(die_t *die, int level){
-    if(!die)
-        return;
-
-    const char *varnamecolorstr = LIGHT_MAGENTA;
-
-    if(die->die_haschildren)
-        varnamecolorstr = GREEN;
-
-    printf("%#llx: <%d> <%s>: '%s%s%s', is parent: %d",
-            die->die_dieoffset, level, die->die_tagname,
-            varnamecolorstr, die->die_diename, RESET,
-            die->die_haschildren);
-
-    printf(", type DIE at %s%#llx%s",
-            die->die_datatypedieoffset!=0?CYAN:"",
-            die->die_datatypedieoffset, die->die_datatypedieoffset!=0?RESET:"");
-
-    if(die->die_datatypedieoffset!=0){
-        printf(", type = '"LIGHT_BLUE"%s"RESET"'", die->die_datatypename);
-
-        if(die->die_tag != DW_TAG_subprogram){
-            printf(", sizeof(%s%s%s) = "LIGHT_YELLOW"%#llx"RESET"",
-                    varnamecolorstr, die->die_diename, RESET, die->die_databytessize);
-        }
-    }
-
-    if(die->die_tag == DW_TAG_formal_parameter ||
-            die->die_tag == DW_TAG_variable ||
-            die->die_tag == DW_TAG_member){
-        const char *e = NULL;
-        dwarf_get_ATE_name(die->die_datatypeencoding, &e);
-
-        if(e)
-            printf(", data type encoding = "WHITE_BG""BLACK"%s"RESET""RESET_BG, e);
-        int c = die->die_datatypeclass;
-        int ptr = c & DTC_POINTER;
-        int s = c & DTC_STRUCT;
-        int u = c & DTC_UNION;
-        int a = c & DTC_ARRAY;
-        int none = c & DTC_OTHER;//(!ptr && !soru && !a);
-        printf(", %s%sARRAY%s%s %s%sPOINTER%s%s %s%sSTRUCT%s%s %s%sUNION%s%s %s%sOTHER%s%s",
-                a?GREEN_BG:RED_BG, a?BLACK:"", RESET, RESET_BG,
-                ptr?GREEN_BG:RED_BG, ptr?BLACK:"", RESET, RESET_BG,
-                s?GREEN_BG:RED_BG, s?BLACK:"", RESET, RESET_BG,
-                u?GREEN_BG:RED_BG, u?BLACK:"", RESET, RESET_BG,
-                none?GREEN_BG:RED_BG, none?BLACK:"", RESET, RESET_BG);
-    }
-   
-    if(die->die_datatypedietag == DW_TAG_array_type){
-        printf(", membsz = %s%s%#llx%s%s",
-                MAGENTA_BG, LIGHT_YELLOW, die->die_arrmembsz,
-                RESET, RESET_BG);
-    }
-
-    if(die->die_tag == DW_TAG_compile_unit ||
-            die->die_tag == DW_TAG_subprogram ||
-            die->die_tag == DW_TAG_lexical_block){
-        printf(", low PC = "YELLOW"%#llx"RESET", high PC = "YELLOW"%#llx"RESET"",
-                die->die_low_pc, die->die_high_pc);
-    }
-
-    if(die->die_tag == DW_TAG_member){
-        char *parentname = die->die_parent->die_diename;
-        printf(", offset = "GREEN"%s"RESET"+"LIGHT_GREEN"%#llx"RESET"",
-                parentname, die->die_memb_off);
-    }
-
-    if(level == 0){
-        printf(", srclinescnt = "MAGENTA"%lld"RESET"", die->die_srclinescnt);
-    }
-
-    if(die->die_loclistcnt > 0){ 
-        printf(", loclistcnt = %s%#llx%s",
-                BLUE_BG, die->die_loclistcnt, RESET_BG);
-    }
-
-    if(die->die_inlinedsub)
-        printf(", abstract origin %s%#llx%s", MAGENTA, die->die_aboriginoff, RESET);
-
-    if(!die->die_haschildren && die->die_parent){
-        printf(", parent DIE name '"GREEN"%s"RESET"'\n", die->die_parent->die_diename);
-    }
-    else if(!die->die_haschildren && !die->die_parent){
-        printf(", "RED"no parent???"RESET"\n");
-    }
-    else if(die->die_haschildren && die->die_parent){
-        printf(", parent DIE name '"GREEN"%s"RESET"'\n", die->die_parent->die_diename);
-    }
-    else{
-        putchar('\n');
-    }
-
-    int putseparator = 0;
-    int maxbyteswritten = 0;
-
-    // XXX for testing read_buffer location lists
-    uint64_t pc = 0x1000191d4;
-
-    if(die->die_loclistcnt > 0){
-        putseparator = 1;
-
-        for(Dwarf_Unsigned i=0; i<die->die_loclistcnt; i++){
-            void *current = die->die_loclists[i];
-
-            int idx2 = 0;
-            while(current){
-                int byteswritten = 0;
-                describe_location_description(current, 0, i, idx2, level, &byteswritten);
-
-                if(byteswritten > maxbyteswritten)
-                    maxbyteswritten = byteswritten;
-
-                putchar('\n');
-                idx2++;
-                current = get_next_location_description(current);
-            }
-
-            current = die->die_loclists[i];
-
-            if(current){
-                write_tabs(level);
-                write_spaces(level+4);
-                printf(RED"| "RESET);
-
-                write_spaces(4);
-                printf(GREEN"|"RESET"\n");
-
-                write_tabs(level);
-                write_spaces(level+4);
-                printf(RED"| "RESET);
-                write_spaces(4);
-
-                printf(GREEN"---"RESET);
-
-                uint64_t result = 0;
-
-                char *loc_desc_decoded =
-                    decode_location_description(die->die_framebaselocdesc,
-                            current, pc, &result);
-                printf(" Decoded: '%s'\n", loc_desc_decoded);
-                free(loc_desc_decoded);
-            }
-        }
-    }
-
-    if(die->die_framebaselocdesc){
-        int byteswritten = 0;
-        describe_location_description(die->die_framebaselocdesc, 1, 0, 0, level, &byteswritten);
-        if(byteswritten > maxbyteswritten)
-            maxbyteswritten = byteswritten;
-
-        putchar('\n');
-
-        write_tabs(level);
-        write_spaces(level+4);
-        printf(RED"| "RESET);
-
-        write_spaces(4);
-        printf(GREEN"|"RESET"\n");
-
-        write_tabs(level);
-        write_spaces(level+4);
-        printf(RED"| "RESET);
-        write_spaces(4);
-
-        printf(GREEN"---"RESET);
-
-        uint64_t result = 0;
-        char *loc_desc_decoded =
-            decode_location_description(die->die_framebaselocdesc,
-                    die->die_framebaselocdesc, pc, &result);
-        printf(" Decoded: '%s'\n", loc_desc_decoded);
-        free(loc_desc_decoded);
-
-        putseparator = 1;
-    }
-
-    if(putseparator){
-        write_tabs(level);
-        write_spaces(level+4);
-
-        printf(LIGHT_YELLOW"* "LIGHT_RED);
-
-        /* Account for the printf call above */
-        maxbyteswritten -= 2;
-        for(int i=0; i<maxbyteswritten; i++)
-            putchar('-');
-
-        printf(RESET"\n");
-    }
-}
-
 static die_t *create_new_die(dwarfinfo_t *dwarfinfo, void *compile_unit,
         Dwarf_Die based_on, int level){
     if(!based_on)
@@ -1454,34 +1261,6 @@ static void construct_die_tree(dwarfinfo_t *dwarfinfo, void *compile_unit,
     }
 }
 
-static void display_die_tree_internal(die_t *die, int level){
-    if(!die)
-        return;
-
-    write_tabs(level);
-    describe_die_internal(die, level);
-
-    if(!die->die_haschildren)
-        return;
-    else{
-        int idx = 0;
-        die_t *child = die->die_children[idx];
-
-        while(child){
-            display_die_tree_internal(child, level+1);
-            child = die->die_children[++idx];
-        }
-    }
-}
-
-void die_display(die_t *die){
-    describe_die_internal(die, 0);
-}
-
-void die_display_die_tree_starting_from(die_t *die){
-    display_die_tree_internal(die, 0);
-}
-
 void die_tree_free(Dwarf_Debug dbg, die_t *die, int level){
     if(!die)
         return;
@@ -1587,7 +1366,7 @@ int die_create_variable_or_parameter_desc(die_t *die, void *cu_root_die,
 }
 
 int die_evaluate_location_description(die_t *die, uint64_t pc,
-        uint64_t *resultout, sym_error_t *e){
+        char **outbuffer, int64_t *resultout, sym_error_t *e){
     if(!die){
         errset(e, GENERIC_ERROR_KIND, GE_INVALID_DIE);
         return 1;
@@ -1605,9 +1384,8 @@ int die_evaluate_location_description(die_t *die, uint64_t pc,
         if(current && !is_locdesc_in_bounds(current, pc))
             continue;
 
-        char *s = decode_location_description(die->die_framebaselocdesc,
-                current, pc, resultout);
-        free(s);
+        decode_location_description(die->die_framebaselocdesc,
+                current, pc, outbuffer, resultout);
         break;
     }
 
@@ -2103,7 +1881,7 @@ int die_is_member_of_struct_or_union(die_t *die, int *retval,
 }
 
 int die_lineno_to_pc(Dwarf_Debug dbg, die_t *die, uint64_t *lineno,
-        uint64_t *pcout, sym_error_t *e){
+        uint64_t *pcout, char **outbuffer, sym_error_t *e){
     if(!die){
         errset(e, GENERIC_ERROR_KIND, GE_INVALID_DIE);
         return 1;
@@ -2145,8 +1923,7 @@ int die_lineno_to_pc(Dwarf_Debug dbg, die_t *die, uint64_t *lineno,
         }
     }
 
-    // XXX concat(outbuffer, ...
-    printf("Line %lld doesn't exist, auto-adjusted to line %lld\n",
+    concat(outbuffer, "Line %lld doesn't exist, auto-adjusted to line %lld\n",
             linepassedin, closestlineno);
 
     *pcout = get_dwarf_line_virtual_addr(dbg, closestline);
@@ -2262,9 +2039,6 @@ int initialize_and_build_die_tree_from_root_die(dwarfinfo_t *dwarfinfo,
     memset(CUR_PARENTS, 0, sizeof(CUR_PARENTS));
     CUR_PARENTS[0] = root_die;
 
-     //if(strcmp(root_die->die_diename, "source/cmd/memcmd.c") != 0)
-       //return 0;
-
     construct_die_tree(dwarfinfo, compile_unit, root_die, 0);
 
     ret = dwarf_srclines(root_die->die_dwarfdie, &root_die->die_srclines,
@@ -2275,12 +2049,6 @@ int initialize_and_build_die_tree_from_root_die(dwarfinfo_t *dwarfinfo,
         errset(e, SYM_ERROR_KIND, SYM_DWARF_SRCLINES_FAILED);
         return 1;
     }
-
-    printf("output of display_die_tree:\n\n");
-
-    display_die_tree_internal(root_die, 0);
-
-    printf("end display_die_tree output\n\n");
 
     *_root_die = root_die;
 

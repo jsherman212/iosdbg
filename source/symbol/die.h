@@ -3,9 +3,8 @@
 
 int die_create_variable_or_parameter_desc(void *, void *, char **,
         void *, int);
-void die_display(void *);
-void die_display_die_tree_starting_from(void *);
-int die_evaluate_location_description(void *, uint64_t, uint64_t *, void *);
+int die_evaluate_location_description(void *, uint64_t, char **, int64_t *,
+        void *);
 int die_get_array_elem_size(void *, uint64_t *, void *);
 int die_get_array_size_determined_at_runtime(void *, int *, void *);
 int die_get_data_type_str(void *, char **, void *);
@@ -25,7 +24,7 @@ int die_get_pc_values_from_lineno(void *, void *, uint64_t, uint64_t **,
 int die_get_variables(void *, void *, void ***, int *, void *);
 int die_get_variable_size(void *, uint64_t *, void *);
 int die_is_member_of_struct_or_union(void *, int *, void *);
-int die_lineno_to_pc(void *, void *, uint64_t *, uint64_t *, void *);
+int die_lineno_to_pc(void *, void *, uint64_t *, uint64_t *, char **, void *);
 int die_pc_to_lineno(void *, void *, uint64_t, uint64_t *, void *);
 int die_represents_array(void *, int *, void *);
 int die_represents_pointer(void *, int *, void *);
