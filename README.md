@@ -17,10 +17,12 @@ A work in progress, native debugger built for *jailbroken* 64 bit iOS devices ca
 
 #### If you're jailbroken with Unc0ver on iOS 12, you'll need to set CS_GET_TASK_ALLOW (0x4) in the csflags of the program you want to debug, as of March 6th, 2019. Otherwise, use beta 50 or later and turn on "Enable get-task-allow" and "Set CS_DEBUGGED" and jailbreak. If you're using Chimera, you should be fine.
 
+Optional: if you're compiling on device, add MCApollo's repo in Cydia: https://mcapollo.github.io/Public/
+
 #### Theos
 Skip this step if it's already installed on your computer. I have been using the iOS 9.3 SDK and (currently) the iOS 11.2 SDK to build this project. If you use a different SDK, edit the Makefile. I have been developing this debugger on an iPhone 6s on iOS 9.3.3, an iPhone 5s on iOS 10.3.2, an iPhone SE on iOS 12.0, and an iPhone X on iOS 12.1.
 
-Theos is a cross-platform suite of tools capable of building iOS software without Xcode. Refer to this link for instructions on installing Theos on your computer: https://github.com/theos/theos/wiki/Installation-macOS
+Theos is a cross-platform suite of tools capable of building iOS software without Xcode. Refer to this link for instructions on installing Theos on your computer: https://github.com/theos/theos/wiki/Installation-macOS or your iDevice: 
 
 #### GNU readline 8.0
 This project uses GNU readline 8.0. Compile it for `aarch64-apple-darwin`:
@@ -34,7 +36,7 @@ export CFLAGS='-arch arm64 -isysroot /path/to/your/iPhoneOS/sdk'
 make
 ```
 
-After you build it, you'll find `libreadline.a` and `libhistory.a` inside of the current working directory. Upload those files to your device at `/path/to/theos/sdks/your/sdk/usr/lib/`. Rename them to `libreadline8.0.a` and `libhistory8.0.a` and fakesign them with `ldid`.
+After you build it, you'll find `libreadline.a` and `libhistory.a` inside of the current working directory. Upload those files to your device at `/path/to/theos/sdks/your/sdk/usr/lib/`. Rename them to `libreadline8.0.a` and `libhistory8.0.a` and fakesign them with `ldid`. If you're compiling on a computer, copy those files to `/path/to/theos/sdks/your/sdk/usr/lib/`. Create a new directory called `readline` at `/path/to/theos/sdks/your/sdk/usr/include` and copy (or upload to your device) `chardefs.h`, `history.h`, `keymaps.h`, `readline.h`, `rlstdc.h`, `rltypedefs.h`, and `tilde.h` there.
 
 #### pcre2
 This project uses pcre2 10.32. Compile it for `aarch64-apple-darwin`:
@@ -45,10 +47,30 @@ export CFLAGS='-arch arm64 -isysroot /path/to/your/iPhoneOS/sdk'
 make
 ```
 
-You'll find `libpcre2-8.0.dylib` in `.libs`. Upload those files to your device at `/path/to/theos/sdks/your/sdk/usr/lib/` and fakesign it.
+You'll find `libpcre2-8.0.dylib` in `.libs`. Upload it to your device at `/path/to/theos/sdks/your/sdk/usr/lib/` and fakesign it. If you're compiling on a computer, copy it to `/path/to/theos/sdks/your/sdk/usr/lib/`. Copy (or upload to your device) `pcre2.h` to `/path/to/theos/sdks/your/sdk/usr/include`.
+
+Alternatively, if you're compiling on device, you can add MCApollo's repo in Cydia and install `pcre2`. Make sure the version is 10.32.
 
 #### armadillo
-I took a break from this project to write the disassembler for it. Head over to https://github.com/jsherman212/armadillo and follow the instructions for compiling it **on your jailbroken device**. Copy `source/armadillo.h` to `/path/to/your/iPhoneOS/sdk/usr/include`.
+I took a break from this project to write the disassembler for it. Head over to https://github.com/jsherman212/armadillo and follow the instructions for compiling it **on your jailbroken device**. Copy `source/armadillo.h` to `/path/to/theos/sdks/your/sdk/usr/include`.
+
+### Source Level Debugging
+I took another break from this project to write a wrapper around libdwarf to support C language source level debugging. You can find the implementation in `source/symbol`. This requires libdwarf and its dependencies. To build each for `aarch64-apple-darwin` on your computer:
+
+#### libdwarf-20190529
+```
+curl -O https://www.prevanders.net/libdwarf-20190529.tar.gz
+tar xvzf libdwarf-20190529.tar.gz
+cd libdwarf-20190529
+export CFLAGS='-arch arm64 -isysroot /path/to/your/iPhoneOS/sdk'
+./configure --host=aarch64-apple-darwin --disable-libelf
+cp libdwarf/libdwarf.h.in libdwarf/libdwarf.h
+```
+
+You'll find `libdwarf.a` at `libdwarf/.libs`. Rename it to `libdwarf-20190529.a` and upload it to your device at `/path/to/theos/sdks/your/sdk/usr/lib/` and fakesign it. If you're compiling on a computer, copy it to `/path/to/theos/sdks/your/sdk/usr/lib/`. Copy (or upload to your device) `libdwarf.h` and `dwarf.h` to `/path/to/theos/sdks/your/sdk/usr/include/`.
+
+#### zlib
+The SDKs from Theos should already ship with zlib.
 
 #### iosdbg
 You're set to compile iosdbg. On your computer:

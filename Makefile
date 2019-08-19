@@ -2,18 +2,20 @@ SDK=~/theos/sdks/iPhoneOS11.2.sdk
 IPHONESDK=/var/theos/sdks/iPhoneOS10.3.sdk
 CC=clang
 CFLAGS=-g -arch arm64 -isysroot $(SDK) -pedantic
-LDFLAGS=-arch arm64 -lreadline8.0 -lhistory8.0 -lncurses -larmadillo -lpcre2-8.0 -miphoneos-version-min=12.2 -fsanitize=address -rpath $(IPHONESDK)/usr/lib
+LDFLAGS=-arch arm64 -lreadline8.0 -lhistory8.0 -lncurses -larmadillo -lpcre2-8.0 -ldwarf-20190529 -lz -miphoneos-version-min=12.2 -fsanitize=address -rpath $(IPHONESDK)/usr/lib
 SRC=source
 CMDSRC=$(SRC)/cmd
 DISASSRC=$(SRC)/disas
+SYMSRC=$(SRC)/symbol
 
 ROOT_OBJECT_FILES = $(patsubst $(SRC)/%.c,$(SRC)/%.o,$(wildcard $(SRC)/*.c))
 CMD_OBJECT_FILES = $(patsubst $(CMDSRC)/%.c,$(CMDSRC)/%.o,$(wildcard $(CMDSRC)/*.c))
 DISAS_OBJECT_FILES = $(patsubst $(DISASSRC)/%.c,$(DISASSRC)/%.o,$(wildcard $(DISASSRC)/*.c))
+SYM_OBJECT_FILES = $(patsubst $(SYMSRC)/%.c,$(SYMSRC)/%.o,$(wildcard $(SYMSRC)/*.c))
 CRITICAL_HEADER_FILES = $(SRC)/debuggee.h $(CMDSRC)/cmd.h
 
-iosdbg : $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES) $(DISAS_OBJECT_FILES)
-	$(CC) -isysroot $(SDK) $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES) $(DISAS_OBJECT_FILES) $(LDFLAGS) -o iosdbg
+iosdbg : $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES) $(DISAS_OBJECT_FILES) $(SYM_OBJECT_FILES)
+	$(CC) -isysroot $(SDK) $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES) $(DISAS_OBJECT_FILES) $(SYM_OBJECT_FILES) $(LDFLAGS) -o iosdbg
 	dsymutil ./iosdbg
 
 $(SRC)/%.o : $(SRC)/%.c $(SRC)/%.h $(CRITICAL_HEADER_FILES)
@@ -29,6 +31,12 @@ DISAS_SOURCES = $(wildcard $(SRC)/cmd/*.c)
 
 disas : $(DISAS_SOURCES)
 	cd $(DISASSRC)
+	$(MAKE) -B
+
+SYM_SOURCES = $(wildcard $(SRC)/symbol/*.c)
+
+symbol : $(SYMBOL_OBJECT_FILES)
+	cd $(SYMSRC)
 	$(MAKE) -B
 
 BUILD-DEVICE=pink
@@ -47,4 +55,4 @@ deploy:
 
 .PHONY: clean
 clean:
-	rm iosdbg $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES)
+	rm iosdbg $(ROOT_OBJECT_FILES) $(CMD_OBJECT_FILES) $(SYM_OBJECT_FILES)
