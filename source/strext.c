@@ -10,28 +10,36 @@ static int _concat_internal(char **dst, const char *src, va_list args){
     if(!src || !dst)
         return 0;
 
-    if(!(*dst)){
-        *dst = malloc(1);
-        *(*dst) = '\0';
+    size_t srclen = strlen(src), dstlen = 0;
+
+    if(*dst)
+        dstlen = strlen(*dst);
+
+    /* Back up args before it gets used. Client calls va_end
+     * on the parameter themselves when needed.
+     */
+    va_list args1;
+    va_copy(args1, args);
+
+    size_t total = srclen + dstlen + vsnprintf(NULL, 0, src, args) + 1;
+
+    char *dst1 = malloc(total);
+
+    if(!(*dst))
+        *dst1 = '\0';
+    else{
+        strncpy(dst1, *dst, dstlen + 1);
+        free(*dst);
+        *dst = NULL;
     }
-    
-    size_t srclen = strlen(src);
-    size_t dstlen = strlen(*dst);
 
-    const size_t needed = vsnprintf(NULL, 0, src, args);
-    char *dst1 = malloc(srclen + dstlen + needed);
-    strncpy(dst1, *dst, dstlen + 1);
+    int w = vsnprintf(dst1 + dstlen, total, src, args1);
 
-    int w = vsnprintf(&dst1[dstlen], srclen + dstlen + needed, src, args);
+    va_end(args1);
 
-    char *dst2 = realloc(dst1, strlen(dst1) + 1);
-    *dst = dst2;
+    *dst = realloc(dst1, strlen(dst1) + 1);
 
     return w;
-}
-
-int vconcat(char **dst, const char *src, va_list args){
-    return _concat_internal(dst, src, args);
 }
 
 int concat(char **dst, const char *src, ...){
@@ -43,6 +51,10 @@ int concat(char **dst, const char *src, ...){
     va_end(args);
 
     return w;
+}
+
+int vconcat(char **dst, const char *src, va_list args){
+    return _concat_internal(dst, src, args);
 }
 
 /* Insert `str` at `where` in `target`. */

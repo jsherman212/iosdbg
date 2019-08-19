@@ -286,6 +286,7 @@ void argfree(struct cmd_args_t *args){
         }
 
         linkedlist_delete(args->argmaps, map);
+        free(map);
     }
 
     linkedlist_free(args->argmaps);

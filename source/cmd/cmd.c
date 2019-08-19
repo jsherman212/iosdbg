@@ -490,10 +490,12 @@ void load_history(void){
 
     concat(&HISTORY_PATH, "%s/.iosdbg/iosdbg-history", home);
 
-    if(read_history(HISTORY_PATH)){
+    if(access(HISTORY_PATH, F_OK)){
         int fd = creat(HISTORY_PATH, 0644);
         close(fd);
     }
+
+    read_history(HISTORY_PATH);
 
     FILE *histfp = fopen(HISTORY_PATH, "r");
 

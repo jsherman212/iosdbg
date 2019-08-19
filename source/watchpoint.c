@@ -238,6 +238,7 @@ static void wp_delete_internal(struct watchpoint *wp){
     linkedlist_delete(debuggee->watchpoints, wp);
     debuggee->num_watchpoints--;
 
+    free(wp);
     wp = NULL;
 }
 

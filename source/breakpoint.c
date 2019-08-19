@@ -279,6 +279,7 @@ static void bp_delete_internal(struct breakpoint *bp){
     linkedlist_delete(debuggee->breakpoints, bp);    
     debuggee->num_breakpoints--;
 
+    free(bp);
     bp = NULL;
 }
 

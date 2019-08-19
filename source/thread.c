@@ -442,6 +442,7 @@ void update_thread_list(thread_act_port_array_t threads,
         infos[infos_cnt - 1] = info;
 
         linkedlist_delete(debuggee->threads, t);
+        free(t);
     }
 
     resetmtid();

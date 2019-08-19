@@ -314,8 +314,11 @@ void del_convvar(char *name, char **error){
 
     convvar_free(target);
 
-    if(vars)
+    if(vars){
         linkedlist_delete(vars, target);
+        free(target);
+        target = NULL;
+    }
 }
 
 void p_convvar(char *name, char **outbuffer){
