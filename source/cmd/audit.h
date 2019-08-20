@@ -20,6 +20,7 @@ void audit_register_write(struct cmd_args_t *, const char **, char **);
 void audit_signal_deliver(struct cmd_args_t *, const char **, char **);
 void audit_step_inst_into(struct cmd_args_t *, const char **, char **);
 void audit_step_inst_over(struct cmd_args_t *, const char **, char **);
+void audit_symbols_add(struct cmd_args_t *, const char **, char **);
 void audit_thread_list(struct cmd_args_t *, const char **, char **);
 void audit_thread_select(struct cmd_args_t *, const char **, char **);
 void audit_watchpoint_set(struct cmd_args_t *, const char **, char **);

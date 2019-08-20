@@ -20,6 +20,8 @@
 #include "trace.h"
 #include "watchpoint.h"
 
+#include "symbol/sym.h"
+
 void ops_printsiginfo(char **outbuffer){
     concat(outbuffer, "%-11s %-5s %-5s %-6s\n", "NAME", "PASS", "STOP", "NOTIFY");
     concat(outbuffer, "=========== ===== ===== ======\n");
@@ -147,6 +149,10 @@ void ops_detach(int from_death, char **outbuffer){
     void_convvar("$_");
     void_convvar("$__");
     void_convvar("$ASLR");
+
+    sym_end(debuggee->dwarfinfo);
+    free(debuggee->dwarfinfo);
+    debuggee->dwarfinfo = NULL;
 
     ops_resume();
 }

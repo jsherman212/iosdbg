@@ -1,6 +1,8 @@
 #ifndef _SYM_H_
 #define _SYM_H_
 
+#include <stdint.h>
+
 #include "symerr.h"
 
 /*

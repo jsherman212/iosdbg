@@ -1,6 +1,12 @@
+8-20-19
+- new command: 'symbols add'
+- started symbolicated backtraces
+
 8-19-19
 - fixed concat logic/memory leaks
 - fixed linkedlist logic/memory leaks
+- put in libsym
+- implemented the platform specific parts of the DWARF expression evaluator
 
 7-10-19
 - fix up cmdfunc_kill logic so we don't get stuck in wait4

@@ -20,6 +20,7 @@
 #include "regcmd.h"
 #include "sigcmd.h"
 #include "stepcmd.h"
+#include "symcmd.h"
 #include "tcmd.h"
 #include "wpcmd.h"
 #include "varcmd.h"
@@ -391,6 +392,22 @@ void initialize_commands(void){
     }
 
     ADD_CMD(step);
+
+    struct dbg_cmd_t *symbols = create_parent_cmd("symbols",
+            NULL, SYMBOLS_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
+            NO_ARGUMENT_REGEX, _NUM_GROUPS(0), _UNK_ARGS(0),
+            NO_GROUPS, _NUM_SUBCMDS(1), NULL, NULL);
+    {
+        struct dbg_cmd_t *add = create_child_cmd("add",
+                NULL, SYMBOLS_ADD_COMMAND_DOCUMENTATION, _AT_LEVEL(1),
+                SYMBOLS_ADD_COMMAND_REGEX, _NUM_GROUPS(1), _UNK_ARGS(0),
+                SYMBOLS_ADD_COMMAND_REGEX_GROUPS, cmdfunc_symbols_add,
+                audit_symbols_add);
+
+        symbols->subcmds[0] = add;
+    }
+
+    ADD_CMD(symbols);
 
     struct dbg_cmd_t *thread = create_parent_cmd("thread",
             NULL, THREAD_COMMAND_DOCUMENTATION, _AT_LEVEL(0),

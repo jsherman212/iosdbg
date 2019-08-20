@@ -30,6 +30,8 @@
 #include "../trace.h"
 #include "../watchpoint.h"
 
+#include "../symbol/sym.h"
+
 int KEEP_CHECKING_FOR_PROCESS;
 
 static pid_t parse_pid(char *pidstr, char **error){
@@ -224,8 +226,40 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
     get_thread_state(focused);
 
-    concat(outbuffer, "  * frame #0: 0x%16.16llx\n", focused->thread_state.__pc);
-    concat(outbuffer, "    frame #1: 0x%16.16llx\n", focused->thread_state.__lr);
+    char *pc_srcfile = NULL, *pc_srcfunc = NULL, *lr_srcfile = NULL,
+         *lr_srcfunc = NULL;
+    uint64_t pc_srcfileline = 0, lr_srcfileline = 0;
+    void *root_die = NULL;
+
+    int has_debug_info = debuggee->has_debug_info();
+
+    concat(outbuffer, "  * frame #0: 0x%16.16llx", focused->thread_state.__pc);
+
+    if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
+                focused->thread_state.__pc - debuggee->aslr_slide,
+                &pc_srcfile, &pc_srcfunc, &pc_srcfileline, &root_die, NULL)){
+        concat(outbuffer, "\n");
+    }
+    else{
+        concat(outbuffer, " %s at %s:%lld\n", pc_srcfunc, pc_srcfile,
+                pc_srcfileline);
+        free(pc_srcfile);
+        free(pc_srcfunc);
+    }
+
+    concat(outbuffer, "    frame #1: 0x%16.16llx", focused->thread_state.__lr);
+
+    if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
+                focused->thread_state.__lr - debuggee->aslr_slide,
+                &lr_srcfile, &lr_srcfunc, &lr_srcfileline, &root_die, NULL)){
+        concat(outbuffer, "\n");
+    }
+    else{
+        concat(outbuffer, " %s at %s:%lld\n", lr_srcfunc, lr_srcfile,
+                lr_srcfileline);
+        free(lr_srcfile);
+        free(lr_srcfunc);
+    }
 
     /* There's a linked list of frame pointers. */
     struct frame_t {
@@ -234,7 +268,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     };
 
     struct frame_t *current_frame = malloc(sizeof(struct frame_t));
-    kern_return_t err = read_memory_at_location( focused->thread_state.__fp,
+    kern_return_t err = read_memory_at_location(focused->thread_state.__fp,
             current_frame, sizeof(struct frame_t));
     
     if(err){
@@ -245,8 +279,23 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     int frame_counter = 2;
 
     while(current_frame->next){
-        concat(outbuffer, "%4sframe #%d: 0x%16.16lx\n", "", frame_counter,
+        concat(outbuffer, "%4sframe #%d: 0x%16.16lx", "", frame_counter,
                 current_frame->frame);
+        
+        char *srcfile = NULL, *srcfunc = NULL;
+        uint64_t srcfileline = 0;
+
+        if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
+                    current_frame->frame - debuggee->aslr_slide,
+                    &srcfile, &srcfunc, &srcfileline, &root_die, NULL)){
+            concat(outbuffer, "\n");
+        }
+        else{
+            concat(outbuffer, " %s at %s:%lld\n", srcfunc, srcfile,
+                    srcfileline);
+            free(srcfile);
+            free(srcfunc);
+        }
 
         read_memory_at_location((uintptr_t)current_frame->next, 
                 (void *)current_frame, sizeof(struct frame_t)); 

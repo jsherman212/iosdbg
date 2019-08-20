@@ -166,6 +166,10 @@ kern_return_t get_threads(thread_act_port_array_t *threads,
     return err;
 }
 
+int has_debug_info(void){
+    return debuggee->dwarfinfo != NULL;
+}
+
 int suspended(void){
     struct task_basic_info_64 info = {0};
     mach_msg_type_number_t count = TASK_BASIC_INFO_64_COUNT;

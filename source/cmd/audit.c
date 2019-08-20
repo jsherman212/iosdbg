@@ -264,6 +264,18 @@ void audit_step_inst_over(struct cmd_args_t *args, const char **groupnames,
         concat(error, "no debuggee");
 }
 
+void audit_symbols_add(struct cmd_args_t *args, const char **groupnames,
+        char **error){
+    char *filepath = argcopy(args, groupnames[0]);
+    
+    if(!filepath){
+        concat(error, "need path to DWARF file");
+        return;
+    }
+
+    free(filepath);
+}
+
 void audit_thread_list(struct cmd_args_t *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1){

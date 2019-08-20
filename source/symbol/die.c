@@ -1545,15 +1545,8 @@ int die_get_line_info_from_pc(Dwarf_Debug dbg, die_t *die, uint64_t pc,
         if(pc == get_dwarf_line_virtual_addr(dbg, line)){
             char *fname = get_dwarf_line_filename(dbg, line);
 
-            /* We are only interested in the file name */
             if(fname){
-                char *slash = strrchr(fname, '/');
-
-                if(slash)
-                    *srcfilename = strdup(slash + 1);
-                else
-                    *srcfilename = strdup(fname);
-
+                *srcfilename = strdup(fname);
                 dwarf_dealloc(dbg, fname, DW_DLA_STRING);
             }
 

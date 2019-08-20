@@ -50,6 +50,7 @@ static void install_handlers(void){
     debuggee->deallocate_ports = &deallocate_ports;
     debuggee->suspend = &suspend;
     debuggee->get_threads = &get_threads;
+    debuggee->has_debug_info = &has_debug_info;
     debuggee->suspended = &suspended;
 }
 
@@ -264,12 +265,12 @@ static int setup_tracing(void){
 }
 
 static void setup_initial_debuggee(void){
-    debuggee = malloc(sizeof(struct debuggee));
+    debuggee = calloc(1, sizeof(struct debuggee));
 
     /* If we aren't attached to anything, debuggee's pid is -1. */
     debuggee->pid = -1;
 
-    debuggee->num_breakpoints = 0;
+    /*debuggee->num_breakpoints = 0;
     debuggee->num_watchpoints = 0;
     debuggee->thread_count = 0;
 
@@ -279,7 +280,7 @@ static void setup_initial_debuggee(void){
     debuggee->breakpoints = NULL;
     debuggee->watchpoints = NULL;
     debuggee->threads = NULL;
-
+    */
     /* Figure out how many hardware breakpoints/watchpoints are supported. */
     size_t len = sizeof(int);
 

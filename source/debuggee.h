@@ -84,6 +84,9 @@ struct debuggee {
     kern_return_t (*get_threads)(thread_act_port_array_t *,
             mach_msg_type_number_t *, char **);
 
+    /* The function pointer to figure out if source level debugging is available. */
+    int (*has_debug_info)(void);
+
     /* The function pointer to figure out if the debuggee is currently suspended. */
     int (*suspended)(void);
 };
