@@ -2,6 +2,7 @@
 #define _DEBUGGEE_H_
 
 #include <mach/mach.h>
+#include <mach-o/dyld_images.h>
 #include <sys/types.h>
 
 struct debuggee {
@@ -13,6 +14,15 @@ struct debuggee {
 
     /* dwarfinfo pointer for the debuggee. */
     void *dwarfinfo;
+
+    /* dyld_all_image_infos pointer for the debuggee. */
+    struct dyld_all_image_infos dyld_all_image_infos;
+
+    /* Array of images dyld loaded into the debuggee. */
+    struct dyld_image_info *dyld_info_array;
+
+    /* Array of imageFilePath strings, corresponds with dyld_all_image_infos. */
+    char **dyld_image_info_filePaths;
 
     /* If this variable is non-zero, tracing is not supported. */
     int tracing_disabled;

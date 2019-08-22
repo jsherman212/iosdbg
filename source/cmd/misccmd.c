@@ -1,3 +1,4 @@
+#include <dlfcn.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdio.h>
@@ -31,6 +32,7 @@
 #include "../watchpoint.h"
 
 #include "../symbol/sym.h"
+#include "../symbol/scache.h"
 
 int KEEP_CHECKING_FOR_PROCESS;
 
@@ -217,6 +219,12 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     free(aslr);
     free(target);
 
+    if(initialize_debuggee_dyld_all_image_infos()){
+        concat(outbuffer, "warning: could not properly examine"
+                " the debuggee's dyld_all_image_infos, symbolication"
+                " will be minimal.\n");
+    }
+
     return CMD_SUCCESS;
 }
 
@@ -288,6 +296,35 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
         if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
                     current_frame->frame - debuggee->aslr_slide,
                     &srcfile, &srcfunc, &srcfileline, &root_die, NULL)){
+           /* Dl_info info = {0};
+            unsigned long addr = current_frame->frame;
+            */
+            /* Walk up by four bytes until we hit a function definition.
+             * A naive approach, but should work just as well as actually
+             * looking at the shared cache?
+             */
+           /* int dladdrret = dladdr((void *)addr, &info);
+            while(dladdrret == 0){
+                printf("%s: checking out address %#lx\n", __func__, addr);
+                //unsigned long a = (unsigned long)addr;
+                //a -= 4;
+                //addr = (void *)a;
+                addr -= 4;
+                usleep(5 * 100);
+                dladdrret = dladdr((void *)addr, &info);
+            }*/
+
+            //int dladdrret = dladdr(0x0000000208ed1420/*(void *)current_frame->frame*/, &info);
+            //printf("%s: dladdr returns %d\n", __func__, dladdrret);
+
+            // XXX success, according to the man page
+            //if(dladdrret != 0){
+               /* printf("%s: dli_fname '%s' dli_fbase %p dli_sname '%s' dli_saddr %p\n",
+                        __func__, info.dli_fname, info.dli_fbase, info.dli_sname,
+                        info.dli_saddr);
+*/
+            //}
+
             concat(outbuffer, "\n");
         }
         else{
@@ -296,6 +333,8 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
             free(srcfile);
             free(srcfunc);
         }
+
+
 
         read_memory_at_location((uintptr_t)current_frame->next, 
                 (void *)current_frame, sizeof(struct frame_t)); 
