@@ -31,8 +31,8 @@
 #include "../trace.h"
 #include "../watchpoint.h"
 
+#include "../symbol/image.h"
 #include "../symbol/sym.h"
-#include "../symbol/scache.h"
 
 int KEEP_CHECKING_FOR_PROCESS;
 
