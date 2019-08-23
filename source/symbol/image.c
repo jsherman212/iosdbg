@@ -8,13 +8,27 @@
 #include "../debuggee.h"
 #include "../memutils.h"
 
+struct dsc_hdr {
+    char magic[16];
+    uint32_t mappingOffset;
+    uint32_t mappingCount;
+};
+
+struct dsc_mapping_info {
+    uint64_t address;
+	uint64_t size;
+	uint64_t fileOffset;
+	uint32_t maxProt;
+	uint32_t initProt;
+};
+
 int initialize_debuggee_dyld_all_image_infos(void){
     struct task_dyld_info dyld_info = {0};
     mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
 
     kern_return_t kret = task_info(debuggee->task, TASK_DYLD_INFO,
                 (task_info_t)&dyld_info, &count);
-    printf("%s: task_info says %s\n", __func__, mach_error_string(kret));
+    //printf("%s: task_info says %s\n", __func__, mach_error_string(kret));
 
     if(kret){
         return 1;
@@ -26,7 +40,7 @@ int initialize_debuggee_dyld_all_image_infos(void){
                 &debuggee->dyld_all_image_infos,
                 sizeof(struct dyld_all_image_infos));
 
-    printf("%s: 1st read_memory_at_location says %s\n", __func__, mach_error_string(kret));
+    //printf("%s: 1st read_memory_at_location says %s\n", __func__, mach_error_string(kret));
 
 
     if(kret){
@@ -45,7 +59,6 @@ int initialize_debuggee_dyld_all_image_infos(void){
     printf("%s: shared cache base address: %#lx\n",
             __func__, debuggee->dyld_all_image_infos.sharedCacheBaseAddress);
 
-
     count = sizeof(struct dyld_image_info) *
         debuggee->dyld_all_image_infos.infoArrayCount;
 
@@ -55,10 +68,66 @@ int initialize_debuggee_dyld_all_image_infos(void){
             (unsigned long)debuggee->dyld_all_image_infos.infoArray,
             debuggee->dyld_info_array, count);
 
-    printf("%s: 2nd read_memory_at_location says %s\n", __func__, mach_error_string(kret));
+    //printf("%s: 2nd read_memory_at_location says %s\n", __func__, mach_error_string(kret));
 
     if(kret){
         return 1;
+    }
+
+    /* Read the mappings of dyld shared cache to differentiate
+     * between cache images and other images.
+     */
+    struct dsc_hdr dsc_hdr = {0};
+    unsigned long dsc_base_addr = debuggee->dyld_all_image_infos.sharedCacheBaseAddress;
+
+    kret = read_memory_at_location(dsc_base_addr, &dsc_hdr, sizeof(dsc_hdr));
+
+    printf("%s: dsc hdr read_memory_at_location says %s\n", __func__, mach_error_string(kret));
+
+    if(kret)
+        return 1;
+
+    printf("%s: dsc_hdr.mappingOffset %#x dsc_hdr.mappingCount %#x\n",
+            __func__, dsc_hdr.mappingOffset, dsc_hdr.mappingCount);
+
+    struct {
+        unsigned long file_start;
+        unsigned long file_end;
+        unsigned long vm_start;
+        unsigned long vm_end;
+    } dsc_mappings[dsc_hdr.mappingCount];
+    
+    memset(dsc_mappings, 0, dsc_hdr.mappingCount);
+
+    struct dsc_mapping_info *mapping_infos =
+        malloc(sizeof(struct dsc_mapping_info) * dsc_hdr.mappingCount);
+
+    kret = read_memory_at_location(dsc_base_addr + dsc_hdr.mappingOffset,
+            mapping_infos, sizeof(struct dsc_mapping_info) * dsc_hdr.mappingCount);
+
+    printf("%s: dsc mappings read_memory_at_location says %s\n", __func__, mach_error_string(kret));
+
+    if(kret)
+        return 1;
+
+    for(int i=0; i<dsc_hdr.mappingCount; i++){
+        struct dsc_mapping_info info = mapping_infos[i];
+
+    //    printf("%s: mapping info %d: address %#llx size %#llx fileOffset %#llx\n",
+      //          __func__, i, info.address, info.size, info.fileOffset);
+
+        dsc_mappings[i].file_start = info.fileOffset;
+        dsc_mappings[i].file_end = dsc_mappings[i].file_start + info.size;
+        dsc_mappings[i].vm_start = info.address;
+        dsc_mappings[i].vm_end = dsc_mappings[i].vm_start + info.size;
+    }
+
+    free(mappings_infos);
+
+    for(int i=0; i<dsc_hdr.mappingCount; i++){
+        printf("%s: mapping %d: file: %#lx-%#lx vm: %#lx-%#lx\n",
+                __func__, i, dsc_mappings[i].file_start, dsc_mappings[i].file_end,
+                dsc_mappings[i].vm_start, dsc_mappings[i].vm_end);
     }
 
 
@@ -126,8 +195,8 @@ int initialize_debuggee_dyld_all_image_infos(void){
         for(int j=0; j<image_hdr.ncmds; j++){
             //printf("%s: cmd %p\n", __func__, cmd);
             if(cmd->cmd == LC_SYMTAB){
-                printf("******%s: got LC_SYMTAB cmd for image %d\n",
-                        __func__, i);
+                //printf("******%s: got LC_SYMTAB cmd for image %d\n",
+                  //      __func__, i);
 
                 symtab_cmd = malloc(cmd->cmdsize);
                 memcpy(symtab_cmd, cmd, cmd->cmdsize);
@@ -142,12 +211,12 @@ int initialize_debuggee_dyld_all_image_infos(void){
                 struct segment_command_64 *s = (struct segment_command_64 *)cmd;
 
                 if(strcmp(s->segname, "__LINKEDIT") == 0){
-                    printf("%s: got linkedit\n", __func__);
+                    //printf("%s: got linkedit\n", __func__);
                     linkedit_segcmd = malloc(cmd->cmdsize);
                     memcpy(linkedit_segcmd, cmd, cmd->cmdsize);
                 }
                 else if(strcmp(s->segname, "__TEXT") == 0){
-                    printf("%s: got text\n", __func__);
+                    //printf("%s: got text\n", __func__);
                     text_segcmd = malloc(cmd->cmdsize);
                     memcpy(text_segcmd, cmd, cmd->cmdsize);
                 }
@@ -194,11 +263,10 @@ int initialize_debuggee_dyld_all_image_infos(void){
 
         unsigned long nlistaddr = symtab_addr;
         kret = read_memory_at_location(nlistaddr, ns, nscount);
-        printf("%s: image %d: fifth kret says %s\n", __func__,
-                i, mach_error_string(kret));
+        //printf("%s: image %d: fifth kret says %s\n", __func__,
+          //      i, mach_error_string(kret));
 
         if(kret == KERN_SUCCESS && debuggee->dyld_image_info_filePaths[i] && strcmp(debuggee->dyld_image_info_filePaths[i], "/usr/lib/system/libsystem_c.dylib") == 0){
-          
         //if(kret == KERN_SUCCESS){
             for(int j=0; j<symtab_cmd->nsyms; j++){
                 char str[PATH_MAX] = {0};
@@ -216,10 +284,10 @@ int initialize_debuggee_dyld_all_image_infos(void){
                     if(ns[j].n_value != 0)
                         slid_addr = ns[j].n_value + (load_addr - text_segcmd->vmaddr);
 
-                    printf("%s: nlist %d: strx '%s' n_type %#x n_sect %#x n_desc %#x"
-                            " location %#lx\n",
-                            __func__, j, str, ns[j].n_type, ns[j].n_sect,
-                            ns[j].n_desc, slid_addr);
+                    //printf("%s: nlist %d: strx '%s' n_type %#x n_sect %#x n_desc %#x"
+                      //      " symbol location %#lx\n",
+                        //    __func__, j, str, ns[j].n_type, ns[j].n_sect,
+                          //  ns[j].n_desc, slid_addr);
                 }
                 /*
                 else{
