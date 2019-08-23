@@ -457,8 +457,14 @@ int breakpoint_disabled(int bp_id){
 }
 
 void breakpoint_delete_all(void){
-    BP_LOCKED_FOREACH(current){
+    //BP_LOCKED_FOREACH(current){
+    pthread_mutex_lock(&BREAKPOINT_LOCK);
+    struct node_t *current = debuggee->breakpoints->front;
+    while(current){
         struct breakpoint *bp = current->data;
+
+        current = current->next;
+
         bp_delete_internal(bp);
     }
     BP_END_LOCKED_FOREACH;

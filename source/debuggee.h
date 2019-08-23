@@ -21,6 +21,9 @@ struct debuggee {
     /* Array of images dyld loaded into the debuggee. */
     struct dyld_image_info *dyld_info_array;
 
+    /* List of symbols for the debuggee. */
+    struct linkedlist *symbols;
+
     /* Array of imageFilePath strings, corresponds with dyld_all_image_infos. */
     char **dyld_image_info_filePaths;
 

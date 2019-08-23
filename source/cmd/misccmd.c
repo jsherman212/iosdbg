@@ -31,6 +31,7 @@
 #include "../trace.h"
 #include "../watchpoint.h"
 
+#include "../symbol/dbgsymbol.h"
 #include "../symbol/image.h"
 #include "../symbol/sym.h"
 
@@ -234,15 +235,34 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
     get_thread_state(focused);
 
+    
     char *pc_srcfile = NULL, *pc_srcfunc = NULL, *lr_srcfile = NULL,
          *lr_srcfunc = NULL;
     uint64_t pc_srcfileline = 0, lr_srcfileline = 0;
     void *root_die = NULL;
 
     int has_debug_info = debuggee->has_debug_info();
-
+        
     concat(outbuffer, "  * frame #0: 0x%16.16llx", focused->thread_state.__pc);
 
+    char *imgname = NULL, *symname = NULL;
+    unsigned int symdist = 0;
+
+    if(get_symbol_info_from_address(debuggee->symbols,
+            focused->thread_state.__pc, &imgname, &symname, &symdist)){
+        concat(outbuffer, " <unknown>\n");
+    }
+    else{
+        concat(outbuffer, " %s`%s + %#lx\n", imgname, symname, symdist);
+    }
+
+    free(imgname);
+    free(symname);
+    imgname = NULL;
+    symname = NULL;
+    symdist = 0;
+
+    /*
     if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
                 focused->thread_state.__pc - debuggee->aslr_slide,
                 &pc_srcfile, &pc_srcfunc, &pc_srcfileline, &root_die, NULL)){
@@ -254,9 +274,24 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
         free(pc_srcfile);
         free(pc_srcfunc);
     }
+    */
 
     concat(outbuffer, "    frame #1: 0x%16.16llx", focused->thread_state.__lr);
 
+    if(get_symbol_info_from_address(debuggee->symbols,
+            focused->thread_state.__lr, &imgname, &symname, &symdist)){
+        concat(outbuffer, " <unknown>\n");
+    }
+    else{
+        concat(outbuffer, " %s`%s + %#lx\n", imgname, symname, symdist);
+    }
+
+    free(imgname);
+    free(symname);
+    imgname = NULL;
+    symname = NULL;
+    symdist = 0;
+    /*
     if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
                 focused->thread_state.__lr - debuggee->aslr_slide,
                 &lr_srcfile, &lr_srcfunc, &lr_srcfileline, &root_die, NULL)){
@@ -267,9 +302,8 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
                 lr_srcfileline);
         free(lr_srcfile);
         free(lr_srcfunc);
-    }
+    }*/
 
-    /* There's a linked list of frame pointers. */
     struct frame_t {
         struct frame_t *next;
         unsigned long frame;
@@ -290,9 +324,29 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
         concat(outbuffer, "%4sframe #%d: 0x%16.16lx", "", frame_counter,
                 current_frame->frame);
         
+
+        char *imgname = NULL, *symname = NULL;
+        unsigned int symdist = 0;
+
+        if(get_symbol_info_from_address(debuggee->symbols,
+                    current_frame->frame, &imgname, &symname, &symdist)){
+            concat(outbuffer, " <unknown>\n");
+        }
+        else{
+            concat(outbuffer, " %s`%s + %#lx\n", imgname, symname, symdist);
+        }
+
+        free(imgname);
+        free(symname);
+
+        read_memory_at_location((uintptr_t)current_frame->next, 
+                (void *)current_frame, sizeof(struct frame_t)); 
+        frame_counter++;
+
+
+        continue;
         char *srcfile = NULL, *srcfunc = NULL;
         uint64_t srcfileline = 0;
-
         if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
                     current_frame->frame - debuggee->aslr_slide,
                     &srcfile, &srcfunc, &srcfileline, &root_die, NULL)){

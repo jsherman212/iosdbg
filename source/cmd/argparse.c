@@ -272,9 +272,9 @@ void argfree(struct cmd_args_t *args){
     if(!args)
         return;
 
-    for(struct node_t *current = args->argmaps->front;
-            current;
-            current = current->next){
+    struct node_t *current = args->argmaps->front;
+
+    while(current){
         struct argmap *map = current->data;
         free(map->arggroup);
 
@@ -284,6 +284,8 @@ void argfree(struct cmd_args_t *args){
             free(arg);
             arg = dequeue(map->argvals);
         }
+
+        current = current->next;
 
         linkedlist_delete(args->argmaps, map);
         free(map);

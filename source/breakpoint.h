@@ -4,9 +4,11 @@
 #include <pthread/pthread.h>
 
 extern pthread_mutex_t BREAKPOINT_LOCK;
+//pthread_mutex_lock(&BREAKPOINT_LOCK); 
+//struct node_t *current = debuggee->breakpoints->front; 
+//while(current){ 
 
 #define BP_LOCKED_FOREACH(var) \
-    pthread_mutex_lock(&BREAKPOINT_LOCK); \
     for(struct node_t *var = debuggee->breakpoints->front; \
             var; \
             var = var->next) \
