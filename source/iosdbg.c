@@ -451,9 +451,11 @@ int main(int argc, char **argv, const char **envp){
 
     sigaction(SIGINT, &sa, NULL);
     
+    // XXX don't have this on by default - wastes a lot of memory if unused
+    /*
     if(setup_tracing())
         io_append("Could not setup for future tracing. Tracing is disabled.\n");
-
+    */
     io_append("For help, type \"help\".\n"
             "Command name abbreviations are allowed if unambiguous.\n"
             "Type '!' before your input to execute a shell command.\n");

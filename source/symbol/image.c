@@ -6,111 +6,138 @@
 #include <stdlib.h>
 
 #include "dbgsymbol.h"
+#include "scache.h"
 
 #include "../debuggee.h"
 #include "../linkedlist.h"
 #include "../memutils.h"
 
-struct dsc_hdr {
-    char magic[16];
-    uint32_t mappingOffset;
-    uint32_t mappingCount;
-};
-
-struct dsc_mapping_info {
-    uint64_t address;
-    uint64_t size;
-    uint64_t fileOffset;
-    uint32_t maxProt;
-    uint32_t initProt;
-};
-
-struct my_dsc_mapping {
-    unsigned long file_start;
-    unsigned long file_end;
-    unsigned long vm_start;
-    unsigned long vm_end;
-};
-
-static int is_dsc_image(unsigned long vmoffset, unsigned long fileoffset,
-        struct my_dsc_mapping *mappings, unsigned int mcnt,
-        struct my_dsc_mapping *which){
-    /* We have to check this first because one of the dsc file mappings
-     * starts at 0.
-     */
-    int dscimage = 0;
-
-    for(int i=0; i<mcnt; i++){
-        struct my_dsc_mapping dscmap = mappings[i];
-        //printf("%s: dscmap vm: %#lx-%#lx, file: %#lx-%#lx\n",
-        //      __func__, dscmap.vm_start, dscmap.vm_end, dscmap.file_start,
-        //    dscmap.file_end);
-
-        if(vmoffset >= dscmap.vm_start && vmoffset < dscmap.vm_end){
-            dscimage = 1;
-            break;
-        }
-    }
-
-    if(!dscimage)
-        return 0;
-
-    // printf("%s: fileoffset %#lx\n", __func__, fileoffset);
-    for(int i=0; i<mcnt; i++){
-        struct my_dsc_mapping dscmap = mappings[i];
-        // printf("%s: dscmap vm: %#lx-%#lx, file: %#lx-%#lx\n",
-        //       __func__, dscmap.vm_start, dscmap.vm_end, dscmap.file_start,
-        //     dscmap.file_end);
-
-        if(fileoffset >= dscmap.file_start && fileoffset < dscmap.file_end){
-            *which = dscmap;
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-static int cmp(const void *a, const void *b){
+static int symoffcmp(const void *a, const void *b){
     struct sym *sa = *(struct sym **)a;
     struct sym *sb = *(struct sym **)b;
+
     if(!sa || !sb)
         return 0;
-    /*
-    if(!sa)
-        return -1;
-    if(!sb)
-        return 1;
-    */
-    //printf("%s: sa addr start %#lx sb addr start %#lx\n", __func__,
-      //      sa.symaddr_start, sb.symaddr_end);
-
-    //long astart = (long)sa.symaddr_start;
-    //long bstart = (long)sb.symaddr_start;
-    long astart = (long)sa->symaddr_start;
-    long bstart = (long)sb->symaddr_start;
 
     return (long)sa->symaddr_start - (long)sb->symaddr_start;
- //   return astart - bstart;
-
-    /*
-    if(astart < bstart)
-        return -1;
-    else if(astart == bstart)
-        return 0;
-    else
-        return 1;
-*/
-    //return (long)sa.symaddr_start - (long)sb.symaddr_start;
 }
 
-static int cmp1(const void *a, const void *b){
-    return *(int *)a - *(int *)b;
+static void get_cmds(unsigned long image_load_addr,
+        struct symtab_command **symtab_cmd_out,
+        struct segment_command_64 **__text_seg_cmd_out){
+    struct mach_header_64 image_hdr = {0};
+    kern_return_t kret =
+        read_memory_at_location(image_load_addr, &image_hdr, sizeof(image_hdr));
+
+    if(kret)
+        return;
+
+    struct load_command *cmd = malloc(image_hdr.sizeofcmds);
+    struct load_command *cmdorig = cmd;
+
+    kret = read_memory_at_location(image_load_addr + sizeof(image_hdr),
+            cmd, image_hdr.sizeofcmds);
+
+    if(kret){
+        free(cmd);
+        return;
+    }
+
+    //printf("%s: 3rd read_memory_at_location says %s, cmd->cmd %#x"
+    //      " cmd->cmdsize %#x\n",
+    //    __func__, mach_error_string(kret), cmd->cmd, cmd->cmdsize);
+
+
+    struct symtab_command *symtab_cmd = NULL;
+    struct segment_command_64 *__text_seg_cmd = NULL;
+
+    for(int i=0; i<image_hdr.ncmds; i++){
+        if(cmd->cmd == LC_SYMTAB){
+            symtab_cmd = malloc(cmd->cmdsize);
+            memcpy(symtab_cmd, cmd, cmd->cmdsize);
+        }
+        else if(cmd->cmd == LC_SEGMENT_64){
+            struct segment_command_64 *s = (struct segment_command_64 *)cmd;
+
+            if(strcmp(s->segname, "__TEXT") == 0){
+                __text_seg_cmd = malloc(cmd->cmdsize);
+                memcpy(__text_seg_cmd, cmd, cmd->cmdsize);
+            }
+        }
+
+        if(symtab_cmd && __text_seg_cmd)
+            break;
+
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
+    }
+
+    free(cmdorig);
+
+    *symtab_cmd_out = symtab_cmd;
+    *__text_seg_cmd_out = __text_seg_cmd;
 }
+
+// XXX if image is a part of shared cache, call create_sym_entry_for_dsc_image
+// otherwise write the logic here
+static struct dbg_sym_entry *create_sym_entry_for_image(char *imagename,
+        unsigned long image_load_addr, struct my_dsc_mapping *mappings,
+        int mappingcnt, struct symtab_command **symtab_cmd_out,
+        struct segment_command_64 **__text_seg_cmd_out){
+    struct dbg_sym_entry *entry = NULL;
+
+    if(is_dsc_image(image_load_addr, mappings, mappingcnt)){
+        // XXX remember I wrote a function to get the dylib's name
+        // from the struct dylib load command
+        printf("%s: '%s' IS a shared cache image\n", __func__, imagename);
+    }
+    else{
+        printf("%s: '%s' IS NOT a shared cache image\n", __func__, imagename);
+
+        struct symtab_command *symtab_cmd = NULL;
+        struct segment_command_64 *__text_seg_cmd = NULL;
+
+        get_cmds(image_load_addr, &symtab_cmd, &__text_seg_cmd);
+
+        if(!symtab_cmd || !__text_seg_cmd)
+            return NULL;
+
+        printf("%s: got symtab & __text commands\n", __func__);
+        int from_dsc = 0;
+        //unsigned long symtab_vmaddr = symtab_cmd->symoff + image_load_addr,
+        //             strtab_vmaddr = symtab_cmd->stroff + image_load_addr;
+        unsigned long strtab_vmaddr = symtab_cmd->stroff + image_load_addr;
+        entry = create_sym_entry(imagename, strtab_vmaddr, symtab_cmd->stroff,
+                from_dsc);
+
+        *symtab_cmd_out = symtab_cmd;
+        *__text_seg_cmd_out = __text_seg_cmd;
+
+        //free(symtab_cmd);
+        //symtab_cmd = NULL;
+    }
+
+    return entry;
+}
+
+/*
+   static int stroffcmp(const void *a, const void *b){
+   struct sym *sa = *(struct sym **)a;
+   struct sym *sb = *(struct sym **)b;
+
+   if(!sa || !sb)
+   return 0;
+
+   return (long)(sa->strtab_fileaddr + sa->strtabidx) -
+   (long)(sb->strtab_fileaddr + sb->strtabidx);
+
+   }
+
+   static int cmp1(const void *a, const void *b){
+   return *(int *)a - *(int *)b;
+   }
+   */
 
 int initialize_debuggee_dyld_all_image_infos(void){
-
-
     struct task_dyld_info dyld_info = {0};
     mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
 
@@ -129,6 +156,10 @@ int initialize_debuggee_dyld_all_image_infos(void){
             sizeof(struct dyld_all_image_infos));
 
     //printf("%s: 1st read_memory_at_location says %s\n", __func__, mach_error_string(kret));
+
+    struct dyld_all_image_infos dyld_all_image_infos = debuggee->dyld_all_image_infos;
+    //int bkpthere1 = 0;
+
     if(kret)
         return 1;
 
@@ -144,6 +175,8 @@ int initialize_debuggee_dyld_all_image_infos(void){
     printf("%s: shared cache base address: %#lx\n",
             __func__, debuggee->dyld_all_image_infos.sharedCacheBaseAddress);
 
+    unsigned long scache_vmbase = debuggee->dyld_all_image_infos.sharedCacheBaseAddress;
+
     count = sizeof(struct dyld_image_info) *
         debuggee->dyld_all_image_infos.infoArrayCount;
 
@@ -158,51 +191,18 @@ int initialize_debuggee_dyld_all_image_infos(void){
     if(kret)
         return 1;
 
-    /* Read the mappings of dyld shared cache to differentiate
-     * between cache images and other images.
-     */
-    struct dsc_hdr dsc_hdr = {0};
-    unsigned long dsc_base_addr = debuggee->dyld_all_image_infos.sharedCacheBaseAddress;
-
-    kret = read_memory_at_location(dsc_base_addr, &dsc_hdr, sizeof(dsc_hdr));
-
-    //printf("%s: dsc hdr read_memory_at_location says %s\n", __func__, mach_error_string(kret));
-
-    if(kret)
-        return 1;
-
     //printf("%s: dsc_hdr.mappingOffset %#x dsc_hdr.mappingCount %#x\n",
     //      __func__, dsc_hdr.mappingOffset, dsc_hdr.mappingCount);
 
-    struct my_dsc_mapping dsc_mappings[dsc_hdr.mappingCount];
-    memset(dsc_mappings, 0, dsc_hdr.mappingCount);
+    /* Read the mappings of dyld shared cache to differentiate
+     * between cache images and other images.
+     */
+    int num_dsc_mappings = 0;
+    struct my_dsc_mapping *dsc_mappings = get_dsc_mappings(&num_dsc_mappings);
 
-    unsigned int msz = sizeof(struct dsc_mapping_info) * dsc_hdr.mappingCount;
+    printf("%s: dsc_mappings %p num %d\n", __func__, dsc_mappings, num_dsc_mappings);
 
-    struct dsc_mapping_info *mapping_infos = malloc(msz);
-    kret = read_memory_at_location(dsc_base_addr + dsc_hdr.mappingOffset,
-            mapping_infos, msz);
-
-    //  printf("%s: dsc mappings read_memory_at_location says %s\n", __func__, mach_error_string(kret));
-
-    if(kret)
-        return 1;
-
-    for(int i=0; i<dsc_hdr.mappingCount; i++){
-        struct dsc_mapping_info info = mapping_infos[i];
-
-        //    printf("%s: mapping info %d: address %#llx size %#llx fileOffset %#llx\n",
-        //          __func__, i, info.address, info.size, info.fileOffset);
-
-        dsc_mappings[i].file_start = info.fileOffset;
-        dsc_mappings[i].file_end = dsc_mappings[i].file_start + info.size;
-        dsc_mappings[i].vm_start = info.address + scache_slide;
-        dsc_mappings[i].vm_end = dsc_mappings[i].vm_start + info.size;
-    }
-
-    free(mapping_infos);
-
-    debuggee->dyld_image_info_filePaths = calloc(sizeof(char *), 
+    debuggee->dyld_image_info_filePaths = calloc(sizeof(char *),
             debuggee->dyld_all_image_infos.infoArrayCount);
 
     debuggee->symbols = linkedlist_new();
@@ -210,126 +210,55 @@ int initialize_debuggee_dyld_all_image_infos(void){
     for(int i=0; i<debuggee->dyld_all_image_infos.infoArrayCount; i++){
         int count = PATH_MAX;
         char fpath[count];
+
         kret = read_memory_at_location(
                 (unsigned long)debuggee->dyld_info_array[i].imageFilePath,
                 fpath, count);
 
+        if(kret != KERN_SUCCESS)
+            continue;
 
         //printf("%s: read_memory_at_location inside loop says %s\n",
         //      __func__, mach_error_string(kret));
 
-        if(kret == KERN_SUCCESS){
-            size_t len = strlen(fpath) + 1;
+        size_t len = strlen(fpath) + 1;
 
-            debuggee->dyld_image_info_filePaths[i] = malloc(len);
-            strncpy(debuggee->dyld_image_info_filePaths[i], fpath, len);
-        }
+        debuggee->dyld_image_info_filePaths[i] = malloc(len);
+        strncpy(debuggee->dyld_image_info_filePaths[i], fpath, len);
 
-        unsigned long load_addr =
+        //printf("%s: Image %d: '%s'\n", __func__, i, fpath);
+        unsigned long image_load_address =
             (unsigned long)debuggee->dyld_info_array[i].imageLoadAddress;
 
-        printf("%s: load addr for image %d: %#lx\n", __func__, i, load_addr);
-
-        struct mach_header_64 image_hdr = {0};
-        kret = read_memory_at_location(load_addr, &image_hdr, sizeof(image_hdr));
-
-        if(kret)
-            return 1;
-
-        struct load_command *cmd = malloc(image_hdr.sizeofcmds);
-        struct load_command *cmdorig = cmd;
-        struct segment_command_64 *text_segcmd = NULL;
-        //struct segment_command_64 *linkedit_segcmd = NULL, *text_segcmd = NULL;
-
-        kret = read_memory_at_location(load_addr + sizeof(image_hdr),
-                cmd, image_hdr.sizeofcmds);
-
-        if(kret){
-            free(cmd);
-            return 1;
-        }
-
-        //printf("%s: 3rd read_memory_at_location says %s, cmd->cmd %#x"
-        //      " cmd->cmdsize %#x\n",
-        //    __func__, mach_error_string(kret), cmd->cmd, cmd->cmdsize);
-
-
         struct symtab_command *symtab_cmd = NULL;
-        //struct dysymtab_command *dysymtab_cmd = NULL;
+        struct segment_command_64 *__text_seg_cmd = NULL;
+        struct dbg_sym_entry *entry = create_sym_entry_for_image(fpath,
+                image_load_address, dsc_mappings, num_dsc_mappings,
+                &symtab_cmd, &__text_seg_cmd);
 
-        // XXX left off on finding LC_SYMTAB
-        for(int j=0; j<image_hdr.ncmds; j++){
-            if(cmd->cmd == LC_SYMTAB){
-                symtab_cmd = malloc(cmd->cmdsize);
-                memcpy(symtab_cmd, cmd, cmd->cmdsize);
-            }
-            /* 
-            else if(cmd->cmd == LC_DYSYMTAB){
-                dysymtab_cmd = malloc(cmd->cmdsize);
-                memcpy(dysymtab_cmd, cmd, cmd->cmdsize);
-            }
-            */
-            else if(cmd->cmd == LC_SEGMENT_64){
-                struct segment_command_64 *s = (struct segment_command_64 *)cmd;
+        if(!entry)
+            continue;
 
-                /*
-                if(strcmp(s->segname, "__LINKEDIT") == 0){
-                    //printf("%s: got linkedit\n", __func__);
-                    linkedit_segcmd = malloc(cmd->cmdsize);
-                    memcpy(linkedit_segcmd, cmd, cmd->cmdsize);
-                }
-                */
-                if(strcmp(s->segname, "__TEXT") == 0){
-                    //printf("%s: got text\n", __func__);
-                    text_segcmd = malloc(cmd->cmdsize);
-                    memcpy(text_segcmd, cmd, cmd->cmdsize);
-                }
-            }
+        if(entry->from_dsc){
 
-            cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
-        }
-
-        free(cmdorig);
-
-        printf("%s: image %d '%s': symoff %#x nsyms %#x stroff %#x strsize %#x\n",
-                __func__, i, debuggee->dyld_image_info_filePaths[i],
-                symtab_cmd->symoff, symtab_cmd->nsyms,
-                symtab_cmd->stroff, symtab_cmd->strsize);
-
-        unsigned long symtab_addr = 0, strtab_addr = 0;
-
-        /* If symtab is a part of the shared cache, then stroff should be too */
-        struct my_dsc_mapping apartof = {0};
-        if(is_dsc_image(load_addr, symtab_cmd->symoff, dsc_mappings, dsc_hdr.mappingCount,
-                    &apartof)){
-            //printf("*******%s: dsc image!\n", __func__);
-            symtab_addr = apartof.vm_start +
-                (symtab_cmd->symoff - apartof.file_start);
-            strtab_addr = apartof.vm_start +
-                (symtab_cmd->stroff - apartof.file_start);
         }
         else{
-            symtab_addr = load_addr + symtab_cmd->symoff;
-            strtab_addr = load_addr + symtab_cmd->stroff;
-        }
+            unsigned long symtab_addr = symtab_cmd->symoff + image_load_address,
+                          strtab_addr = symtab_cmd->stroff + image_load_address;
+            printf("%s: symtab_addr %#lx strtab_addr %#lx\n",
+                    __func__, symtab_addr, strtab_addr);
 
-        free(symtab_cmd);
+            size_t nscount = sizeof(struct nlist_64) * symtab_cmd->nsyms;
+            struct nlist_64 *ns = malloc(nscount);
 
-        printf("%s: symtab_addr %#lx strtab_addr %#lx\n",
-                __func__, symtab_addr, strtab_addr);
+            kret = read_memory_at_location(symtab_addr, ns, nscount);
 
-        size_t nscount = sizeof(struct nlist_64) * symtab_cmd->nsyms;
-        struct nlist_64 *ns = malloc(nscount);
-
-        kret = read_memory_at_location(symtab_addr, ns, nscount);
-
-        if(kret == KERN_SUCCESS){
-            struct dbg_sym_entry *sym_entry = create_sym_entry(fpath,
-                    symtab_cmd->nsyms, strtab_addr);
+            if(kret != KERN_SUCCESS)
+                continue;
 
             for(int j=0; j<symtab_cmd->nsyms; j++){
                 char str[PATH_MAX] = {0};
-                kret = read_memory_at_location(strtab_addr + ns[j].n_un.n_strx,
+                kret = read_memory_at_location(entry->strtab_vmaddr + ns[j].n_un.n_strx,
                         str, PATH_MAX);
 
                 if(kret == KERN_SUCCESS){
@@ -337,106 +266,91 @@ int initialize_debuggee_dyld_all_image_infos(void){
                     unsigned long slid_addr_end = 0;
 
                     if(ns[j].n_value != 0 && strlen(str) > 0){
-                        slid_addr_start = ns[j].n_value + (load_addr - text_segcmd->vmaddr);
+                        slid_addr_start = ns[j].n_value +
+                            (image_load_address - __text_seg_cmd->vmaddr);
 
-                        add_symbol_to_entry(sym_entry, j, ns[j].n_un.n_strx,
-                                slid_addr_start, slid_addr_end);
-/*
-                        if(i==0){
-                            printf("%s: nlist %d: strx '%s' n_type %#x n_sect %#x n_desc %#x"
+
+
+                        // XXX is this correct?
+                        if((ns[j].n_type & N_TYPE) == N_SECT){
+                            add_symbol_to_entry(entry, j, ns[j].n_un.n_strx,
+                                    slid_addr_start, slid_addr_end);
+
+                            if(i==0){
+                            printf("%s: nlist %d: strx '%s' %#lx n_type %#x "
+                                    " n_sect %#x n_desc %#x"
                                     " symbol location %#lx\n",
-                                    __func__, j, str, ns[j].n_type, ns[j].n_sect,
-                                    ns[j].n_desc, slid_addr_start);
+                                    __func__, j, str, strtab_addr + ns[j].n_un.n_strx,
+                                    ns[j].n_type & N_TYPE,
+                                    ns[j].n_sect, ns[j].n_desc, slid_addr_start);
+                            }
                         }
-                        */
+
+
                     }
                 }
             }
 
-            qsort(sym_entry->syms, sym_entry->cursymarrsz, sizeof(struct sym *), cmp);
+            free(symtab_cmd);
+            free(ns);
 
-            for(int i=0; i<sym_entry->cursymarrsz; i++){
-    //            printf("%s: symbol %d: %p\n", __func__, i, sym_entry->syms[i]);
-      //          continue;
-                if(!sym_entry->syms[i])
-                    continue;
+            qsort(entry->syms, entry->cursymarrsz,
+                    sizeof(struct sym *), symoffcmp);
+
+            for(int i=0; i<entry->cursymarrsz; i++){
+                //            printf("%s: symbol %d: %p\n", __func__, i, entry->syms[i]);
 
                 // XXX 8-23-19
                 // XXX end of __TEXT segment is good for the end offset of the last
                 // symbol because this array will be sorted
                 // XXX figure out why duplicate symbols are added
-                if(i != sym_entry->cursymarrsz-1){
-                 /*   unsigned long next_sym_start = 0;
-                    int j = i+1;
-                    while(!sym_entry->syms[j++])
-                        continue;
-                        */
-                    //if(sym_entry->syms[j]){
-                        sym_entry->syms[i]->symaddr_end =
-                            sym_entry->syms[i+1]->symaddr_start;
+                if(i != entry->cursymarrsz-1){
+                    entry->syms[i]->symaddr_end =
+                        entry->syms[i+1]->symaddr_start;
 
-
-                        if(sym_entry->syms[i+1]->symaddr_start < load_addr)
-                            sym_entry->syms[i]->symaddr_end =
-                                (load_addr + (text_segcmd->fileoff + text_segcmd->filesize));
-
-                    //}
+                    
+                    /*
+                    if(entry->syms[i+1]->symaddr_start < image_load_address){
+                        entry->syms[i]->symaddr_end =
+                            (image_load_address +
+                             (__text_seg_cmd->fileoff + __text_seg_cmd->filesize));
+                    }*/
+                    
                 }
                 else{
-                    sym_entry->syms[i]->symaddr_end =
-                        (load_addr - (text_segcmd->vmaddr + text_segcmd->vmsize));
+                    /*
+                    entry->syms[i]->symaddr_end =
+                        (image_load_address -
+                         (__text_seg_cmd->vmaddr + __text_seg_cmd->vmsize));
+                         */
+                    entry->syms[i]->symaddr_end = image_load_address +
+                        __text_seg_cmd->vmsize;
                 }
-                
-                //if(strcmp(sym_entry->imagename, "/usr/lib/system/libdyld.dylib") == 0){
-                if(strcmp(sym_entry->imagename, "/private/var/mobile/testprogs/./params") == 0){
+                if(strcmp(entry->imagename, "/private/var/mobile/testprogs/./params") == 0){
                     int len = 64;
                     char symname[len];
                     memset(symname, 0, len);
                     kern_return_t kret =
-                        read_memory_at_location(sym_entry->strtab_addr +
-                                sym_entry->syms[i]->strtabidx, symname, len);
+                        read_memory_at_location(entry->strtab_vmaddr +
+                                entry->syms[i]->strtabidx, symname, len);
 
                     //printf("%s: read_memory_at_location says %s\n", __func__,
-                      //      mach_error_string(kret));
-                    //printf("%s: symbol %d: [%#lx-%#lx] '%s'\n",
-                      //      __func__, i, sym_entry->syms[i]->symaddr_start,
-                        //    sym_entry->syms[i]->symaddr_end, symname);
+                    //      mach_error_string(kret));
+                    printf("%s: symbol %d: [%#lx-%#lx] '%s'\n",
+                          __func__, i, entry->syms[i]->symaddr_start,
+                        entry->syms[i]->symaddr_end, symname);
                 }
-                
+
             }
 
-            /*
-            int l = 4;
-            int *a = malloc(sizeof(int)*l);
-            a[0] = 34;
-            a[1] = 3;
-            a[2] = 22;
-            a[3] = 9;
-
-            for(int i=0; i<l; i++)
-                printf("%d ", a[i]);
-            printf("\n");
-
-            qsort(a, l, sizeof(int), cmp1);
-
-            for(int i=0; i<l; i++)
-                printf("%d ", a[i]);
-            printf("\n");
-            */
-            linkedlist_add(debuggee->symbols, sym_entry);
+            free(__text_seg_cmd);
         }
 
 
-        free(ns);
-
-        //free(symtab_cmd);
-        //free(dysymtab_cmd);
-        //free(strs);
-        //free(linkedit_segcmd);
-        free(text_segcmd);
+        linkedlist_add(debuggee->symbols, entry);
     }
 
-    int bkpthere = 0;
+    free(dsc_mappings);
 
     return 0;
 }
