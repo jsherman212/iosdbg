@@ -1,3 +1,6 @@
+8-27-19
+- symbolize every available symbol (very slow, will need to improve)
+
 8-23-19
 - symbolic backtraces can symbolize images loaded into debuggee, not just
 the debuggee (not perfect yet)

@@ -35,6 +35,14 @@ struct dsc_hdr {
        uint64_t	localSymbolsOffset;		// file offset of where local symbols are stored
        uint64_t	localSymbolsSize;
        */
+    uint8_t		uuid[16];				// unique value for each shared cache file
+	uint64_t	cacheType;				// 0 for development, 1 for production
+	uint32_t	branchPoolsOffset;		// file offset to table of uint64_t pool addresses
+	uint32_t	branchPoolsCount;	    // number of uint64_t entries
+	uint64_t	accelerateInfoAddr;		// (unslid) address of optimization info
+	uint64_t	accelerateInfoSize;		// size of optimization info
+	uint64_t	imagesTextOffset;		// file offset to first dyld_cache_image_text_info
+	uint64_t	imagesTextCount;
 };
 
 struct dsc_local_syms_info {
@@ -44,6 +52,12 @@ struct dsc_local_syms_info {
     uint32_t stringsSize;
     uint32_t entriesOffset;
     uint32_t entriesCount;
+};
+
+struct dsc_local_syms_entry {
+	uint32_t	dylibOffset;		// offset in cache file of start of dylib
+	uint32_t	nlistStartIndex;	// start index of locals for this dylib
+	uint32_t	nlistCount;			// number of local symbols for this dylib
 };
 /*
    uint32_t	nlistOffset;		// offset into this chunk of nlist entries
@@ -62,9 +76,198 @@ struct dsc_mapping_info {
     uint32_t initProt;
 };
 
-struct dbg_sym_entry *create_sym_entry_for_dsc_image(char *imagename){
+static char *get_dylib_path(FILE *dscfile, unsigned int dylib_offset){
+    struct mach_header_64 dylib_hdr = {0};
 
-    return NULL;
+    fseek(dscfile, dylib_offset, SEEK_SET);
+    fread(&dylib_hdr, sizeof(char), sizeof(dylib_hdr), dscfile);
+
+    struct load_command *cmd = malloc(dylib_hdr.sizeofcmds);
+    struct load_command *cmdorig = cmd;
+    struct dylib_command *dylib_cmd = NULL;
+
+    fseek(dscfile, dylib_offset + sizeof(dylib_hdr), SEEK_SET);
+    fread(cmd, sizeof(char), dylib_hdr.sizeofcmds, dscfile);
+
+    for(int i=0; i<dylib_hdr.ncmds; i++){
+        if(cmd->cmd == LC_ID_DYLIB){
+            dylib_cmd = malloc(cmd->cmdsize);
+            memcpy(dylib_cmd, cmd, cmd->cmdsize);
+
+            break;
+        }
+
+        cmd = (struct load_command *)((uint8_t *)cmd + cmd->cmdsize);
+    }
+
+    char *name = NULL;
+    unsigned int nameoff = dylib_cmd->dylib.name.offset;
+
+    struct load_command *cmdend =
+        (struct load_command *)((uint8_t *)cmdorig + dylib_hdr.sizeofcmds);
+    unsigned long bytes_left = cmdend - cmd;
+
+    if(nameoff > bytes_left){
+        free(cmdorig);
+        free(dylib_cmd);
+        return strdup("Name out of bounds");
+    }
+
+    if(dylib_cmd)
+        name = strdup((const char *)((uint8_t *)cmd + nameoff));
+
+    free(cmdorig);
+    free(dylib_cmd);
+
+    return name;
+}
+
+struct dbg_sym_entry *create_sym_entry_for_dsc_image(char *imagename){
+    int from_dsc = 1;
+    struct dbg_sym_entry *entry = create_sym_entry(imagename, 0, 0, from_dsc);
+
+    return entry;
+}
+
+void get_dsc_image_symbols(char *imagename, unsigned long aslr_slide,
+        struct dbg_sym_entry **sym_entry, struct symtab_command *symtab_cmd){
+    // XXX no hardcode on master
+    char *dscpath = "/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64";
+
+    FILE *dscfile = fopen(dscpath, "rb");
+
+    if(!dscfile){
+        printf("%s: couldn't open dsc\n", __func__);
+        return;
+    }
+
+    struct dsc_hdr cache_hdr = {0};
+    fread(&cache_hdr, sizeof(char), sizeof(cache_hdr), dscfile);
+
+    printf("localSymbolsOffset %#llx\n", cache_hdr.localSymbolsOffset);
+
+    struct dsc_local_syms_info syminfos = {0};
+    fseek(dscfile, cache_hdr.localSymbolsOffset, SEEK_SET);
+    fread(&syminfos, sizeof(char), sizeof(syminfos), dscfile);
+
+    syminfos.nlistOffset += cache_hdr.localSymbolsOffset;
+    syminfos.stringsOffset += cache_hdr.localSymbolsOffset;
+    syminfos.entriesOffset += cache_hdr.localSymbolsOffset;
+
+    printf("nlistOffset %#x nlistCount %#x stringsOffset %#x stringsSize %#x "
+            "entriesOffset %#x entriesCount %#x\n",
+            syminfos.nlistOffset, syminfos.nlistCount, syminfos.stringsOffset,
+            syminfos.stringsSize, syminfos.entriesOffset,
+            syminfos.entriesCount);
+
+
+    // XXX this line should be somewhere else
+    (*sym_entry)->strtab_fileaddr = syminfos.stringsOffset;
+    
+    for(int i=0; i<syminfos.entriesCount; i++){
+        fseek(dscfile,
+                syminfos.entriesOffset +
+                (sizeof(struct dsc_local_syms_entry) * i), SEEK_SET);
+        struct dsc_local_syms_entry entry = {0};
+        fread(&entry, sizeof(char), sizeof(entry), dscfile);
+
+        uint64_t nlist_start = syminfos.nlistOffset +
+            (entry.nlistStartIndex * sizeof(struct nlist_64));
+
+        char *cur_dylib_path = get_dylib_path(dscfile, entry.dylibOffset);
+
+        /*
+        printf("Entry %d/%d: dylibOffset %#x nlistStartIndex %#llx"
+                " nlistCount %#x\n",
+                i+1, syminfos.entriesCount, entry.dylibOffset,
+                nlist_start, entry.nlistCount);
+        */
+        if(strcmp(imagename, cur_dylib_path) != 0){
+            free(cur_dylib_path);
+            continue;
+        }
+
+        /*
+           printf("Entry %d/%d: '%s': nlistStartIndex %#llx"
+           " nlistCount %#x\n",
+           i+1, syminfos.entriesCount, cur_dylib_path,
+           nlist_start, entry.nlistCount);
+           */
+
+        int idx = 0;
+
+        for(int j=0; j<entry.nlistCount; j++){
+        //while(idx < entry.nlistCount){
+            struct nlist_64 nlist = {0};
+
+            fseek(dscfile, nlist_start + (sizeof(nlist) * j), SEEK_SET);
+            fread(&nlist, sizeof(char), sizeof(nlist), dscfile);
+
+            unsigned long stroff = nlist.n_un.n_strx + syminfos.stringsOffset;
+
+            add_symbol_to_entry(*sym_entry, idx, nlist.n_un.n_strx,
+                    nlist.n_value + aslr_slide, 0);
+            (*sym_entry)->syms[idx]->dsc_use_stroff = 0;
+            idx++;
+            /*
+            enum { len = 512 };
+            char str[len] = {0};
+            fseek(dscfile, stroff, SEEK_SET);
+            fread(str, sizeof(char), len, dscfile);
+            str[len - 1] = '\0';
+
+            printf("Entry %d: '%s': nlist %d/%d: strx '%s' - %#lx, n_type %#x"
+                    " n_sect %#x n_desc %#x n_value %#llx\n",
+                    i, cur_dylib_path, j+1, entry.nlistCount,
+                    str, stroff,
+                    nlist.n_type, nlist.n_sect,
+                    nlist.n_desc, nlist.n_value);
+        */
+        }
+
+
+        free(cur_dylib_path);
+
+        // XXX now, go thru dylib's symtab to get the rest
+        unsigned int nsyms = symtab_cmd->nsyms;
+        unsigned int limit = idx + nsyms;
+
+        for(int j=0; j<nsyms; j++){
+            struct nlist_64 nlist = {0};
+
+            fseek(dscfile, symtab_cmd->symoff + (sizeof(nlist) * j), SEEK_SET);
+            fread(&nlist, sizeof(char), sizeof(nlist), dscfile);
+
+            unsigned long stroff = symtab_cmd->stroff + nlist.n_un.n_strx;
+
+            enum { len = 512 };
+            char symname[len] = {0};
+
+            fseek(dscfile, stroff, SEEK_SET);
+            fread(symname, sizeof(char), len, dscfile);
+
+            symname[len - 1] = '\0';
+
+            if(strcmp(symname, "<redacted>") != 0){
+                if((nlist.n_type & N_TYPE) == N_SECT){
+                    add_symbol_to_entry(*sym_entry, idx, nlist.n_un.n_strx,
+                            nlist.n_value + aslr_slide, 0);
+
+
+                    //(*sym_entry)->strtab_fileaddr = symtab_cmd->stroff;
+                    (*sym_entry)->syms[idx]->dsc_use_stroff = 1;
+                    (*sym_entry)->syms[idx]->stroff_fileaddr = symtab_cmd->stroff;
+
+                    idx++;
+                }
+            }
+            else{
+                //printf("%s: not adding redacted\n", __func__);
+            }
+        }
+    }
+
+    fclose(dscfile);
 }
 
 struct my_dsc_mapping *get_dsc_mappings(int *len){
@@ -119,10 +322,10 @@ struct my_dsc_mapping *get_dsc_mappings(int *len){
 }
 
 /*
-int is_dsc_image(unsigned long vmoffset, unsigned long fileoffset,
-        struct my_dsc_mapping *mappings, unsigned int mcnt,
-        struct my_dsc_mapping *which){
-        */
+   int is_dsc_image(unsigned long vmoffset, unsigned long fileoffset,
+   struct my_dsc_mapping *mappings, unsigned int mcnt,
+   struct my_dsc_mapping *which){
+   */
 int is_dsc_image(unsigned long vmoffset, struct my_dsc_mapping *mappings,
         unsigned int mcnt){
     // XXX remove this comment once I'm done
@@ -134,8 +337,8 @@ int is_dsc_image(unsigned long vmoffset, struct my_dsc_mapping *mappings,
     for(int i=0; i<mcnt; i++){
         struct my_dsc_mapping dscmap = mappings[i];
         //printf("%s: dscmap vm: %#lx-%#lx, file: %#lx-%#lx\n",
-          //    __func__, dscmap.vm_start, dscmap.vm_end, dscmap.file_start,
-           // dscmap.file_end);
+        //    __func__, dscmap.vm_start, dscmap.vm_end, dscmap.file_start,
+        // dscmap.file_end);
 
         if(vmoffset >= dscmap.vm_start && vmoffset < dscmap.vm_end){
             return 1;
@@ -148,22 +351,22 @@ int is_dsc_image(unsigned long vmoffset, struct my_dsc_mapping *mappings,
     return 0;
 
     /*
-    if(!dscimage)
-        return 0;
+       if(!dscimage)
+       return 0;
 
     // printf("%s: fileoffset %#lx\n", __func__, fileoffset);
     for(int i=0; i<mcnt; i++){
-        struct my_dsc_mapping dscmap = mappings[i];
-        // printf("%s: dscmap vm: %#lx-%#lx, file: %#lx-%#lx\n",
-        //       __func__, dscmap.vm_start, dscmap.vm_end, dscmap.file_start,
-        //     dscmap.file_end);
+    struct my_dsc_mapping dscmap = mappings[i];
+    // printf("%s: dscmap vm: %#lx-%#lx, file: %#lx-%#lx\n",
+    //       __func__, dscmap.vm_start, dscmap.vm_end, dscmap.file_start,
+    //     dscmap.file_end);
 
-        if(fileoffset >= dscmap.file_start && fileoffset < dscmap.file_end){
-            *which = dscmap;
-            return 1;
-        }
-    }
+    if(fileoffset >= dscmap.file_start && fileoffset < dscmap.file_end){
+     *which = dscmap;
+     return 1;
+     }
+     }
 
-    return 0;
-    */
+     return 0;
+     */
 }

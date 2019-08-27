@@ -89,6 +89,35 @@ static struct dbg_sym_entry *create_sym_entry_for_image(char *imagename,
         // XXX remember I wrote a function to get the dylib's name
         // from the struct dylib load command
         printf("%s: '%s' IS a shared cache image\n", __func__, imagename);
+
+        entry = create_sym_entry_for_dsc_image(imagename);
+
+        struct symtab_command *symtab_cmd = NULL;
+        struct segment_command_64 *__text_seg_cmd = NULL;
+
+        get_cmds(image_load_addr, &symtab_cmd, &__text_seg_cmd);
+
+        unsigned long slide = image_load_addr - __text_seg_cmd->vmaddr;
+        printf("%s: slide for '%s' is %#lx\n", __func__, imagename, slide);
+        get_dsc_image_symbols(imagename, slide, &entry, symtab_cmd);
+
+        qsort(entry->syms, entry->cursymarrsz,
+                sizeof(struct sym *), symoffcmp);
+
+        // XXX sorted by default
+        for(int i=0; i<entry->cursymarrsz; i++){
+            if(i != entry->cursymarrsz-1){
+                entry->syms[i]->symaddr_end =
+                    entry->syms[i+1]->symaddr_start;
+            }
+            else{
+                entry->syms[i]->symaddr_end = image_load_addr +
+                    __text_seg_cmd->vmsize;
+            }
+        }
+
+        free(symtab_cmd);
+        free(__text_seg_cmd);
     }
     else{
         printf("%s: '%s' IS NOT a shared cache image\n", __func__, imagename);
@@ -215,16 +244,15 @@ int initialize_debuggee_dyld_all_image_infos(void){
                 (unsigned long)debuggee->dyld_info_array[i].imageFilePath,
                 fpath, count);
 
-        if(kret != KERN_SUCCESS)
-            continue;
 
         //printf("%s: read_memory_at_location inside loop says %s\n",
         //      __func__, mach_error_string(kret));
+        if(kret == KERN_SUCCESS){
+            size_t len = strlen(fpath) + 1;
 
-        size_t len = strlen(fpath) + 1;
-
-        debuggee->dyld_image_info_filePaths[i] = malloc(len);
-        strncpy(debuggee->dyld_image_info_filePaths[i], fpath, len);
+            debuggee->dyld_image_info_filePaths[i] = malloc(len);
+            strncpy(debuggee->dyld_image_info_filePaths[i], fpath, len);
+        }
 
         //printf("%s: Image %d: '%s'\n", __func__, i, fpath);
         unsigned long image_load_address =
@@ -239,12 +267,21 @@ int initialize_debuggee_dyld_all_image_infos(void){
         if(!entry)
             continue;
 
-        if(entry->from_dsc){
+        unsigned long symtab_addr = 0, strtab_addr = 0;
 
+        if(entry->from_dsc){
+            free(symtab_cmd);
+            free(__text_seg_cmd);
+            //free(ns);
+
+            linkedlist_add(debuggee->symbols, entry);
+
+            continue;
         }
         else{
-            unsigned long symtab_addr = symtab_cmd->symoff + image_load_address,
-                          strtab_addr = symtab_cmd->stroff + image_load_address;
+            symtab_addr = symtab_cmd->symoff + image_load_address;
+            strtab_addr = symtab_cmd->stroff + image_load_address;
+
             printf("%s: symtab_addr %#lx strtab_addr %#lx\n",
                     __func__, symtab_addr, strtab_addr);
 
@@ -258,8 +295,9 @@ int initialize_debuggee_dyld_all_image_infos(void){
 
             for(int j=0; j<symtab_cmd->nsyms; j++){
                 char str[PATH_MAX] = {0};
-                kret = read_memory_at_location(entry->strtab_vmaddr + ns[j].n_un.n_strx,
+                kret = read_memory_at_location(strtab_addr + ns[j].n_un.n_strx,
                         str, PATH_MAX);
+                str[PATH_MAX - 1] = '\0';
 
                 if(kret == KERN_SUCCESS){
                     unsigned long slid_addr_start = 0;
@@ -269,86 +307,71 @@ int initialize_debuggee_dyld_all_image_infos(void){
                         slid_addr_start = ns[j].n_value +
                             (image_load_address - __text_seg_cmd->vmaddr);
 
-
-
                         // XXX is this correct?
                         if((ns[j].n_type & N_TYPE) == N_SECT){
                             add_symbol_to_entry(entry, j, ns[j].n_un.n_strx,
                                     slid_addr_start, slid_addr_end);
 
                             if(i==0){
-                            printf("%s: nlist %d: strx '%s' %#lx n_type %#x "
-                                    " n_sect %#x n_desc %#x"
-                                    " symbol location %#lx\n",
-                                    __func__, j, str, strtab_addr + ns[j].n_un.n_strx,
-                                    ns[j].n_type & N_TYPE,
-                                    ns[j].n_sect, ns[j].n_desc, slid_addr_start);
+                                printf("%s: nlist %d: strx '%s' n_type %#x "
+                                        " n_sect %#x n_desc %#x"
+                                        " symbol location %#lx\n",
+                                        __func__, j, str, ns[j].n_type & N_TYPE,
+                                        ns[j].n_sect, ns[j].n_desc, slid_addr_start);
                             }
                         }
-
-
                     }
                 }
             }
 
-            free(symtab_cmd);
             free(ns);
-
-            qsort(entry->syms, entry->cursymarrsz,
-                    sizeof(struct sym *), symoffcmp);
-
-            for(int i=0; i<entry->cursymarrsz; i++){
-                //            printf("%s: symbol %d: %p\n", __func__, i, entry->syms[i]);
-
-                // XXX 8-23-19
-                // XXX end of __TEXT segment is good for the end offset of the last
-                // symbol because this array will be sorted
-                // XXX figure out why duplicate symbols are added
-                if(i != entry->cursymarrsz-1){
-                    entry->syms[i]->symaddr_end =
-                        entry->syms[i+1]->symaddr_start;
-
-                    
-                    /*
-                    if(entry->syms[i+1]->symaddr_start < image_load_address){
-                        entry->syms[i]->symaddr_end =
-                            (image_load_address +
-                             (__text_seg_cmd->fileoff + __text_seg_cmd->filesize));
-                    }*/
-                    
-                }
-                else{
-                    /*
-                    entry->syms[i]->symaddr_end =
-                        (image_load_address -
-                         (__text_seg_cmd->vmaddr + __text_seg_cmd->vmsize));
-                         */
-                    entry->syms[i]->symaddr_end = image_load_address +
-                        __text_seg_cmd->vmsize;
-                }
-                if(strcmp(entry->imagename, "/private/var/mobile/testprogs/./params") == 0){
-                    int len = 64;
-                    char symname[len];
-                    memset(symname, 0, len);
-                    kern_return_t kret =
-                        read_memory_at_location(entry->strtab_vmaddr +
-                                entry->syms[i]->strtabidx, symname, len);
-
-                    //printf("%s: read_memory_at_location says %s\n", __func__,
-                    //      mach_error_string(kret));
-                    printf("%s: symbol %d: [%#lx-%#lx] '%s'\n",
-                          __func__, i, entry->syms[i]->symaddr_start,
-                        entry->syms[i]->symaddr_end, symname);
-                }
-
-            }
-
-            free(__text_seg_cmd);
         }
 
 
+
+        //        continue;
+        free(symtab_cmd);
+        //      free(__text_seg_cmd);
+
+        qsort(entry->syms, entry->cursymarrsz,
+                sizeof(struct sym *), symoffcmp);
+
+        for(int i=0; i<entry->cursymarrsz; i++){
+            // XXX 8-23-19
+            // XXX end of __TEXT segment is good for the end offset of the last
+            // symbol because this array will be sorted
+            // XXX figure out why duplicate symbols are added
+            if(i != entry->cursymarrsz-1){
+                entry->syms[i]->symaddr_end =
+                    entry->syms[i+1]->symaddr_start;
+            }
+            else{
+                entry->syms[i]->symaddr_end = image_load_address +
+                    __text_seg_cmd->vmsize;
+            }
+
+
+            if(strcmp(entry->imagename, "/private/var/mobile/testprogs/./params") == 0){
+                int len = 64;
+                char symname[len];
+                memset(symname, 0, len);
+                kern_return_t kret =
+                    read_memory_at_location(entry->strtab_vmaddr +
+                            entry->syms[i]->strtabidx, symname, len);
+
+                //printf("%s: read_memory_at_location says %s\n", __func__,
+                //      mach_error_string(kret));
+                printf("%s: symbol %d: [%#lx-%#lx] '%s'\n",
+                        __func__, i, entry->syms[i]->symaddr_start,
+                        entry->syms[i]->symaddr_end, symname);
+            }
+        }
+
+        free(__text_seg_cmd);
+
         linkedlist_add(debuggee->symbols, entry);
     }
+
 
     free(dsc_mappings);
 

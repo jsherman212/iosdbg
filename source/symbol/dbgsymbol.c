@@ -111,12 +111,44 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
             }
 
 
-            /*
+        /*    
             printf("%s: potential: symaddr_start %#lx symaddr_end %#lx "
-                   " strtabidx %#x\n",
+                   " strtabidx %#x",
                    __func__, entry->syms[i]->symaddr_start,
                    entry->syms[i]->symaddr_end, entry->syms[i]->strtabidx);
-                   */
+            enum { len = 512 };
+            char symname[len] = {0};
+
+            if(entry->from_dsc){
+                FILE *dscfptr =
+                    fopen("/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64", "rb");
+
+                if(!dscfptr){
+                    printf("%s: couldn't open shared cache\n", __func__);
+                    return 1;
+                }
+
+                struct sym *cursym = entry->syms[i];
+                unsigned long using_strtab = entry->strtab_fileaddr;
+
+                if(cursym->dsc_use_stroff)
+                    using_strtab = cursym->stroff_fileaddr;
+
+                unsigned long file_stroff =
+                    using_strtab + cursym->strtabidx;
+
+                fseek(dscfptr, file_stroff, SEEK_SET);
+                fread(symname, sizeof(char), len, dscfptr);
+                symname[len - 1] = '\0';
+
+                printf(": symname '%s'\n", symname);
+
+                fclose(dscfptr);
+            }
+            else{
+                printf("\n");
+            }
+            */         
             /*
             int len = 64;
             char symname[len];
@@ -142,9 +174,14 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
     if(!best_entry)
         return 1;
 
+    /*
     int len = 64;
     char symname[len];
     memset(symname, 0, len);
+    */
+
+    enum { len = 512 };
+    char symname[len] = {0};
 
     if(best_entry->from_dsc){
         FILE *dscfptr =
@@ -155,16 +192,22 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
             return 1;
         }
 
-        /*
+        struct sym *best_sym = best_entry->syms[best_symbol_idx];
+        unsigned long using_strtab = best_entry->strtab_fileaddr;
+
+        if(best_sym->dsc_use_stroff)
+            using_strtab = best_sym->stroff_fileaddr;
+        
         unsigned long file_stroff =
-            best_entry->strtab_fileaddr + best_entry->syms[best_symbol_idx]->strtabidx;
+            using_strtab + best_sym->strtabidx;
 
         fseek(dscfptr, file_stroff, SEEK_SET);
         fread(symname, sizeof(char), len, dscfptr);
+        symname[len - 1] = '\0';
 
         printf("%s: got symname '%s' from file offset %#lx\n", __func__, symname,
                 file_stroff);
-        */
+
         fclose(dscfptr);
     }
     else{
