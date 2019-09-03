@@ -1,3 +1,7 @@
+9-2-19
+- vastly improved symbolication, uses much, much less memory, and it is much,
+much faster
+
 8-27-19
 - symbolize every available symbol (very slow, will need to improve)
 

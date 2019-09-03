@@ -11,11 +11,9 @@ struct my_dsc_mapping {
 };
 
 struct dbg_sym_entry *create_sym_entry_for_dsc_image(char *);
-void get_dsc_image_symbols(char *, unsigned long, struct dbg_sym_entry **,
-        struct symtab_command *);
-struct my_dsc_mapping *get_dsc_mappings(int *);
-//int is_dsc_image(unsigned long, unsigned long, struct my_dsc_mapping *,
-  //      unsigned int, struct my_dsc_mapping *);
+void get_dsc_image_symbols(void *, char *, unsigned long, struct dbg_sym_entry **,
+        struct symtab_command *, int);
+struct my_dsc_mapping *get_dsc_mappings(void *, int *);
 int is_dsc_image(unsigned long, struct my_dsc_mapping *, unsigned int);
 
 

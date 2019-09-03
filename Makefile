@@ -25,19 +25,19 @@ CMD_SOURCES = $(wildcard $(SRC)/cmd/*.c)
 
 cmds : $(CMD_SOURCES) $(CRITICAL_HEADER_FILES)
 	cd $(CMDSRC)
-	$(MAKE) -B
+	$(MAKE)
 
 DISAS_SOURCES = $(wildcard $(SRC)/cmd/*.c)
 
 disas : $(DISAS_SOURCES)
 	cd $(DISASSRC)
-	$(MAKE) -B
+	$(MAKE)
 
 SYM_SOURCES = $(wildcard $(SRC)/symbol/*.c)
 
 symbol : $(SYMBOL_OBJECT_FILES)
 	cd $(SYMSRC)
-	$(MAKE) -B
+	$(MAKE)
 
 BUILD-DEVICE=pink
 BUILD-PATH=/var/mobile/iosdbg-dev

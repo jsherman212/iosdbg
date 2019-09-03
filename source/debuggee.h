@@ -24,9 +24,6 @@ struct debuggee {
     /* List of symbols for the debuggee. */
     struct linkedlist *symbols;
 
-    /* Array of imageFilePath strings, corresponds with dyld_all_image_infos. */
-    char **dyld_image_info_filePaths;
-
     /* If this variable is non-zero, tracing is not supported. */
     int tracing_disabled;
 

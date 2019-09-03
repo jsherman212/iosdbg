@@ -270,17 +270,6 @@ static void setup_initial_debuggee(void){
     /* If we aren't attached to anything, debuggee's pid is -1. */
     debuggee->pid = -1;
 
-    /*debuggee->num_breakpoints = 0;
-    debuggee->num_watchpoints = 0;
-    debuggee->thread_count = 0;
-
-    debuggee->tracing_disabled = 0;
-    debuggee->currently_tracing = 0;
-
-    debuggee->breakpoints = NULL;
-    debuggee->watchpoints = NULL;
-    debuggee->threads = NULL;
-    */
     /* Figure out how many hardware breakpoints/watchpoints are supported. */
     size_t len = sizeof(int);
 

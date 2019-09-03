@@ -1,9 +1,12 @@
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include <readline/readline.h>
@@ -220,21 +223,44 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     free(aslr);
     free(target);
 
-    if(initialize_debuggee_dyld_all_image_infos()){
-        concat(outbuffer, "warning: could not properly examine"
-                " the debuggee's dyld_all_image_infos, symbolication"
-                " will be minimal.\n");
+    // XXX no hardcode on master
+    const char *dscp = "/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64";
+
+    const char *dscerrmsg = "warning: could not properly examine"
+        " the debuggee's dyld_all_image_infos structure, symbolication"
+        " will be minimal.\n";
+
+    struct stat st = {0};
+    stat(dscp, &st);
+
+    int dscfd = open(dscp, O_RDONLY, 0);
+
+    if(dscfd == -1){
+        concat(outbuffer, "%s", dscerrmsg);
+        return CMD_SUCCESS;
     }
+
+    void *dscdata = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, dscfd, 0);
+
+    if(initialize_debuggee_dyld_all_image_infos(dscdata))
+        concat(outbuffer, "%s", dscerrmsg);
+
+    munmap(dscdata, st.st_size);
+    close(dscfd);
 
     return CMD_SUCCESS;
 }
 
 enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
         int arg1, char **outbuffer, char **error){
+    if(!debuggee->suspended()){
+        concat(error, "debuggee must be suspended");
+        return CMD_FAILURE;
+    }
+
     struct machthread *focused = get_focused_thread();
 
     get_thread_state(focused);
-
     
     char *pc_srcfile = NULL, *pc_srcfunc = NULL, *lr_srcfile = NULL,
          *lr_srcfunc = NULL;
@@ -250,7 +276,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
     if(get_symbol_info_from_address(debuggee->symbols,
             focused->thread_state.__pc, &imgname, &symname, &symdist)){
-        concat(outbuffer, " <unknown>\n");
+        concat(outbuffer, "\n");
     }
     else{
         concat(outbuffer, " %s`%s + %#lx\n", imgname, symname, symdist);
@@ -280,7 +306,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
     if(get_symbol_info_from_address(debuggee->symbols,
             focused->thread_state.__lr, &imgname, &symname, &symdist)){
-        concat(outbuffer, " <unknown>\n");
+        concat(outbuffer, "\n");
     }
     else{
         concat(outbuffer, " %s`%s + %#lx\n", imgname, symname, symdist);
@@ -323,14 +349,13 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     while(current_frame->next){
         concat(outbuffer, "%4sframe #%d: 0x%16.16lx", "", frame_counter,
                 current_frame->frame);
-        
 
         char *imgname = NULL, *symname = NULL;
         unsigned int symdist = 0;
 
         if(get_symbol_info_from_address(debuggee->symbols,
                     current_frame->frame, &imgname, &symname, &symdist)){
-            concat(outbuffer, " <unknown>\n");
+            concat(outbuffer, "\n");
         }
         else{
             concat(outbuffer, " %s`%s + %#lx\n", imgname, symname, symdist);
@@ -338,57 +363,6 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
         free(imgname);
         free(symname);
-
-        read_memory_at_location((uintptr_t)current_frame->next, 
-                (void *)current_frame, sizeof(struct frame_t)); 
-        frame_counter++;
-
-
-        continue;
-        char *srcfile = NULL, *srcfunc = NULL;
-        uint64_t srcfileline = 0;
-        if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
-                    current_frame->frame - debuggee->aslr_slide,
-                    &srcfile, &srcfunc, &srcfileline, &root_die, NULL)){
-           /* Dl_info info = {0};
-            unsigned long addr = current_frame->frame;
-            */
-            /* Walk up by four bytes until we hit a function definition.
-             * A naive approach, but should work just as well as actually
-             * looking at the shared cache?
-             */
-           /* int dladdrret = dladdr((void *)addr, &info);
-            while(dladdrret == 0){
-                printf("%s: checking out address %#lx\n", __func__, addr);
-                //unsigned long a = (unsigned long)addr;
-                //a -= 4;
-                //addr = (void *)a;
-                addr -= 4;
-                usleep(5 * 100);
-                dladdrret = dladdr((void *)addr, &info);
-            }*/
-
-            //int dladdrret = dladdr(0x0000000208ed1420/*(void *)current_frame->frame*/, &info);
-            //printf("%s: dladdr returns %d\n", __func__, dladdrret);
-
-            // XXX success, according to the man page
-            //if(dladdrret != 0){
-               /* printf("%s: dli_fname '%s' dli_fbase %p dli_sname '%s' dli_saddr %p\n",
-                        __func__, info.dli_fname, info.dli_fbase, info.dli_sname,
-                        info.dli_saddr);
-*/
-            //}
-
-            concat(outbuffer, "\n");
-        }
-        else{
-            concat(outbuffer, " %s at %s:%lld\n", srcfunc, srcfile,
-                    srcfileline);
-            free(srcfile);
-            free(srcfunc);
-        }
-
-
 
         read_memory_at_location((uintptr_t)current_frame->next, 
                 (void *)current_frame, sizeof(struct frame_t)); 
