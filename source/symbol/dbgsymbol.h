@@ -41,5 +41,6 @@ void add_symbol_to_entry(struct dbg_sym_entry *, int, unsigned long);
 struct dbg_sym_entry *create_sym_entry(char *, unsigned long, unsigned long, int);
 int get_symbol_info_from_address(struct linkedlist *, unsigned long, char **,
         char **, unsigned int *);
+void sym_desc(struct dbg_sym_entry *, struct sym *);
 
 #endif

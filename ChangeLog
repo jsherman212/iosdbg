@@ -1,3 +1,7 @@
+9-6-19
+- logarithmic search time for looking up symbols based on virtual address
+rather than linear search time, huge speed improvements
+
 9-2-19
 - vastly improved symbolication, uses much, much less memory, and it is much,
 much faster

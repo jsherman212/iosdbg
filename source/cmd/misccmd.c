@@ -226,7 +226,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     // XXX no hardcode on master
     const char *dscp = "/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64";
 
-    const char *dscerrmsg = "warning: could not properly examine"
+    const char *dscwarnmsg = "warning: could not properly examine"
         " the debuggee's dyld_all_image_infos structure, symbolication"
         " will be minimal.\n";
 
@@ -236,14 +236,14 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     int dscfd = open(dscp, O_RDONLY, 0);
 
     if(dscfd == -1){
-        concat(outbuffer, "%s", dscerrmsg);
+        concat(outbuffer, "%s", dscwarnmsg);
         return CMD_SUCCESS;
     }
 
     void *dscdata = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, dscfd, 0);
 
     if(initialize_debuggee_dyld_all_image_infos(dscdata))
-        concat(outbuffer, "%s", dscerrmsg);
+        concat(outbuffer, "%s", dscwarnmsg);
 
     munmap(dscdata, st.st_size);
     close(dscfd);

@@ -31,8 +31,8 @@ struct dsc_local_syms_info {
 };
 
 struct dsc_local_syms_entry {
-	unsigned int dyliboff;
-	unsigned int nliststartidx;
+    unsigned int dyliboff;
+    unsigned int nliststartidx;
     unsigned int nlistcnt;
 };
 
@@ -161,6 +161,7 @@ void get_dsc_image_symbols(void *dscdata, char *imagename, unsigned long aslr_sl
             unsigned long stroff = stab_stroff + nlist->n_un.n_strx;
             char *symname = (char *)((uint8_t *)dscdata + stroff);
 
+            /* Skip <redacted> symbols */
             if(*symname != '<'){
                 if((nlist->n_type & N_TYPE) == N_SECT &&
                         nlist->n_sect == __text_segment_nsect){

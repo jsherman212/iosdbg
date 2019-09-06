@@ -146,16 +146,16 @@ static struct dbg_sym_entry *create_sym_entry_for_image(void *dscdata, char *ima
                 entry->syms[i]->sym_func_len = len;
             }
 
-            unsigned int len =
-                (__text_seg_cmd->vmaddr +  __text_seg_cmd->vmsize) -
-                entry->syms[oneless]->sym_func_start;
-            entry->syms[oneless]->sym_func_len = len;
+            //unsigned int len =
+              //  (__text_seg_cmd->vmaddr +  __text_seg_cmd->vmsize) -
+                //entry->syms[oneless]->sym_func_start;
+            entry->syms[oneless]->sym_func_len = __text_seg_cmd->vmsize;//len;
         }
         else if(entry->cursymarrsz > 0){
-            unsigned int len =
-                (__text_seg_cmd->vmaddr + __text_seg_cmd->vmsize) -
-                entry->syms[0]->sym_func_start;
-            entry->syms[0]->sym_func_len = len;
+            //unsigned int len =
+              //  (__text_seg_cmd->vmaddr + __text_seg_cmd->vmsize) -
+                //entry->syms[0]->sym_func_start;
+            entry->syms[0]->sym_func_len = __text_seg_cmd->vmsize;//len;
         }
     }
     else{
@@ -243,10 +243,17 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
         if(!entry)
             continue;
 
-        unsigned long symtab_addr = 0, strtab_addr = 0;
-
         if(entry->from_dsc){
             linkedlist_add(debuggee->symbols, entry);
+
+            /*
+            if(i==3){
+                for(int i=0; i<entry->cursymarrsz; i++){
+                    struct sym *cursym = entry->syms[i];
+                    sym_desc(entry, cursym);
+                }
+            }
+            */
 
             free(symtab_cmd);
             free(__text_seg_cmd);
@@ -254,8 +261,8 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
             continue;
         }
         else{
-            symtab_addr = symtab_cmd->symoff + image_load_address;
-            strtab_addr = symtab_cmd->stroff + image_load_address;
+            unsigned long symtab_addr = symtab_cmd->symoff + image_load_address,
+                          strtab_addr = symtab_cmd->stroff + image_load_address;
 
             size_t nscount = sizeof(struct nlist_64) * symtab_cmd->nsyms;
             struct nlist_64 *ns = malloc(nscount);
@@ -277,13 +284,10 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
                     continue;
                 }
 
-                unsigned long slid_addr_start = 0;
-                unsigned long slid_addr_end = 0;
-
-                slid_addr_start = nlist.n_value +
+                unsigned long slid_addr_start = nlist.n_value +
                     (image_load_address - __text_seg_cmd->vmaddr);
 
-                add_symbol_to_entry(entry,nlist.n_un.n_strx, slid_addr_start);
+                add_symbol_to_entry(entry, nlist.n_un.n_strx, slid_addr_start);
             }
 
             free(ns);
@@ -301,19 +305,40 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
                 entry->syms[i]->sym_func_len = len;
             }
 
+            /*
+            printf("%s: __text vmaddr %#llx __text vmsize %#llx"
+                    "last sym func start %#lx\n",
+                    __func__, __text_seg_cmd->vmaddr, __text_seg_cmd->vmsize,
+                    entry->syms[oneless]->sym_func_start);
+                    */
+
+            /*
             unsigned int len =
                 (__text_seg_cmd->vmaddr +  __text_seg_cmd->vmsize) -
                 entry->syms[oneless]->sym_func_start;
-            entry->syms[oneless]->sym_func_len = len;
+                */
+            entry->syms[oneless]->sym_func_len = __text_seg_cmd->vmsize;//len;
+
+            //sym_desc(entry, entry->syms[oneless]);
         }
         else if(entry->cursymarrsz > 0){
             unsigned int len =
                 (__text_seg_cmd->vmaddr + __text_seg_cmd->vmsize) -
                 entry->syms[0]->sym_func_start;
-            entry->syms[0]->sym_func_len = len;
+            entry->syms[0]->sym_func_len = __text_seg_cmd->vmsize;//len;
         }
 
         linkedlist_add(debuggee->symbols, entry);
+
+        // XXX for testing, seeing what is wrong with binary searching for
+        // a symbol while backtracing
+        if(i==0){
+            for(int i=0; i<entry->cursymarrsz; i++){
+                struct sym *cursym = entry->syms[i];
+                //sym_desc(entry, cursym);
+            }
+        }
+        //}
 
         free(symtab_cmd);
         free(__text_seg_cmd);
