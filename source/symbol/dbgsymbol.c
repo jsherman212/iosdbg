@@ -6,9 +6,16 @@
 #include "dbgsymbol.h"
 
 #include "../memutils.h"
+#include "../strext.h"
 
-void add_symbol_to_entry(struct dbg_sym_entry *entry, int strtabidx,
-        unsigned long vmaddr_start){
+// XXX inside iosdbg, reset this on detach
+static int UNNAMED_SYM_CNT = 0;
+
+// XXX get rid of the idx param
+// XXX arg1 - strtabidx or unnamed_sym_num depending on kind
+void add_symbol_to_entry(struct dbg_sym_entry *entry, int arg1,
+        unsigned long vmaddr_start, unsigned int fxnlen, int kind,
+        char *symname){
     if(entry->cursymarrsz >= FAST_POW_TWO(entry->symarr_capacity_pow) - 1){
         entry->symarr_capacity_pow++;
         struct sym **sym_rea = realloc(entry->syms,
@@ -17,9 +24,22 @@ void add_symbol_to_entry(struct dbg_sym_entry *entry, int strtabidx,
     }
 
     entry->syms[entry->cursymarrsz] = malloc(sizeof(struct sym));
-    entry->syms[entry->cursymarrsz]->strtabidx = strtabidx;
+
+    if(symname)
+        entry->syms[entry->cursymarrsz]->dsc_symname = symname;
+    //else
+      //  entry->syms[entry->cursymarrsz]->dsc_symname = UNNAMED_SYMBOL;
+
+    if(kind == UNNAMED_SYM){
+        entry->syms[entry->cursymarrsz]->dsc_symname = UNNAMED_SYMBOL;
+        entry->syms[entry->cursymarrsz]->unnamed_sym_num = UNNAMED_SYM_CNT++;
+    }
+    else if(kind == NAMED_SYM)
+        entry->syms[entry->cursymarrsz]->strtabidx = arg1;
+
+    //entry->syms[entry->cursymarrsz]->strtabidx = strtabidx;
     entry->syms[entry->cursymarrsz]->sym_func_start = vmaddr_start;
-    entry->syms[entry->cursymarrsz]->sym_func_len = 0;
+    entry->syms[entry->cursymarrsz]->sym_func_len = fxnlen;
 
     entry->cursymarrsz++;
 }
@@ -40,7 +60,7 @@ struct dbg_sym_entry *create_sym_entry(char *imagename,
     entry->symarr_capacity_pow = STARTING_CAPACITY;
     entry->cursymarrsz = 0;
     entry->strtab_vmaddr = strtab_vmaddr;
-    entry->strtab_fileaddr = strtab_fileaddr;
+    //entry->strtab_fileaddr = strtab_fileaddr;
     entry->syms = malloc(CALC_SYM_CAPACITY(STARTING_CAPACITY));
     entry->from_dsc = from_dsc;
 
@@ -157,8 +177,8 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
             current;
             current = current->next){
         struct dbg_sym_entry *entry = current->data;
-        //printf("%s: searching entry %d: '%s' for vmaddr %#lx\n",
-          //      __func__, cnt++, entry->imagename, vmaddr);
+      //  printf("%s: searching entry %d: '%s' for vmaddr %#lx\n",
+        //        __func__, cnt++, entry->imagename, vmaddr);
 
         if(entry->cursymarrsz == 0)
             continue;
@@ -173,6 +193,14 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
 
             continue;
         }
+
+        /*
+        if(strcmp(entry->imagename, "/private/var/mobile/testprogs/./params") == 0){
+            for(int i=0; i<entry->cursymarrsz; i++){
+                sym_desc(entry, entry->syms[i]);
+            }
+        }
+        */
 
         /* Figure out the closest symbol to vmaddr for each entry */
         int lo = 0, hi = entry->cursymarrsz - 1;
@@ -193,74 +221,55 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
     /* Prep good combo array for binary search */
     qsort(good_combos, num_good_combos, sizeof(struct goodcombo *), goodcombocmp);
 
-    /*
     for(int i=0; i<num_good_combos; i++){
         struct goodcombo *gc = good_combos[i];
         printf("%s: combo %d: ", __func__, i);
         sym_desc(gc->entry, gc->sym);
     }
     printf("%s: done printing good combos\n\n", __func__);
-    */
     /* Out of all the candidates we have, which is the closest to vmaddr? */
     int bestcomboidx = bsearch_gc_lc(good_combos, vmaddr, 0, num_good_combos - 1);
 
     /* Nothing found. This is fine, could be an unnamed function. */
-    if(bestcomboidx == -1)
-        return 1;
+    //if(bestcomboidx == -1)
+      //  return 1;
 
     struct goodcombo *bestcombo = good_combos[bestcomboidx];
 
-    /*
     printf("%s: final best combo:\n", __func__);
     sym_desc(bestcombo->entry, bestcombo->sym);
     printf("%s: done printing best combo\n\n", __func__);
-    */
+    
     best_entry = bestcombo->entry;
     best_sym = bestcombo->sym;
 
-
-    enum { len = 512 };
-    char symname[len] = {0};
+    char *symname = NULL;
 
     if(best_entry->from_dsc){
-        // XXX don't hardcode on master
-        FILE *dscfptr =
-            fopen("/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64", "rb");
-
-        if(!dscfptr){
-            printf("%s: couldn't open shared cache\n", __func__);
-            return 1;
+        if(!IS_UNNAMED_SYMBOL(best_sym))
+            concat(&symname, "%s", best_sym->dsc_symname);
+        else{
+            concat(&symname, "iosdbg$$unnamed_symbol%d",
+                    best_sym->unnamed_sym_num);
         }
-
-        //  struct sym *best_sym = best_entry->syms[best_symbol_idx];
-        unsigned long using_strtab = best_entry->strtab_fileaddr;
-
-        if(best_sym->use_dsc_dylib_strtab)
-            using_strtab = best_sym->dsc_dylib_strtab_fileoff;
-
-        unsigned long file_stroff =
-            using_strtab + best_sym->strtabidx;
-
-        fseek(dscfptr, file_stroff, SEEK_SET);
-        fread(symname, sizeof(char), len, dscfptr);
-        symname[len - 1] = '\0';
-
-        //printf("%s: got symname '%s' from file offset %#lx\n", __func__, symname,
-        //       file_stroff);
-
-        fclose(dscfptr);
     }
     else{
-        /*
-        kern_return_t kret =
-            read_memory_at_location(best_entry->strtab_vmaddr +
-                    best_entry->syms[best_symbol_idx]->strtabidx, symname, len);
-        */
-        kern_return_t kret =
-            read_memory_at_location(best_entry->strtab_vmaddr +
-                    best_sym->strtabidx, symname, len);
-        // printf("%s: kret %s for addr %#lx\n", __func__, mach_error_string(kret),
-        //       best_entry->strtab_vmaddr + best_entry->syms[best_symbol_idx]->strtabidx);
+        if(!IS_UNNAMED_SYMBOL(best_sym)){
+            //printf("%s: best_sym is named\n", __func__);
+            int maxlen = 512;
+            symname = malloc(maxlen);
+
+            unsigned long stroff = best_entry->strtab_vmaddr + best_sym->strtabidx;
+            kern_return_t kret = read_memory_at_location(stroff, symname, maxlen);
+
+            //printf("%s: kret %s\n", __func__, mach_error_string(kret));
+
+            //concat(&symname, "%s", best_sym->dsc_symname);
+        }
+        else{
+            concat(&symname, "iosdbg$$unnamed_symbol%d",
+                    best_sym->unnamed_sym_num);
+        }
     }
 
     for(int i=0; i<num_good_combos; i++)
@@ -268,63 +277,56 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
 
     free(good_combos);
 
-    /*
-    free(best_entries);
-    free(best_syms);
-    */
     *imgnameout = strdup(best_entry->imagename);
-    *symnameout = strdup(symname);
-    //*distfromsymstartout = vmaddr - best_entry->syms[best_symbol_idx]->sym_func_start;
+    *symnameout = symname;
     *distfromsymstartout = vmaddr - best_sym->sym_func_start;
 
     return 0;
 }
 
 void sym_desc(struct dbg_sym_entry *entry, struct sym *sym){
-    enum { len = 512 };
-    char symname[len];
-
     unsigned long start = sym->sym_func_start;
     unsigned long end = start + sym->sym_func_len;
 
+    char *symname = NULL;
+
     if(entry->from_dsc){
-        // XXX don't hardcode on master
-        FILE *dscfptr =
-            fopen("/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64", "rb");
-
-        if(!dscfptr){
-            printf("%s: couldn't open shared cache\n", __func__);
-            return;
+        if(!IS_UNNAMED_SYMBOL(sym))
+            concat(&symname, "%s", sym->dsc_symname);
+        else{
+            concat(&symname, "iosdbg$$unnamed_symbol%d", sym->unnamed_sym_num);
         }
-
-        unsigned long using_strtab = entry->strtab_fileaddr;
-
-        if(sym->use_dsc_dylib_strtab)
-            using_strtab = sym->dsc_dylib_strtab_fileoff;
-
-        unsigned long file_stroff = using_strtab + sym->strtabidx;
-
-        fseek(dscfptr, file_stroff, SEEK_SET);
-        fread(symname, sizeof(char), len, dscfptr);
-        symname[len - 1] = '\0';
 
         printf("DSC image '%s': [%#lx-%#lx]: '%s'\n",
                 entry->imagename, start, end, symname);
 
-        fclose(dscfptr);
+        free(symname);
 
         return;
     }
 
-    kern_return_t kret = read_memory_at_location(entry->strtab_vmaddr + 
-            sym->strtabidx, symname, len);
+    if(!IS_UNNAMED_SYMBOL(sym)){
+        //printf("%s: best_sym is named\n", __func__);
+        int maxlen = 512;
+        symname = malloc(maxlen);
+
+        unsigned long stroff = entry->strtab_vmaddr + sym->strtabidx;
+        kern_return_t kret = read_memory_at_location(stroff, symname, maxlen);
+
+        //printf("%s: kret %s\n", __func__, mach_error_string(kret));
+
+        //concat(&symname, "%s", best_sym->dsc_symname);
+    }
+    else{
+        concat(&symname, "iosdbg$$unnamed_symbol%d", sym->unnamed_sym_num);
+    }
 
     printf("non-DSC image '%s': [%#lx-%#lx]:", entry->imagename, start, end);
 
-    if(kret == KERN_SUCCESS)
+    //if(kret == KERN_SUCCESS)
         printf(" '%s'\n", symname);
-    else
-        printf(" could not get symname from vmaddr %#lx: %s\n",
-                entry->strtab_vmaddr + sym->strtabidx, mach_error_string(kret));
+    //else
+      //  printf(" could not get symname from vmaddr %#lx: %s\n",
+        //        entry->strtab_vmaddr + sym->strtabidx, mach_error_string(kret));
 
 }

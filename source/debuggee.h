@@ -5,6 +5,9 @@
 #include <mach-o/dyld_images.h>
 #include <sys/types.h>
 
+extern void *DSCDATA;
+extern unsigned long DSCSZ;
+
 struct debuggee {
     /* Task port for the debuggee. */
     mach_port_t task;

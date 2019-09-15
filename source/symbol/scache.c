@@ -12,37 +12,6 @@
 
 #include "scache.h"
 
-struct dsc_hdr {
-    char magic[16];
-    unsigned int mappingoff;
-    unsigned int mappingcnt;
-    char pad[48];
-    unsigned long localsymoff;
-    unsigned long localsymsz;
-};
-
-struct dsc_local_syms_info {
-    unsigned int nlistoff;
-    unsigned int nlistcnt;
-    unsigned int stringsoff;
-    unsigned int stringssz;
-    unsigned int entriesoff;
-    unsigned int entriescnt;
-};
-
-struct dsc_local_syms_entry {
-    unsigned int dyliboff;
-    unsigned int nliststartidx;
-    unsigned int nlistcnt;
-};
-
-struct dsc_mapping_info {
-    unsigned long address;
-    unsigned long size;
-    unsigned long fileoff;
-    char pad[8];
-};
-
 enum { NAME_OK, NAME_OOB, NAME_NOT_FOUND };
 
 static int get_dylib_path(void *dscdata, unsigned int dylib_offset,
@@ -88,100 +57,6 @@ struct dbg_sym_entry *create_sym_entry_for_dsc_image(char *imagename){
     struct dbg_sym_entry *entry = create_sym_entry(imagename, 0, 0, from_dsc);
 
     return entry;
-}
-
-void get_dsc_image_symbols(void *dscdata, char *imagename, unsigned long aslr_slide,
-        struct dbg_sym_entry **sym_entry, struct symtab_command *symtab_cmd,
-        int __text_segment_nsect){
-    struct dsc_hdr *cache_hdr = (struct dsc_hdr *)dscdata;
-    struct dsc_local_syms_info *syminfos =
-        (struct dsc_local_syms_info *)((uint8_t *)dscdata + cache_hdr->localsymoff);
-
-    unsigned long nlist_offset = syminfos->nlistoff + cache_hdr->localsymoff;
-    unsigned long strings_offset = syminfos->stringsoff + cache_hdr->localsymoff;
-    unsigned long entries_offset = syminfos->entriesoff + cache_hdr->localsymoff;
-
-    // XXX this line should be somewhere else
-    (*sym_entry)->strtab_fileaddr = strings_offset;
-
-    int entriescnt = syminfos->entriescnt;
-
-    for(int i=0; i<entriescnt; i++){
-        unsigned long nextentryoff =
-            entries_offset + (sizeof(struct dsc_local_syms_entry) * i);
-        struct dsc_local_syms_entry *entry =
-            (struct dsc_local_syms_entry *)((uint8_t *)dscdata + nextentryoff);
-
-        void *nameptr = NULL;
-        int result = get_dylib_path(dscdata, entry->dyliboff, &nameptr);
-
-        if(result == NAME_OOB || result == NAME_NOT_FOUND)
-            continue;
-
-        char *cur_dylib_path = nameptr;
-
-        if(strcmp(imagename, cur_dylib_path) != 0)
-            continue;
-
-        unsigned long nlist_start = nlist_offset +
-            (entry->nliststartidx * sizeof(struct nlist_64));
-        int idx = 0;
-        int nlistcnt = entry->nlistcnt;
-
-        for(int j=0; j<nlistcnt; j++){
-            unsigned long nextnlistoff = nlist_start +
-                (sizeof(struct nlist_64) * j);
-            struct nlist_64 *nlist =
-                (struct nlist_64 *)((uint8_t *)dscdata + nextnlistoff);
-
-            if(nlist->n_sect == __text_segment_nsect){
-                add_symbol_to_entry(*sym_entry, nlist->n_un.n_strx,
-                        nlist->n_value + aslr_slide);
-
-                /* These come right from the DSC string table,
-                 * not any dylib-specific string table.
-                 */
-                (*sym_entry)->syms[idx]->use_dsc_dylib_strtab = 0;
-
-                idx++;
-            }
-        }
-
-        /* Go through the dylib's symtab to get the rest */
-        unsigned int nsyms = symtab_cmd->nsyms;
-        unsigned long stab_symoff = symtab_cmd->symoff;
-        unsigned long stab_stroff = symtab_cmd->stroff;
-
-        for(int j=0; j<nsyms; j++){
-            unsigned long nextnlistoff = stab_symoff +
-                (sizeof(struct nlist_64) * j);
-            struct nlist_64 *nlist =
-                (struct nlist_64 *)((uint8_t *)dscdata + nextnlistoff);
-
-            unsigned long stroff = stab_stroff + nlist->n_un.n_strx;
-            char *symname = (char *)((uint8_t *)dscdata + stroff);
-
-            /* Skip <redacted> symbols */
-            if(*symname != '<'){
-                if((nlist->n_type & N_TYPE) == N_SECT &&
-                        nlist->n_sect == __text_segment_nsect){
-                    add_symbol_to_entry(*sym_entry, nlist->n_un.n_strx,
-                            nlist->n_value + aslr_slide);
-
-                    /* However, these come right from the string table
-                     * of the dylib we're currently on.
-                     */
-                    (*sym_entry)->syms[idx]->use_dsc_dylib_strtab = 1;
-                    (*sym_entry)->syms[idx]->dsc_dylib_strtab_fileoff =
-                        symtab_cmd->stroff;
-
-                    idx++;
-                }
-            }
-        }
-
-        return;
-    }
 }
 
 struct my_dsc_mapping *get_dsc_mappings(void *dscdata, int *len){

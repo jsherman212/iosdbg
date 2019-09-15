@@ -240,13 +240,16 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         return CMD_SUCCESS;
     }
 
-    void *dscdata = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, dscfd, 0);
+    DSCSZ = st.st_size;
 
-    if(initialize_debuggee_dyld_all_image_infos(dscdata))
+    DSCDATA = mmap(NULL, DSCSZ, PROT_READ, MAP_PRIVATE, dscfd, 0);
+
+    close(dscfd);
+
+    if(initialize_debuggee_dyld_all_image_infos(DSCDATA))
         concat(outbuffer, "%s", dscwarnmsg);
 
-    munmap(dscdata, st.st_size);
-    close(dscfd);
+    //munmap(dscdata, st.st_size);
 
     return CMD_SUCCESS;
 }

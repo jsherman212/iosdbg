@@ -2,6 +2,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include "breakpoint.h"
@@ -77,6 +78,8 @@ static void reply_to_all_exceptions(void){
 
 void ops_detach(int from_death, char **outbuffer){
     ops_suspend();
+
+    munmap(DSCDATA, DSCSZ);
 
     breakpoint_delete_all();
     watchpoint_delete_all();
