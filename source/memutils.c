@@ -166,11 +166,12 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount,
 
 kern_return_t read_memory_at_location(unsigned long location, void *buffer,
         vm_size_t length){
-    return vm_read_overwrite(debuggee->task,
-            (vm_address_t)location,
-            length,
-            (vm_address_t)buffer,
-            &length);
+    if(PM){
+        printf("%s: location %#lx buffer %p\n", __func__, location, buffer);
+        PM = 0;
+    }
+    return vm_read_overwrite(debuggee->task, (vm_address_t)location,
+            length, (vm_address_t)buffer, &length);
 }
 
 kern_return_t write_memory_to_location(vm_address_t location,
@@ -198,22 +199,12 @@ kern_return_t write_memory_to_location(vm_address_t location,
     /* Get raw bytes from this number. */
     void *data_ptr = (uint8_t *)&data;
 
-    vm_protect(debuggee->task,
-            location,
-            size,
-            0,
+    vm_protect(debuggee->task, location, size, 0,
             VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
 
-    ret = vm_write(debuggee->task,
-            location,
-            (pointer_t)data_ptr,
-            size);
+    ret = vm_write(debuggee->task, location, (pointer_t)data_ptr, size);
 
-    vm_protect(debuggee->task,
-            location,
-            size,
-            0,
-            info.protection);
+    vm_protect(debuggee->task, location, size, 0, info.protection);
 
     return ret;
 }

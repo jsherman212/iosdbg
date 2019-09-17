@@ -12,46 +12,6 @@
 
 #include "scache.h"
 
-enum { NAME_OK, NAME_OOB, NAME_NOT_FOUND };
-
-static int get_dylib_path(void *dscdata, unsigned int dylib_offset,
-        void **nameptrout){
-    struct mach_header_64 *dylib_hdr =
-        (struct mach_header_64 *)((uint8_t *)dscdata + dylib_offset);
-
-    struct load_command *cmd =
-        (struct load_command *)((uint8_t *)dscdata + dylib_offset + sizeof(*dylib_hdr));
-
-    struct load_command *cmdorig = cmd;
-    struct dylib_command *dylib_cmd = NULL;
-
-    for(int i=0; i<dylib_hdr->ncmds; i++){
-        if(cmd->cmd == LC_ID_DYLIB){
-            dylib_cmd = (struct dylib_command *)cmd;
-            break;
-        }
-
-        unsigned long diff = (uint8_t *)cmd - (uint8_t *)dscdata;
-        cmd = (struct load_command *)((uint8_t *)dscdata + diff + cmd->cmdsize);
-    }
-
-    unsigned int nameoff = dylib_cmd->dylib.name.offset;
-
-    struct load_command *cmdend =
-        (struct load_command *)((uint8_t *)cmdorig + dylib_hdr->sizeofcmds);
-    unsigned long bytes_left = cmdend - cmd;
-
-    if(nameoff > bytes_left)
-        return NAME_OOB;
-
-    if(dylib_cmd){
-        *nameptrout = (uint8_t *)cmd + nameoff;
-        return NAME_OK;
-    }
-
-    return NAME_NOT_FOUND;
-}
-
 struct dbg_sym_entry *create_sym_entry_for_dsc_image(char *imagename){
     int from_dsc = 1;
     struct dbg_sym_entry *entry = create_sym_entry(imagename, 0, 0, from_dsc);

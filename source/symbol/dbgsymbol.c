@@ -9,7 +9,7 @@
 #include "../strext.h"
 
 // XXX inside iosdbg, reset this on detach
-static int UNNAMED_SYM_CNT = 0;
+static int UNNAMED_SYM_CNT = 1;
 
 // XXX get rid of the idx param
 // XXX arg1 - strtabidx or unnamed_sym_num depending on kind
@@ -27,17 +27,15 @@ void add_symbol_to_entry(struct dbg_sym_entry *entry, int arg1,
 
     if(symname)
         entry->syms[entry->cursymarrsz]->dsc_symname = symname;
-    //else
-      //  entry->syms[entry->cursymarrsz]->dsc_symname = UNNAMED_SYMBOL;
 
     if(kind == UNNAMED_SYM){
         entry->syms[entry->cursymarrsz]->dsc_symname = UNNAMED_SYMBOL;
         entry->syms[entry->cursymarrsz]->unnamed_sym_num = UNNAMED_SYM_CNT++;
     }
-    else if(kind == NAMED_SYM)
+    else if(kind == NAMED_SYM){
         entry->syms[entry->cursymarrsz]->strtabidx = arg1;
+    }
 
-    //entry->syms[entry->cursymarrsz]->strtabidx = strtabidx;
     entry->syms[entry->cursymarrsz]->sym_func_start = vmaddr_start;
     entry->syms[entry->cursymarrsz]->sym_func_len = fxnlen;
 
@@ -51,16 +49,9 @@ struct dbg_sym_entry *create_sym_entry(char *imagename,
 
     char *name = NULL;
 
-    if(imagename)
-        name = strdup(imagename);
-    else
-        name = strdup("unknown");
-
-    entry->imagename = name;
     entry->symarr_capacity_pow = STARTING_CAPACITY;
     entry->cursymarrsz = 0;
     entry->strtab_vmaddr = strtab_vmaddr;
-    //entry->strtab_fileaddr = strtab_fileaddr;
     entry->syms = malloc(CALC_SYM_CAPACITY(STARTING_CAPACITY));
     entry->from_dsc = from_dsc;
 
@@ -221,13 +212,15 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
     /* Prep good combo array for binary search */
     qsort(good_combos, num_good_combos, sizeof(struct goodcombo *), goodcombocmp);
 
+    /*
     for(int i=0; i<num_good_combos; i++){
         struct goodcombo *gc = good_combos[i];
         printf("%s: combo %d: ", __func__, i);
         sym_desc(gc->entry, gc->sym);
     }
     printf("%s: done printing good combos\n\n", __func__);
-    /* Out of all the candidates we have, which is the closest to vmaddr? */
+    */
+    /* out of all the candidates we have, which is the closest to vmaddr? */
     int bestcomboidx = bsearch_gc_lc(good_combos, vmaddr, 0, num_good_combos - 1);
 
     /* Nothing found. This is fine, could be an unnamed function. */
@@ -236,9 +229,11 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
 
     struct goodcombo *bestcombo = good_combos[bestcomboidx];
 
+    /*
     printf("%s: final best combo:\n", __func__);
     sym_desc(bestcombo->entry, bestcombo->sym);
     printf("%s: done printing best combo\n\n", __func__);
+    */
     
     best_entry = bestcombo->entry;
     best_sym = bestcombo->sym;
@@ -282,6 +277,10 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
     *distfromsymstartout = vmaddr - best_sym->sym_func_start;
 
     return 0;
+}
+
+void reset_unnamed_sym_cnt(void){
+    UNNAMED_SYM_CNT = 1;
 }
 
 void sym_desc(struct dbg_sym_entry *entry, struct sym *sym){

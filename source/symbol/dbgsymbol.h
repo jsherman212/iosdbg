@@ -55,9 +55,6 @@ struct sym {
     /* pointer into debuggee's address space, the start of this function */
     unsigned long sym_func_start;
 
-    /* dylib-specific file offset of the string table inside of the DSC */
-   // unsigned long dsc_dylib_strtab_fileoff;
-
     // XXX non-NULL if the entry that owns this sym comes from the dyld shared cache,
     // as we can mmap the dsc and strdup this pointer to save a lot of memory
     char *dsc_symname;
@@ -70,8 +67,6 @@ struct sym {
     };
 
     unsigned int sym_func_len;
-
-    //char use_dsc_dylib_strtab;
 };
 
 struct dbg_sym_entry {
@@ -79,11 +74,7 @@ struct dbg_sym_entry {
     struct sym **syms;
 
     /* pointer into debuggee's address space */
-    // XXX if zero, this is a shared cache image
     unsigned long strtab_vmaddr;
-
-    /* file offset for the start of the string table */
-//    unsigned long strtab_fileaddr;
 
     unsigned int cursymarrsz;
 
@@ -113,6 +104,7 @@ void add_symbol_to_entry(struct dbg_sym_entry *, int, unsigned long,
 struct dbg_sym_entry *create_sym_entry(char *, unsigned long, unsigned long, int);
 int get_symbol_info_from_address(struct linkedlist *, unsigned long, char **,
         char **, unsigned int *);
+void reset_unnamed_sym_cnt(void);
 void sym_desc(struct dbg_sym_entry *, struct sym *);
 
 #endif

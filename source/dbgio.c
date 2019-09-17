@@ -11,6 +11,26 @@
 int IOSDBG_IO_PIPE[2];
 pthread_mutex_t IO_PIPE_LOCK = PTHREAD_MUTEX_INITIALIZER;
 
+size_t copy_file_contents(char *fname, size_t off, void *buf, size_t size){
+    if(!fname || !buf)
+        return -1;
+
+    FILE *fp = fopen(fname, "rb");
+
+    if(!fp)
+        return -1;
+
+    fseek(fp, off, SEEK_SET);
+    size_t r = fread(buf, sizeof(char), size, fp);
+    fclose(fp);
+
+    return r;
+}
+
+int initialize_iosdbg_io(void){
+    return pipe(IOSDBG_IO_PIPE);
+}
+
 int io_append(const char *fmt, ...){
     pthread_mutex_lock(&IO_PIPE_LOCK);
 
@@ -61,8 +81,4 @@ int io_flush(void){
     free(saved_line);
 
     return written;
-}
-
-int initialize_iosdbg_io(void){
-    return pipe(IOSDBG_IO_PIPE);
 }

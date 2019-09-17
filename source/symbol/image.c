@@ -16,6 +16,8 @@
 void *DSCDATA = NULL;
 unsigned long DSCSZ = 0;
 
+int PM = 0;
+
 static int symoffcmp(const void *a, const void *b){
     struct sym *sa = *(struct sym **)a;
     struct sym *sb = *(struct sym **)b;
@@ -131,15 +133,21 @@ static void get_cmds(void *dscdata, unsigned long image_load_addr,
 
     if(symtab_cmd_out)
         *symtab_cmd_out = symtab_cmd;
+    else
+        free(symtab_cmd);
 
     if(__text_seg_cmd_out)
         *__text_seg_cmd_out = __text_seg_cmd;
+    else
+        free(__text_seg_cmd);
 
     if(__text_segment_nsect_out)
         *__text_segment_nsect_out = section_num;
 
     if(__lc_fxn_start_cmd_out)
         *__lc_fxn_start_cmd_out = lc_fxn_start_cmd;
+    else
+        free(lc_fxn_start_cmd);
 }
 
 enum { DSC = 0, NON_DSC };
@@ -166,14 +174,49 @@ static int read_lc_fxn_starts(char *imagename, void *machodata,
         lcfxnstart_end = lcfxnstart_start + lidc->datasize;
     }
     else{
-        unsigned long lcfxnoff = image_load_addr + lidc->dataoff;
-        printf("%s: lcfxnoff for non dsc image %#lx\n",
-                __func__, lcfxnoff);
-        lcfxnstart_start  = malloc(lidc->datasize);
-        kern_return_t kret =
-            read_memory_at_location(lcfxnoff, lcfxnstart_start, lidc->datasize);
-        printf("%s: kret %s\n", __func__, mach_error_string(kret));
+        printf("%s: image loaded at %#lx, lcfxnstart file offset at %#x\n",
+                __func__, image_load_addr, lidc->dataoff);
+        // XXX seems to be more sane to read right from the file. Don't
+        // have to deal with nonsense shifting in memory
+
+
+        //unsigned long lcfxnoff = image_load_addr + lidc->dataoff;
+        //printf("%s: lcfxnoff for non dsc image %#lx\n",
+          //      __func__, lcfxnoff);
+        lcfxnstart_start = malloc(lidc->datasize);
+
+        if(copy_file_contents(imagename, lidc->dataoff, lcfxnstart_start,
+                    lidc->datasize) == -1){
+            printf("%s: warning: could not open file at '%s'\n",
+                    __func__, imagename);
+            return 1;
+        }
+        /*
+        FILE *imgfile = fopen(imagename, "rb");
+
+        if(!imgfile){
+            printf("%s: warning: could not open file at '%s'\n",
+                    __func__, imagename);
+            return 1;
+        }
+
+        fseek(imgfile, lidc->dataoff, SEEK_SET);
+        fread(lcfxnstart_start, sizeof(char), lidc->datasize, imgfile);
+
+        fclose(imgfile);
+        */
+        
         lcfxnstart_end = lcfxnstart_start + lidc->datasize;
+        /*kern_return_t kret =
+            read_memory_at_location(lcfxnoff, lcfxnstart_start, lidc->datasize);
+        //printf("%s: kret %s\n", __func__, mach_error_string(kret));
+        lcfxnstart_end = lcfxnstart_start + lidc->datasize;
+        
+        char *buf = NULL;
+        dump_memory(lcfxnoff, 0x50, &buf);
+        printf("%s: memdump of lcfxnoff:\n%s\n", __func__, buf);
+        free(buf);
+        */
     }
 
     unsigned long total_fxn_len = 0;
@@ -196,10 +239,11 @@ static int read_lc_fxn_starts(char *imagename, void *machodata,
         total_fxn_len += prevfxnlen;
         nextfxnstartaddr += prevfxnlen;
 
+        /*
         if(strcmp(imagename, PUBG) == 0 && fxncnt < 50)
         printf("%s: fxn %d start @ %#lx, \n",
                 __func__, fxncnt, nextfxnstartaddr + aslr_slide);
-
+                */
 
         if(fxncnt >= FAST_POW_TWO(*entriescapa) - 1){
             (*entriescapa)++;
@@ -621,6 +665,7 @@ static struct dbg_sym_entry *create_sym_entry_for_image(void *dscdata,
             int fxnlen = lc_fxn_starts_entries[i]->len;
 
             // XXX create an nlist "key" so this works correctly
+            // XXX this shouldn't be so complicated
             struct nlist_64_wrapper nwkey = {0};
             struct nlist_64 nkey = {0};
             nkey.n_value = vmaddr;
@@ -829,13 +874,42 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
     debuggee->symbols = linkedlist_new();
 
     for(int i=0; i<debuggee->dyld_all_image_infos.infoArrayCount; i++){
-        int count = PATH_MAX;
-        char fpath[count];
-        memset(fpath, 0, count);
+        int maxlen = PATH_MAX;
+        char fpath[maxlen];
+        memset(fpath, 0, maxlen);
 
-        kret = read_memory_at_location(
-                (unsigned long)debuggee->dyld_info_array[i].imageFilePath,
-                fpath, count);
+        unsigned int bytes_read = 0;
+        char read_byte = '\1';
+
+        /* Read a byte at a time, arbitary large sizes for fpath
+         * causes errors.
+         */
+        while(read_byte && bytes_read < maxlen && kret == KERN_SUCCESS){
+         //   if(i==0)
+           //     PM = 1;
+
+            unsigned long imgpath =
+                (unsigned long)debuggee->dyld_info_array[i].imageFilePath;
+            kret = read_memory_at_location(imgpath + bytes_read,
+                    &read_byte, sizeof(char));
+
+            fpath[bytes_read] = read_byte;
+
+            bytes_read++;
+        }
+        
+        /*
+        if(i==0){
+            printf("%s: imgpath %#lx infoarray.imageFilePath %p\n",
+                    __func__, imgpath, debuggee->dyld_info_array[i].imageFilePath);
+            printf("%s: kret %s\n", __func__, mach_error_string(kret));
+            char *buf = NULL;
+            //PM = 1;
+            dump_memory(imgpath, 0x50, &buf);
+            printf("%s: imgname:\n%s\n", __func__, buf);
+            free(buf);
+        }
+        */
 
         unsigned long image_load_address =
             (unsigned long)debuggee->dyld_info_array[i].imageLoadAddress;
@@ -851,13 +925,6 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
         if(!entry)
             continue;
 
-        //if(entry->from_dsc){
-        linkedlist_add(debuggee->symbols, entry);
-
-        // XXX put this somewhere else
-        free(entry->imagename);
-        entry->imagename = NULL;
-
         /* we only care about the last part of fpath */
         char *lastslash = strrchr(fpath, '/');
         char *path = fpath;
@@ -867,43 +934,7 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
 
         entry->imagename = strdup(path);
 
-
-            /*
-            if(i==3){
-                for(int i=0; i<entry->cursymarrsz; i++){
-                    struct sym *cursym = entry->syms[i];
-                    sym_desc(entry, cursym);
-                }
-            }
-            */
-
-            //free(symtab_cmd);
-            //free(__text_seg_cmd);
-
-            //continue;
-        //}
-        //else{
-            /*unsigned long symtab_addr = symtab_cmd->symoff + image_load_address,
-                          strtab_addr = symtab_cmd->stroff + image_load_address;
-
-            size_t nscount = sizeof(struct nlist_64) * symtab_cmd->nsyms;
-            */
-
-         //   linkedlist_add(debuggee->symbols, entry);
-       // }
-
-
-        // XXX for testing, seeing what is wrong with binary searching for
-        // a symbol while backtracing
-        /*
-        if(i==0){
-            for(int i=0; i<entry->cursymarrsz; i++){
-                struct sym *cursym = entry->syms[i];
-                //sym_desc(entry, cursym);
-            }
-        }
-        */
-        //}
+        linkedlist_add(debuggee->symbols, entry);
 
         free(symtab_cmd);
         free(__text_seg_cmd);

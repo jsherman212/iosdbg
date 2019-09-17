@@ -21,6 +21,7 @@
 #include "trace.h"
 #include "watchpoint.h"
 
+#include "symbol/dbgsymbol.h"
 #include "symbol/sym.h"
 
 void ops_printsiginfo(char **outbuffer){
@@ -156,6 +157,8 @@ void ops_detach(int from_death, char **outbuffer){
     sym_end(debuggee->dwarfinfo);
     free(debuggee->dwarfinfo);
     debuggee->dwarfinfo = NULL;
+
+    reset_unnamed_sym_cnt();
 
     ops_resume();
 }
