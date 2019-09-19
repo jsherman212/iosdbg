@@ -166,10 +166,6 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount,
 
 kern_return_t read_memory_at_location(unsigned long location, void *buffer,
         vm_size_t length){
-    if(PM){
-        printf("%s: location %#lx buffer %p\n", __func__, location, buffer);
-        PM = 0;
-    }
     return vm_read_overwrite(debuggee->task, (vm_address_t)location,
             length, (vm_address_t)buffer, &length);
 }

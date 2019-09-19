@@ -27,7 +27,7 @@ cmds : $(CMD_SOURCES) $(CRITICAL_HEADER_FILES)
 	cd $(CMDSRC)
 	$(MAKE)
 
-DISAS_SOURCES = $(wildcard $(SRC)/cmd/*.c)
+DISAS_SOURCES = $(wildcard $(SRC)/disas/*.c)
 
 disas : $(DISAS_SOURCES)
 	cd $(DISASSRC)

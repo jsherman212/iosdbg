@@ -5,14 +5,13 @@
 
 #include "dbgsymbol.h"
 
+#include "../debuggee.h"
 #include "../memutils.h"
 #include "../strext.h"
 
-// XXX inside iosdbg, reset this on detach
 static int UNNAMED_SYM_CNT = 1;
 
-// XXX get rid of the idx param
-// XXX arg1 - strtabidx or unnamed_sym_num depending on kind
+/* arg1 represents strtabidx or unnamed_sym_num depending on kind */
 void add_symbol_to_entry(struct dbg_sym_entry *entry, int arg1,
         unsigned long vmaddr_start, unsigned int fxnlen, int kind,
         char *symname){
@@ -42,12 +41,9 @@ void add_symbol_to_entry(struct dbg_sym_entry *entry, int arg1,
     entry->cursymarrsz++;
 }
 
-struct dbg_sym_entry *create_sym_entry(char *imagename,
-        unsigned long strtab_vmaddr, unsigned long strtab_fileaddr,
-        int from_dsc){
+struct dbg_sym_entry *create_sym_entry(unsigned long strtab_vmaddr,
+        unsigned long strtab_fileaddr, int from_dsc){
     struct dbg_sym_entry *entry = malloc(sizeof(struct dbg_sym_entry));
-
-    char *name = NULL;
 
     entry->symarr_capacity_pow = STARTING_CAPACITY;
     entry->cursymarrsz = 0;
@@ -58,76 +54,76 @@ struct dbg_sym_entry *create_sym_entry(char *imagename,
     return entry;
 }
 
-// XXX find the symbol with the closest function that starts before vmaddr
-// XXX return idx of that smallest closest elem or -1 if not found
-int bsearch_sym_lc(struct sym **syms, unsigned long vmaddr, int lo, int hi){
-    if(lo == hi){
-        //printf("%s: lo sym func start %#lx vmaddr %#lx\n",
-          //      __func__, syms[lo]->sym_func_start, vmaddr);
-        if(syms[lo]->sym_func_start > vmaddr)
-            return -1;
+void destroy_all_symbol_entries(void){
+    struct node_t *current = debuggee->symbols->front;
 
-        return lo;
+    while(current){
+        struct dbg_sym_entry *entry = current->data;
+
+        free(entry->imagename);
+        entry->imagename = NULL;
+
+        for(int i=0; i<entry->cursymarrsz; i++){
+            free(entry->syms[i]);
+            entry->syms[i] = NULL;
+        }
+
+        free(entry->syms);
+        entry->syms = NULL;
+
+        current = current->next;
+
+        free(entry);
+        entry = NULL;
     }
-
-    if((hi - 1) == lo){
-        //printf("arr[lo] %d vmaddr %d\n", arr[lo], vmaddr);
-        if(vmaddr >= syms[hi]->sym_func_start)
-            return hi;
-        else if(vmaddr >= syms[lo]->sym_func_start)
-            return lo;
-
-        return -1;
-    }
-
-    int mid = (lo + hi) / 2;
-    //printf("lo %d hi %d mid %d\n", lo, hi, mid);
-    //int midval = arr[mid];
-    struct sym *midsym = syms[mid];
-
-    if(vmaddr < midsym->sym_func_start)
-        return bsearch_sym_lc(syms, vmaddr, lo, mid - 1);
-
-    return bsearch_sym_lc(syms, vmaddr, mid, hi);
 }
+
+enum { SYM = 0, GC };
 
 struct goodcombo {
     struct dbg_sym_entry *entry;
     struct sym *sym;
 };
 
-// XXX find the symbol with the closest function that starts before vmaddr
-// XXX return idx of that smallest closest elem or -1 if not found
-int bsearch_gc_lc(struct goodcombo **gcs, unsigned long vmaddr, int lo, int hi){
+/* find the symbol with the closest function that starts before vmaddr */
+int bsearch_lc(void *arg0, unsigned long vmaddr, int lo, int hi, int which){
     if(lo == hi){
-        //printf("%s: lo sym func start %#lx vmaddr %#lx\n",
-          //      __func__, syms[lo]->sym_func_start, vmaddr);
-        if(gcs[lo]->sym->sym_func_start > vmaddr)
-            return -1;
+        unsigned long val = ((struct sym **)arg0)[lo]->sym_func_start;
 
-        return lo;
+        if(which == GC)
+            val = ((struct goodcombo **)arg0)[lo]->sym->sym_func_start;
+
+        return val > vmaddr ? -1 : lo;
     }
 
     if((hi - 1) == lo){
-        //printf("arr[lo] %d vmaddr %d\n", arr[lo], vmaddr);
-        if(vmaddr >= gcs[hi]->sym->sym_func_start)
+        unsigned long hival = ((struct sym **)arg0)[hi]->sym_func_start;
+        unsigned long loval = ((struct sym **)arg0)[lo]->sym_func_start;
+
+        if(which == GC){
+            hival = ((struct goodcombo **)arg0)[hi]->sym->sym_func_start;
+            loval = ((struct goodcombo **)arg0)[lo]->sym->sym_func_start;
+        }
+
+        if(vmaddr >= hival)
             return hi;
-        else if(vmaddr >= gcs[lo]->sym->sym_func_start)
+        else if(vmaddr >= loval)
             return lo;
 
         return -1;
     }
 
     int mid = (lo + hi) / 2;
-    //printf("lo %d hi %d mid %d\n", lo, hi, mid);
-    //int midval = arr[mid];
-    //struct sym *midsym = syms[mid];
-    struct goodcombo *midgc = gcs[mid];
+    unsigned long midval = ((struct sym **)arg0)[mid]->sym_func_start;
 
-    if(vmaddr < midgc->sym->sym_func_start)
-        return bsearch_gc_lc(gcs, vmaddr, lo, mid - 1);
+    if(which == GC)
+        midval = ((struct goodcombo **)arg0)[mid]->sym->sym_func_start;
 
-    return bsearch_gc_lc(gcs, vmaddr, mid, hi);
+    if(vmaddr < midval)
+        return bsearch_lc(arg0, vmaddr, lo, mid - 1, which);
+
+    return bsearch_lc(arg0, vmaddr, mid, hi, which);
+
 }
 
 static int goodcombocmp(const void *a, const void *b){
@@ -152,14 +148,6 @@ static int goodcombocmp(const void *a, const void *b){
 int get_symbol_info_from_address(struct linkedlist *symlist,
         unsigned long vmaddr, char **imgnameout, char **symnameout,
         unsigned int *distfromsymstartout){
-    struct dbg_sym_entry *best_entry = NULL;
-    struct sym *best_sym = NULL;
-
-    int best_symbol_idx = 0;
-
-    unsigned long diff = 0;
-    int cnt = 1;
-
     int num_good_combos = 0;
     struct goodcombo **good_combos = malloc(sizeof(struct goodcombo *));
     good_combos[num_good_combos] = NULL;
@@ -168,8 +156,6 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
             current;
             current = current->next){
         struct dbg_sym_entry *entry = current->data;
-      //  printf("%s: searching entry %d: '%s' for vmaddr %#lx\n",
-        //        __func__, cnt++, entry->imagename, vmaddr);
 
         if(entry->cursymarrsz == 0)
             continue;
@@ -185,20 +171,10 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
             continue;
         }
 
-        /*
-        if(strcmp(entry->imagename, "/private/var/mobile/testprogs/./params") == 0){
-            for(int i=0; i<entry->cursymarrsz; i++){
-                sym_desc(entry, entry->syms[i]);
-            }
-        }
-        */
-
         /* Figure out the closest symbol to vmaddr for each entry */
         int lo = 0, hi = entry->cursymarrsz - 1;
-        int bestsymidx = bsearch_sym_lc(entry->syms, vmaddr, lo, hi);
-        //best_symbol_idx = bsearch_lc(entry->syms, vmaddr, lo, hi);
+        int bestsymidx = bsearch_lc(entry->syms, vmaddr, lo, hi, SYM);
 
-        //if((best_sym = bsearchrange(entry, NULL, 0, vmaddr, NULL))){
         if(bestsymidx != -1){
             struct goodcombo **good_combos_rea = realloc(good_combos,
                     ++num_good_combos * sizeof(struct goodcombo *));
@@ -212,31 +188,12 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
     /* Prep good combo array for binary search */
     qsort(good_combos, num_good_combos, sizeof(struct goodcombo *), goodcombocmp);
 
-    /*
-    for(int i=0; i<num_good_combos; i++){
-        struct goodcombo *gc = good_combos[i];
-        printf("%s: combo %d: ", __func__, i);
-        sym_desc(gc->entry, gc->sym);
-    }
-    printf("%s: done printing good combos\n\n", __func__);
-    */
     /* out of all the candidates we have, which is the closest to vmaddr? */
-    int bestcomboidx = bsearch_gc_lc(good_combos, vmaddr, 0, num_good_combos - 1);
-
-    /* Nothing found. This is fine, could be an unnamed function. */
-    //if(bestcomboidx == -1)
-      //  return 1;
-
+    int bestcomboidx = bsearch_lc(good_combos, vmaddr, 0, num_good_combos - 1, GC);
     struct goodcombo *bestcombo = good_combos[bestcomboidx];
 
-    /*
-    printf("%s: final best combo:\n", __func__);
-    sym_desc(bestcombo->entry, bestcombo->sym);
-    printf("%s: done printing best combo\n\n", __func__);
-    */
-    
-    best_entry = bestcombo->entry;
-    best_sym = bestcombo->sym;
+    struct dbg_sym_entry *best_entry = bestcombo->entry;
+    struct sym *best_sym = bestcombo->sym;
 
     char *symname = NULL;
 
@@ -244,25 +201,20 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
         if(!IS_UNNAMED_SYMBOL(best_sym))
             concat(&symname, "%s", best_sym->dsc_symname);
         else{
-            concat(&symname, "iosdbg$$unnamed_symbol%d",
+            concat(&symname, "iosdbg_unnamed_symbol%d",
                     best_sym->unnamed_sym_num);
         }
     }
     else{
         if(!IS_UNNAMED_SYMBOL(best_sym)){
-            //printf("%s: best_sym is named\n", __func__);
             int maxlen = 512;
             symname = malloc(maxlen);
 
             unsigned long stroff = best_entry->strtab_vmaddr + best_sym->strtabidx;
-            kern_return_t kret = read_memory_at_location(stroff, symname, maxlen);
-
-            //printf("%s: kret %s\n", __func__, mach_error_string(kret));
-
-            //concat(&symname, "%s", best_sym->dsc_symname);
+            read_memory_at_location(stroff, symname, maxlen);
         }
         else{
-            concat(&symname, "iosdbg$$unnamed_symbol%d",
+            concat(&symname, "iosdbg_unnamed_symbol%d",
                     best_sym->unnamed_sym_num);
         }
     }
@@ -281,51 +233,4 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
 
 void reset_unnamed_sym_cnt(void){
     UNNAMED_SYM_CNT = 1;
-}
-
-void sym_desc(struct dbg_sym_entry *entry, struct sym *sym){
-    unsigned long start = sym->sym_func_start;
-    unsigned long end = start + sym->sym_func_len;
-
-    char *symname = NULL;
-
-    if(entry->from_dsc){
-        if(!IS_UNNAMED_SYMBOL(sym))
-            concat(&symname, "%s", sym->dsc_symname);
-        else{
-            concat(&symname, "iosdbg$$unnamed_symbol%d", sym->unnamed_sym_num);
-        }
-
-        printf("DSC image '%s': [%#lx-%#lx]: '%s'\n",
-                entry->imagename, start, end, symname);
-
-        free(symname);
-
-        return;
-    }
-
-    if(!IS_UNNAMED_SYMBOL(sym)){
-        //printf("%s: best_sym is named\n", __func__);
-        int maxlen = 512;
-        symname = malloc(maxlen);
-
-        unsigned long stroff = entry->strtab_vmaddr + sym->strtabidx;
-        kern_return_t kret = read_memory_at_location(stroff, symname, maxlen);
-
-        //printf("%s: kret %s\n", __func__, mach_error_string(kret));
-
-        //concat(&symname, "%s", best_sym->dsc_symname);
-    }
-    else{
-        concat(&symname, "iosdbg$$unnamed_symbol%d", sym->unnamed_sym_num);
-    }
-
-    printf("non-DSC image '%s': [%#lx-%#lx]:", entry->imagename, start, end);
-
-    //if(kret == KERN_SUCCESS)
-        printf(" '%s'\n", symname);
-    //else
-      //  printf(" could not get symname from vmaddr %#lx: %s\n",
-        //        entry->strtab_vmaddr + sym->strtabidx, mach_error_string(kret));
-
 }

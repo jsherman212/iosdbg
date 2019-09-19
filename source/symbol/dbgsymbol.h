@@ -55,12 +55,12 @@ struct sym {
     /* pointer into debuggee's address space, the start of this function */
     unsigned long sym_func_start;
 
-    // XXX non-NULL if the entry that owns this sym comes from the dyld shared cache,
-    // as we can mmap the dsc and strdup this pointer to save a lot of memory
     char *dsc_symname;
 
-    // XXX when it's unnamed, strtabidx is not used and unnamed_sym_num is,
-    // when it's named, strtabidx is used and unnamed_sym_num isn't
+    /* When a symbol is unnamed, unnamed_sym_num is used.
+     * When a symbol is named, strtabidx is used.
+     * Using a union saves memory.
+     */
     union {
         int strtabidx;
         int unnamed_sym_num;
@@ -83,28 +83,16 @@ struct dbg_sym_entry {
     char from_dsc;
 };
 
-struct nlist_64_wrapper {
-    struct nlist_64 *nlist;
-    char *str;
-};
-
-struct lc_fxn_starts_entry {
-    /* function start address */
-    unsigned long vmaddr;
-    /* length of function, -1 if first entry in LC_FUNCTION_STARTS */
-    int len;
-};
-
 enum {
     UNNAMED_SYM = 0, NAMED_SYM = 1
 };
 
 void add_symbol_to_entry(struct dbg_sym_entry *, int, unsigned long,
         unsigned int, int, char *);
-struct dbg_sym_entry *create_sym_entry(char *, unsigned long, unsigned long, int);
+struct dbg_sym_entry *create_sym_entry(unsigned long, unsigned long, int);
+void destroy_all_symbol_entries(void);
 int get_symbol_info_from_address(struct linkedlist *, unsigned long, char **,
         char **, unsigned int *);
 void reset_unnamed_sym_cnt(void);
-void sym_desc(struct dbg_sym_entry *, struct sym *);
 
 #endif

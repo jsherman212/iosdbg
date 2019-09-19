@@ -3,8 +3,6 @@
 
 #include <mach/vm_types.h>
 
-extern int PM;
-
 unsigned int CFSwapInt32(unsigned int);
 unsigned long long CFSwapInt64(unsigned long long);
 

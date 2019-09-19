@@ -1,3 +1,7 @@
+9-19-19
+- unnamed symbols are successfully resolved, at this point, symbol support
+seems to be stable
+
 9-6-19
 - logarithmic search time for looking up symbols based on virtual address
 rather than linear search time, huge speed improvements

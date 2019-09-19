@@ -154,6 +154,11 @@ void ops_detach(int from_death, char **outbuffer){
     void_convvar("$__");
     void_convvar("$ASLR");
 
+    destroy_all_symbol_entries();
+
+    linkedlist_free(debuggee->symbols);
+    debuggee->symbols = NULL;
+
     sym_end(debuggee->dwarfinfo);
     free(debuggee->dwarfinfo);
     debuggee->dwarfinfo = NULL;
@@ -189,8 +194,8 @@ static void delete_invalid_bp_or_wp(int which, void *data, char **out){
         watchpoint_delete_specific(data);
 }
 
-static void update_bp_or_wp_with_correct_threadinfo(int which, struct machthread *t,
-        void *data, char **out){
+static void update_bp_or_wp_with_correct_threadinfo(int which,
+        struct machthread *t, void *data, char **out){
     which == BP ?
         (((struct breakpoint *)data)->threadinfo.iosdbg_tid = t->ID) :
         (((struct watchpoint *)data)->threadinfo.iosdbg_tid = t->ID);
@@ -383,7 +388,7 @@ void ops_threadupdate(char **out){
             (vm_address_t)threads, cnt * sizeof(mach_port_t));
 
     if(ret){
-        concat(out, "warning: vm_deallocate says %s\n", __func__,
+        concat(out, "warning: vm_deallocate: %s\n", __func__,
                 mach_error_string(ret));
     }
 }

@@ -327,7 +327,6 @@ void watchpoint_delete_all(void){
     pthread_mutex_lock(&WATCHPOINT_LOCK);
     struct node_t *current = debuggee->watchpoints->front;
     while(current){
-    //WP_LOCKED_FOREACH(current){
         struct watchpoint *wp = current->data;
         current = current->next;
         wp_delete_internal(wp);

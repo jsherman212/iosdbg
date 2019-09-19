@@ -1,20 +1,15 @@
-#include <mach/mach.h>
 #include <mach-o/loader.h>
-#include <mach-o/nlist.h>
-#include <mach-o/stab.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "../debuggee.h"
-#include "../linkedlist.h"
-#include "../memutils.h"
 
 #include "scache.h"
 
-struct dbg_sym_entry *create_sym_entry_for_dsc_image(char *imagename){
+struct dbg_sym_entry *create_sym_entry_for_dsc_image(void){
     int from_dsc = 1;
-    struct dbg_sym_entry *entry = create_sym_entry(imagename, 0, 0, from_dsc);
+    struct dbg_sym_entry *entry = create_sym_entry(0, 0, from_dsc);
 
     return entry;
 }

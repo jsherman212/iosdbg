@@ -246,7 +246,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
 
     close(dscfd);
 
-    if(initialize_debuggee_dyld_all_image_infos(DSCDATA))
+    if(initialize_debuggee_dyld_all_image_infos())
         concat(outbuffer, "%s", dscwarnmsg);
 
     //munmap(dscdata, st.st_size);

@@ -16,18 +16,6 @@
 void *DSCDATA = NULL;
 unsigned long DSCSZ = 0;
 
-int PM = 0;
-
-static int symoffcmp(const void *a, const void *b){
-    struct sym *sa = *(struct sym **)a;
-    struct sym *sb = *(struct sym **)b;
-
-    if(!sa || !sb)
-        return 0;
-
-    return (long)sa->sym_func_start - (long)sb->sym_func_start;
-}
-
 static unsigned long decode_uleb128(uint8_t **p, unsigned long *len){
     unsigned long val = 0;
     unsigned int shift = 0;
@@ -49,7 +37,7 @@ static unsigned long decode_uleb128(uint8_t **p, unsigned long *len){
     return val;
 }
 
-static void get_cmds(void *dscdata, unsigned long image_load_addr,
+static int get_cmds(unsigned long image_load_addr,
         struct symtab_command **symtab_cmd_out,
         struct segment_command_64 **__text_seg_cmd_out,
         int *__text_segment_nsect_out,
@@ -59,7 +47,7 @@ static void get_cmds(void *dscdata, unsigned long image_load_addr,
         read_memory_at_location(image_load_addr, &image_hdr, sizeof(image_hdr));
 
     if(kret)
-        return;
+        return 1;
 
     struct load_command *cmd = malloc(image_hdr.sizeofcmds);
     struct load_command *cmdorig = cmd;
@@ -69,7 +57,7 @@ static void get_cmds(void *dscdata, unsigned long image_load_addr,
 
     if(kret){
         free(cmd);
-        return;
+        return 1;
     }
 
     struct symtab_command *symtab_cmd = NULL;
@@ -148,80 +136,48 @@ static void get_cmds(void *dscdata, unsigned long image_load_addr,
         *__lc_fxn_start_cmd_out = lc_fxn_start_cmd;
     else
         free(lc_fxn_start_cmd);
+
+    return 0;
 }
 
 enum { DSC = 0, NON_DSC };
 
-#define PUBG "/var/containers/Bundle/Application/B899DCE5-E05D-4CD2-B39E-AD15311610BF/ShadowTrackerExtra.app/ShadowTrackerExtra"
+struct lc_fxn_starts_entry {
+    /* function start address */
+    unsigned long vmaddr;
+    /* length of function, -1 if first entry in LC_FUNCTION_STARTS */
+    int len;
+};
 
-// XXX imagename param is only for testing
-static int read_lc_fxn_starts(char *imagename, void *machodata,
-        unsigned long image_load_addr,
+static int read_lc_fxn_starts(char *imagename, unsigned long image_load_addr,
         struct lc_fxn_starts_entry ***entries, int *entriescnt,
         unsigned int *entriescapa, unsigned long aslr_slide, int kind){
     struct segment_command_64 *__text = NULL;
     struct linkedit_data_command *lidc = NULL;
 
-    get_cmds(machodata, image_load_addr, NULL, &__text, NULL, &lidc);
-
-    //printf("%s: found LC_FUNCTION_STARTS dataoff %#x datasize %#x\n",
-      //      __func__, lidc->dataoff, lidc->datasize);
+    if(get_cmds(image_load_addr, NULL, &__text, NULL, &lidc))
+        return 1;
 
     uint8_t *lcfxnstart_start = NULL, *lcfxnstart_end = NULL;
 
     if(kind == DSC){
-        lcfxnstart_start = (uint8_t *)machodata + lidc->dataoff;
+        lcfxnstart_start = (uint8_t *)DSCDATA + lidc->dataoff;
         lcfxnstart_end = lcfxnstart_start + lidc->datasize;
     }
     else{
-        printf("%s: image loaded at %#lx, lcfxnstart file offset at %#x\n",
-                __func__, image_load_addr, lidc->dataoff);
-        // XXX seems to be more sane to read right from the file. Don't
-        // have to deal with nonsense shifting in memory
-
-
-        //unsigned long lcfxnoff = image_load_addr + lidc->dataoff;
-        //printf("%s: lcfxnoff for non dsc image %#lx\n",
-          //      __func__, lcfxnoff);
         lcfxnstart_start = malloc(lidc->datasize);
 
         if(copy_file_contents(imagename, lidc->dataoff, lcfxnstart_start,
                     lidc->datasize) == -1){
-            printf("%s: warning: could not open file at '%s'\n",
-                    __func__, imagename);
             return 1;
         }
-        /*
-        FILE *imgfile = fopen(imagename, "rb");
-
-        if(!imgfile){
-            printf("%s: warning: could not open file at '%s'\n",
-                    __func__, imagename);
-            return 1;
-        }
-
-        fseek(imgfile, lidc->dataoff, SEEK_SET);
-        fread(lcfxnstart_start, sizeof(char), lidc->datasize, imgfile);
-
-        fclose(imgfile);
-        */
         
         lcfxnstart_end = lcfxnstart_start + lidc->datasize;
-        /*kern_return_t kret =
-            read_memory_at_location(lcfxnoff, lcfxnstart_start, lidc->datasize);
-        //printf("%s: kret %s\n", __func__, mach_error_string(kret));
-        lcfxnstart_end = lcfxnstart_start + lidc->datasize;
-        
-        char *buf = NULL;
-        dump_memory(lcfxnoff, 0x50, &buf);
-        printf("%s: memdump of lcfxnoff:\n%s\n", __func__, buf);
-        free(buf);
-        */
     }
 
-    unsigned long total_fxn_len = 0;
-    unsigned long len = 0;
-    unsigned long nextfxnstartaddr = __text->vmaddr;
+    unsigned long total_fxn_len = 0,
+                  len = 0,
+                  nextfxnstartaddr = __text->vmaddr;
 
     uint8_t *p = lcfxnstart_start;
     int fxncnt = 0;
@@ -232,18 +188,11 @@ static int read_lc_fxn_starts(char *imagename, void *machodata,
 
         len += l;
 
-        // XXX discard
         if(prevfxnlen == 0)
             continue;
 
         total_fxn_len += prevfxnlen;
         nextfxnstartaddr += prevfxnlen;
-
-        /*
-        if(strcmp(imagename, PUBG) == 0 && fxncnt < 50)
-        printf("%s: fxn %d start @ %#lx, \n",
-                __func__, fxncnt, nextfxnstartaddr + aslr_slide);
-                */
 
         if(fxncnt >= FAST_POW_TWO(*entriescapa) - 1){
             (*entriescapa)++;
@@ -256,22 +205,13 @@ static int read_lc_fxn_starts(char *imagename, void *machodata,
         e[fxncnt] = malloc(sizeof(struct lc_fxn_starts_entry));
         e[fxncnt]->vmaddr = nextfxnstartaddr + aslr_slide;
 
-        if(fxncnt == 0){
-    //        printf("first fxn in bin, prev fxn len N/A\n");
-
+        if(fxncnt == 0)
             e[fxncnt]->len = FIRST_FXN_NO_LEN;
-        }
-        else{
-      //      printf("prev fxn's len = %#lx\n", prevfxnlen);
-
+        else
             e[fxncnt - 1]->len = prevfxnlen;
-        }
 
         fxncnt++;
     }
-
-    //printf("%s: last fxn len is %#llx\n",
-      //      __func__, __text->vmsize - total_fxn_len);
 
     if(fxncnt > 0)
         (*entries)[fxncnt - 1]->len = __text->vmsize - total_fxn_len;
@@ -284,15 +224,15 @@ static int read_lc_fxn_starts(char *imagename, void *machodata,
     return 0;
 }
 
-enum { NAME_OK, NAME_OOB, NAME_NOT_FOUND };
+enum { NAME_OK = 0, NAME_OOB, NAME_NOT_FOUND };
 
-static int get_dylib_path(void *dscdata, unsigned int dylib_offset,
-        void **nameptrout){
+static int get_dylib_path(unsigned int dylib_offset, void **nameptrout){
     struct mach_header_64 *dylib_hdr =
-        (struct mach_header_64 *)((uint8_t *)dscdata + dylib_offset);
+        (struct mach_header_64 *)((uint8_t *)DSCDATA + dylib_offset);
 
     struct load_command *cmd =
-        (struct load_command *)((uint8_t *)dscdata + dylib_offset + sizeof(*dylib_hdr));
+        (struct load_command *)((uint8_t *)DSCDATA + dylib_offset +
+                sizeof(*dylib_hdr));
 
     struct load_command *cmdorig = cmd;
     struct dylib_command *dylib_cmd = NULL;
@@ -303,8 +243,8 @@ static int get_dylib_path(void *dscdata, unsigned int dylib_offset,
             break;
         }
 
-        unsigned long diff = (uint8_t *)cmd - (uint8_t *)dscdata;
-        cmd = (struct load_command *)((uint8_t *)dscdata + diff + cmd->cmdsize);
+        unsigned long diff = (uint8_t *)cmd - (uint8_t *)DSCDATA;
+        cmd = (struct load_command *)((uint8_t *)DSCDATA + diff + cmd->cmdsize);
     }
 
     unsigned int nameoff = dylib_cmd->dylib.name.offset;
@@ -324,30 +264,44 @@ static int get_dylib_path(void *dscdata, unsigned int dylib_offset,
     return NAME_NOT_FOUND;
 }
 
-static int read_nlists(void *dscdata, char *imagename,
-        unsigned long image_load_addr, struct nlist_64_wrapper ***nlists,
-        int *nlistscnt, unsigned int *nlistscapa,
-        struct my_dsc_mapping *mappings, int mappingcnt){
-    if(is_dsc_image(image_load_addr, mappings, mappingcnt)){
-        struct symtab_command *symtab_cmd = NULL;
-        struct segment_command_64 *__text_seg_cmd = NULL;
-        int __text_segment_nsect = 0;
-        // XXX not zero inside iosdbg
+struct nlist_64_wrapper {
+    struct nlist_64 *nlist;
+    char *str;
+};
 
-        get_cmds(dscdata, image_load_addr, &symtab_cmd, &__text_seg_cmd,
-                &__text_segment_nsect, NULL);
+static void add_nlist_wrapper(struct nlist_64_wrapper ***nlist_wrappers,
+        struct nlist_64 *nlist, unsigned int *nlists_wrapper_capa, int idx,
+        unsigned long aslr_slide, char *str){
+    if(idx >= FAST_POW_TWO(*nlists_wrapper_capa) - 1){
+        (*nlists_wrapper_capa)++;
+        struct nlist_64_wrapper **nlists_rea =
+            realloc(*nlist_wrappers, CALC_NLISTS_ARR_CAPACITY(*nlists_wrapper_capa));
+        *nlist_wrappers = nlists_rea;
+    }
 
-        if(!symtab_cmd || !__text_seg_cmd)
-            return 1;
+    (*nlist_wrappers)[idx] = malloc(sizeof(struct nlist_64_wrapper));
+    (*nlist_wrappers)[idx]->nlist = malloc(sizeof(struct nlist_64));
+    memcpy((*nlist_wrappers)[idx]->nlist, nlist, sizeof(*nlist));
+    (*nlist_wrappers)[idx]->nlist->n_value += aslr_slide;
+    (*nlist_wrappers)[idx]->str = str;
+}
 
-        unsigned long aslr_slide = image_load_addr - __text_seg_cmd->vmaddr;
+static int read_nlists(char *imagename, unsigned long image_load_addr,
+        struct nlist_64_wrapper ***nlist_wrappers,
+        int *nlists_wrapper_cnt, unsigned int *nlists_wrapper_capa,
+        struct my_dsc_mapping *mappings, int mappingcnt, int dsc_image,
+        struct symtab_command *symtab_cmd,
+        struct segment_command_64 *__text_seg_cmd,
+        int __text_segment_nsect){
+    unsigned long aslr_slide = image_load_addr - __text_seg_cmd->vmaddr;
 
-        struct dsc_hdr *cache_hdr = (struct dsc_hdr *)dscdata;
+    int idx = 0;
 
-        //printf("localsymoff %#llx\n", cache_hdr.localSymbolsOffset);
+    if(dsc_image){
+        struct dsc_hdr *cache_hdr = (struct dsc_hdr *)DSCDATA;
 
         struct dsc_local_syms_info *syminfos =
-            (struct dsc_local_syms_info *)((uint8_t *)dscdata +
+            (struct dsc_local_syms_info *)((uint8_t *)DSCDATA +
                     cache_hdr->localsymoff);
 
         unsigned long nlist_offset = syminfos->nlistoff +
@@ -359,150 +313,86 @@ static int read_nlists(void *dscdata, char *imagename,
 
         int entriescnt = syminfos->entriescnt;
 
+        struct dsc_local_syms_entry *entry = NULL;
+
         for(int i=0; i<entriescnt; i++){
             unsigned long nextentryoff =
                 entries_offset + (sizeof(struct dsc_local_syms_entry) * i);
-            struct dsc_local_syms_entry *entry =
-                (struct dsc_local_syms_entry *)((uint8_t *)dscdata + nextentryoff);
+            struct dsc_local_syms_entry *candidate =
+                (struct dsc_local_syms_entry *)((uint8_t *)DSCDATA + nextentryoff);
 
             void *nameptr = NULL;
-            int result = get_dylib_path(dscdata, entry->dyliboff, &nameptr);
+            int result = get_dylib_path(candidate->dyliboff, &nameptr);
 
-            if(result == NAME_OOB || result == NAME_NOT_FOUND)
+            if(result != NAME_OK)
                 continue;
 
             char *cur_dylib_path = nameptr;
 
-            if(strcmp(imagename, cur_dylib_path) != 0)
-                continue;
+            if(strcmp(imagename, cur_dylib_path) == 0){
+                entry = candidate;
+                break;
+            }
+        }
 
-            /*
-               printf("Entry %d/%d: '%s': nliststartidx %#lx"
-               " nlistcnt %#x\n",
-               i+1, entriescnt, cur_dylib_path,
-               nlist_offset, entry->nlistcnt);
-            */
-            unsigned long nlist_start = nlist_offset +
-                (entry->nliststartidx * sizeof(struct nlist_64));
-            int idx = 0;
-            int nlistcnt = entry->nlistcnt;
+        if(!entry)
+            return 1;
 
-            for(int j=0; j<nlistcnt; j++){
-                unsigned long nextnlistoff = nlist_start +
-                    (sizeof(struct nlist_64) * j);
-                struct nlist_64 *nlist =
-                    (struct nlist_64 *)((uint8_t *)dscdata + nextnlistoff);
+        unsigned long nlist_start = nlist_offset +
+            (entry->nliststartidx * sizeof(struct nlist_64));
+        int nlistcnt = entry->nlistcnt;
 
-                //printf("%s: nlist %p nlist->n_sect %#x\n",
-                  //      __func__, nlist, nlist->n_sect);
-                if(nlist->n_sect == __text_segment_nsect){
-                    /* These come right from the DSC string table,
-                     * not any dylib-specific string table.
-                     */
-                    unsigned long stroff = strings_offset + nlist->n_un.n_strx;
-                    char *symname = (char *)((uint8_t *)dscdata + stroff);
+        /* These come right from the DSC string table,
+         * not any dylib-specific string table.
+         */
+        for(int j=0; j<nlistcnt; j++){
+            unsigned long nextnlistoff = nlist_start +
+                (sizeof(struct nlist_64) * j);
+            struct nlist_64 *nlist =
+                (struct nlist_64 *)((uint8_t *)DSCDATA + nextnlistoff);
 
-                    if(idx >= FAST_POW_TWO(*nlistscapa) - 1){
-                        (*nlistscapa)++;
-                        struct nlist_64_wrapper **nlists_rea =
-                            realloc(*nlists, CALC_NLISTS_ARR_CAPACITY(*nlistscapa));
-                        *nlists = nlists_rea;
-                    }
+            if(nlist->n_sect == __text_segment_nsect){
+                unsigned long stroff = strings_offset + nlist->n_un.n_strx;
+                char *symname = (char *)((uint8_t *)DSCDATA + stroff);
 
-                   // printf("%s: nlist %p\n", __func__, nlist);
-                    //nlist->n_value += aslr_slide;
+                add_nlist_wrapper(nlist_wrappers, nlist,
+                        nlists_wrapper_capa, idx, aslr_slide, symname);
 
-                    (*nlists)[idx] = malloc(sizeof(struct nlist_64_wrapper));
-                    (*nlists)[idx]->nlist = malloc(sizeof(struct nlist_64));
-                    memcpy((*nlists)[idx]->nlist, nlist, sizeof(*nlist));
-                    (*nlists)[idx]->nlist->n_value += aslr_slide;
-                    (*nlists)[idx]->str = symname;
+                idx++;
+            }
+        }
+
+        /* These come right from the string table
+         * of the dylib we're currently on.
+         */
+        unsigned int nsyms = symtab_cmd->nsyms;
+        unsigned long stab_symoff = symtab_cmd->symoff;
+        unsigned long stab_stroff = symtab_cmd->stroff;
+
+        for(int j=0; j<nsyms; j++){
+            unsigned long nextnlistoff = stab_symoff +
+                (sizeof(struct nlist_64) * j);
+            struct nlist_64 *nlist =
+                (struct nlist_64 *)((uint8_t *)DSCDATA + nextnlistoff);
+
+            unsigned long stroff = stab_stroff + nlist->n_un.n_strx;
+            char *symname = (char *)((uint8_t *)DSCDATA + stroff);
+
+            /* don't add <redacted> symbols */
+            if(*symname != '<'){
+                if((nlist->n_type & N_TYPE) == N_SECT &&
+                        nlist->n_sect == __text_segment_nsect){
+
+                    add_nlist_wrapper(nlist_wrappers, nlist,
+                            nlists_wrapper_capa, idx, aslr_slide, symname);
 
                     idx++;
-
-                    /*
-                       printf("from DSC: '%s': nlist %d/%d: strx '%s' - %#lx, n_type %#x"
-                       " n_sect %#x n_desc %#x n_value %#llx\n",
-                       cur_dylib_path, j+1, nlistcnt,
-                       symname, stroff,
-                       nlist->n_type, nlist->n_sect,
-                       nlist->n_desc, nlist->n_value);
-                       */
                 }
             }
-
-            // XXX now, go thru dylib's symtab to get the rest
-            unsigned int nsyms = symtab_cmd->nsyms;
-            unsigned long stab_symoff = symtab_cmd->symoff;
-            unsigned long stab_stroff = symtab_cmd->stroff;
-
-            for(int j=0; j<nsyms; j++){
-                unsigned long nextnlistoff = stab_symoff +
-                    (sizeof(struct nlist_64) * j);
-                struct nlist_64 *nlist =
-                    (struct nlist_64 *)((uint8_t *)dscdata + nextnlistoff);
-
-                unsigned long stroff = stab_stroff + nlist->n_un.n_strx;
-                char *symname = (char *)((uint8_t *)dscdata + stroff);
-
-                if(*symname != '<'){
-                    if((nlist->n_type & N_TYPE) == N_SECT &&
-                            nlist->n_sect == __text_segment_nsect){
-                        /* However, these come right from the string table
-                         * of the dylib we're currently on.
-                         */
-
-                        if(idx >= FAST_POW_TWO(*nlistscapa) - 1){
-                            (*nlistscapa)++;
-                            struct nlist_64_wrapper **nlists_rea =
-                                realloc(*nlists, CALC_NLISTS_ARR_CAPACITY(*nlistscapa));
-                            *nlists = nlists_rea;
-                        }
-
-                    //    nlist->n_value += aslr_slide;
-
-                        (*nlists)[idx] = malloc(sizeof(struct nlist_64_wrapper));
-                        (*nlists)[idx]->nlist = malloc(sizeof(struct nlist_64));
-                        memcpy((*nlists)[idx]->nlist, nlist, sizeof(*nlist));
-                        (*nlists)[idx]->nlist->n_value += aslr_slide;
-                        (*nlists)[idx]->str = symname;
-
-                        idx++;
-/*
-                           printf("from dylib: '%s': nlist %d/%d: "
-                           " strx '%s' - %#lx, n_type %#x"
-                           " n_sect %#x n_desc %#x n_value %#llx\n",
-                           cur_dylib_path, j+1, nsyms,
-                           symname, stroff,
-                           nlist->n_type, nlist->n_sect,
-                           nlist->n_desc, nlist->n_value);
-                           */
-                    }
-                }
-            }
-
-            *nlistscnt = idx;
-
-            // XXX done for this entry move on
-            return 0;
         }
     }
     else{
-        printf("%s: not a dsc image\n", __func__);
-        
-        struct symtab_command *symtab_cmd = NULL;
-        struct segment_command_64 *__text_seg_cmd = NULL;
-        int __text_seg_nsect = 0;
-        // XXX not zero inside iosdbg
-
-        get_cmds(dscdata, image_load_addr, &symtab_cmd, &__text_seg_cmd,
-                &__text_seg_nsect, NULL);
-
-        if(!symtab_cmd || !__text_seg_cmd)
-            return 1;
-
-        unsigned long aslr_slide = image_load_addr - __text_seg_cmd->vmaddr,
-                      symtab_addr = symtab_cmd->symoff + image_load_addr,
+        unsigned long symtab_addr = symtab_cmd->symoff + image_load_addr,
                       strtab_addr = symtab_cmd->stroff + image_load_addr;
 
         size_t nscount = sizeof(struct nlist_64) * symtab_cmd->nsyms;
@@ -513,46 +403,29 @@ static int read_nlists(void *dscdata, char *imagename,
         if(kret != KERN_SUCCESS)
             return 1;
 
-        int idx = 0;
-
         for(int j=0; j<symtab_cmd->nsyms; j++){
             struct nlist_64 nlist = ns[j];
-            char str[PATH_MAX] = {0};
+            enum { maxlen = 512 };
+            char str[maxlen] = {0};
             kret = read_memory_at_location(strtab_addr + ns[j].n_un.n_strx,
-                    str, PATH_MAX);
+                    str, maxlen);
 
             if(kret != KERN_SUCCESS || !(*str) ||
                     (nlist.n_type & N_TYPE) != N_SECT ||
-                    nlist.n_sect != __text_seg_nsect || nlist.n_value == 0){// ||
-                    //strcmp(str, "__mh_execute_header") == 0){
+                    nlist.n_sect != __text_segment_nsect || nlist.n_value == 0){
                 continue;
             }
 
-            if(idx >= FAST_POW_TWO(*nlistscapa) - 1){
-                (*nlistscapa)++;
-                struct nlist_64_wrapper **nlists_rea =
-                    realloc(*nlists, CALC_NLISTS_ARR_CAPACITY(*nlistscapa));
-                *nlists = nlists_rea;
-            }
-
-            //    nlist->n_value += aslr_slide;
-
-            (*nlists)[idx] = malloc(sizeof(struct nlist_64_wrapper));
-            (*nlists)[idx]->nlist = malloc(sizeof(struct nlist_64));
-            memcpy((*nlists)[idx]->nlist, &nlist, sizeof(nlist));
-            (*nlists)[idx]->nlist->n_value += aslr_slide;
-            //(*nlists)[idx]->str = symname;
-
-            //printf("%s: '%s' at %#llx\n",
-              //      __func__, str, (*nlists)[idx]->nlist->n_value);
+            add_nlist_wrapper(nlist_wrappers, &nlist, nlists_wrapper_capa,
+                    idx, aslr_slide, NULL);
 
             idx++;
         }
 
         free(ns);
-
-        *nlistscnt = idx;
     }
+
+    *nlists_wrapper_cnt = idx;
 
     return 0;
 }
@@ -561,19 +434,15 @@ static int nlistwcmp(const void *a, const void *b){
     struct nlist_64_wrapper *nwa = *(struct nlist_64_wrapper **)a;
     struct nlist_64_wrapper *nwb = *(struct nlist_64_wrapper **)b;
 
-    //printf("%s: nwa %p nwb %p\n", __func__, nwa, nwb);
-
     if(!nwa || !nwb)
         return 0;
 
     struct nlist_64 *na = nwa->nlist;
     struct nlist_64 *nb = nwb->nlist;
 
-    // XXX prevent overflow
     unsigned long navalue = na->n_value;
     unsigned long nbvalue = nb->n_value;
 
-    //printf("navalue %#lx nbvalue %#lx\n", navalue, nbvalue);
     if(navalue < nbvalue)
         return -1;
     else if(navalue == nbvalue)
@@ -582,261 +451,129 @@ static int nlistwcmp(const void *a, const void *b){
         return 1;
 }
 
-static struct dbg_sym_entry *create_sym_entry_for_image(void *dscdata,
-        char *imagename, unsigned long image_load_addr,
-        struct my_dsc_mapping *mappings, int mappingcnt,
-        struct symtab_command **symtab_cmd_out,
+static struct dbg_sym_entry *create_sym_entry_for_image(char *imagename, 
+        unsigned long image_load_addr, struct my_dsc_mapping *mappings,
+        int mappingcnt, struct symtab_command **symtab_cmd_out,
         struct segment_command_64 **__text_seg_cmd_out,
         int *__text_segment_nsect_out){
+    int dsc_image = is_dsc_image(image_load_addr, mappings, mappingcnt);
+
+    struct symtab_command *symtab_cmd = NULL;
+    struct segment_command_64 *__text_seg_cmd = NULL;
+
+    int __text_segment_nsect = 0;
+
+    if(get_cmds(image_load_addr, &symtab_cmd, &__text_seg_cmd,
+            &__text_segment_nsect, NULL)){
+        return NULL;
+    }
+
+    unsigned long aslr_slide = image_load_addr - __text_seg_cmd->vmaddr;
+
+    *__text_segment_nsect_out = __text_segment_nsect;
+
     struct dbg_sym_entry *entry = NULL;
 
-    if(is_dsc_image(image_load_addr, mappings, mappingcnt)){
-        //printf("%s: '%s' IS a shared cache image\n", __func__, imagename);
-
-        struct symtab_command *symtab_cmd = NULL;
-        struct segment_command_64 *__text_seg_cmd = NULL;
-
-        int __text_segment_nsect = 0;
-
-        get_cmds(dscdata, image_load_addr, &symtab_cmd, &__text_seg_cmd,
-                &__text_segment_nsect, NULL);
-
-        if(!symtab_cmd || !__text_seg_cmd)
-            return NULL;
-
-        unsigned long aslr_slide = image_load_addr - __text_seg_cmd->vmaddr;
-
-        *__text_segment_nsect_out = __text_segment_nsect;
-
-        entry = create_sym_entry_for_dsc_image(imagename);
-
-        unsigned int lc_fxn_starts_capacity =
-            CALC_ENTRIES_CAPACITY(STARTING_CAPACITY);
-        int num_lc_fxn_starts_entries = 0;
-        struct lc_fxn_starts_entry **lc_fxn_starts_entries =
-            malloc(lc_fxn_starts_capacity);
-
-        read_lc_fxn_starts(imagename, dscdata, image_load_addr, &lc_fxn_starts_entries,
-                &num_lc_fxn_starts_entries, &lc_fxn_starts_capacity,
-                aslr_slide, DSC);
-
-        unsigned long real_entries_arr_sz =
-            num_lc_fxn_starts_entries * sizeof(struct lc_fxn_starts_entry *);
-        struct lc_fxn_starts_entry **lc_fxn_starts_entries_rea =
-            realloc(lc_fxn_starts_entries, real_entries_arr_sz);
-        lc_fxn_starts_entries = lc_fxn_starts_entries_rea;
-
-        /*
-        for(int i=0; i<num_lc_fxn_starts_entries; i++){
-            struct lc_fxn_starts_entry *lce = lc_fxn_starts_entries[i];
-
-            printf("'%s': fxn %d: [%#lx-%#lx]\n", fpath, i+1,
-                    lce->vmaddr, lce->vmaddr + lce->len);
-
-        }
-        continue;
-        */
-
-        unsigned int nlists_capacity = CALC_NLISTS_ARR_CAPACITY(STARTING_CAPACITY);
-        int num_nlists = 0;
-        struct nlist_64_wrapper **nlists = malloc(nlists_capacity);
-
-        read_nlists(dscdata, imagename, image_load_addr, &nlists, &num_nlists,
-                &nlists_capacity, mappings, mappingcnt);
-
-        unsigned long real_nlists_arr_sz = num_nlists * sizeof(struct nlist_64 *);
-        struct nlist_64_wrapper **nlists_rea = realloc(nlists, real_nlists_arr_sz);
-        nlists = nlists_rea;
-
-        /* prep nlist array for binary searches */
-        qsort(nlists, num_nlists, sizeof(struct nlist_64_wrapper *), nlistwcmp);
-
-        /*
-        for(int i=0; i<num_nlists; i++){
-            struct nlist_64_wrapper *nl = nlists[i];
-            printf("%s: nlist %d, n_value %#llx\n",
-                    __func__, i+1, nl->nlist->n_value);
-        }
-        */
-
-        // XXX add the symbols for this entry in the next loop
-        for(int i=0; i<num_lc_fxn_starts_entries; i++){
-            unsigned long vmaddr = lc_fxn_starts_entries[i]->vmaddr;
-            int fxnlen = lc_fxn_starts_entries[i]->len;
-
-            // XXX create an nlist "key" so this works correctly
-            // XXX this shouldn't be so complicated
-            struct nlist_64_wrapper nwkey = {0};
-            struct nlist_64 nkey = {0};
-            nkey.n_value = vmaddr;
-            struct nlist_64 *nkeyp = &nkey;
-            nwkey.nlist = nkeyp;
-            struct nlist_64_wrapper *nwkey_p = &nwkey;
-
-            struct nlist_64_wrapper **found_nw_dp = bsearch(&nwkey_p, nlists,
-                    num_nlists, sizeof(struct nlist_64_wrapper *), nlistwcmp);
-
-            // XXX symbol is present in the symbol table
-            //if(found_nlist_dp){
-            if(found_nw_dp){
-                //struct nlist_64 *found_nlist = *found_nlist_dp;
-                struct nlist_64_wrapper *found_nw = *found_nw_dp;
-
-                // XXX add aslr slide to found_nw->nlist->n_value inside iosdbg
-                add_symbol_to_entry(entry, 0, found_nw->nlist->n_value,
-                        fxnlen, NAMED_SYM, found_nw->str);
-
-                //printf("%s: got named symbol '%s' at %#llx\n",
-                  //      __func__, found_nw->str, found_nw->nlist->n_value);
-            }
-            else{
-                add_symbol_to_entry(entry, 0, vmaddr, fxnlen,
-                        UNNAMED_SYM, NULL);
-
-                //printf("%s: got unnamed symbol at %#lx\n", __func__, vmaddr);
-            }
-        }
-
-        for(int i=0; i<num_lc_fxn_starts_entries; i++)
-            free(lc_fxn_starts_entries[i]);
-        free(lc_fxn_starts_entries);
-        lc_fxn_starts_entries = NULL;
-
-        for(int i=0; i<num_nlists; i++){
-            free(nlists[i]->nlist);
-            free(nlists[i]);
-        }
-
-        free(nlists);
-        nlists = NULL;
-    }
+    if(dsc_image)
+        entry = create_sym_entry_for_dsc_image();
     else{
-        printf("%s: '%s' IS NOT a shared cache image\n", __func__, imagename);
-
-        struct symtab_command *symtab_cmd = NULL;
-        struct segment_command_64 *__text_seg_cmd = NULL;
-
-        int __text_segment_nsect = 0;
-
-        get_cmds(dscdata, image_load_addr, &symtab_cmd, &__text_seg_cmd,
-                &__text_segment_nsect, NULL);
-
-        if(!symtab_cmd || !__text_seg_cmd)
-            return NULL;
-
-        unsigned long aslr_slide = image_load_addr - __text_seg_cmd->vmaddr;
-
-        *__text_segment_nsect_out = __text_segment_nsect;
-
         int from_dsc = 0;
         unsigned long strtab_vmaddr = symtab_cmd->stroff + image_load_addr;
-        entry = create_sym_entry(imagename, strtab_vmaddr, symtab_cmd->stroff,
-                from_dsc);
 
-        unsigned int lc_fxn_starts_capacity =
-            CALC_ENTRIES_CAPACITY(STARTING_CAPACITY);
-        int num_lc_fxn_starts_entries = 0;
-        struct lc_fxn_starts_entry **lc_fxn_starts_entries =
-            malloc(lc_fxn_starts_capacity);
-
-        read_lc_fxn_starts(imagename, dscdata, image_load_addr, &lc_fxn_starts_entries,
-                &num_lc_fxn_starts_entries, &lc_fxn_starts_capacity,
-                aslr_slide, NON_DSC);
-
-        unsigned long real_entries_arr_sz =
-            num_lc_fxn_starts_entries * sizeof(struct lc_fxn_starts_entry *);
-        struct lc_fxn_starts_entry **lc_fxn_starts_entries_rea =
-            realloc(lc_fxn_starts_entries, real_entries_arr_sz);
-        lc_fxn_starts_entries = lc_fxn_starts_entries_rea;
-
-        /*
-        for(int i=0; i<num_lc_fxn_starts_entries; i++){
-            struct lc_fxn_starts_entry *lce = lc_fxn_starts_entries[i];
-
-            printf("%s: fxn %d: [%#lx-%#lx]\n", __func__, -1,
-                    lce->vmaddr, lce->vmaddr + lce->len);
-
-        }*/
-//        continue;
-
-        unsigned int nlists_capacity = CALC_NLISTS_ARR_CAPACITY(STARTING_CAPACITY);
-        int num_nlists = 0;
-        struct nlist_64_wrapper **nlists = malloc(nlists_capacity);
-
-        read_nlists(dscdata, imagename, image_load_addr, &nlists, &num_nlists,
-                &nlists_capacity, mappings, mappingcnt);
-
-        unsigned long real_nlists_arr_sz = num_nlists * sizeof(struct nlist_64 *);
-        struct nlist_64_wrapper **nlists_rea = realloc(nlists, real_nlists_arr_sz);
-        nlists = nlists_rea;
-
-        /* prep nlist array for binary searches */
-        qsort(nlists, num_nlists, sizeof(struct nlist_64_wrapper *), nlistwcmp);
-
-        /*
-        for(int i=0; i<num_nlists; i++){
-            struct nlist_64_wrapper *nl = nlists[i];
-            printf("%s: nlist %d, n_value %#llx\n",
-                    __func__, i+1, nl->nlist->n_value);
-        }
-        */
-
-        // XXX add the symbols for this entry in the next loop
-        for(int i=0; i<num_lc_fxn_starts_entries; i++){
-            unsigned long vmaddr = lc_fxn_starts_entries[i]->vmaddr;
-            int fxnlen = lc_fxn_starts_entries[i]->len;
-
-            // XXX create an nlist "key" so this works correctly
-            struct nlist_64_wrapper nwkey = {0};
-            struct nlist_64 nkey = {0};
-            nkey.n_value = vmaddr;
-            struct nlist_64 *nkeyp = &nkey;
-            nwkey.nlist = nkeyp;
-            struct nlist_64_wrapper *nwkey_p = &nwkey;
-
-            struct nlist_64_wrapper **found_nw_dp = bsearch(&nwkey_p, nlists,
-                    num_nlists, sizeof(struct nlist_64_wrapper *), nlistwcmp);
-
-            // XXX symbol is present in the symbol table
-            //if(found_nlist_dp){
-            if(found_nw_dp){
-                //struct nlist_64 *found_nlist = *found_nlist_dp;
-                struct nlist_64_wrapper *found_nw = *found_nw_dp;
-
-                // XXX add aslr slide to found_nw->nlist->n_value inside iosdbg
-                // XXX these are for non DSC images, so strtabidx matters here
-                add_symbol_to_entry(entry, found_nw->nlist->n_un.n_strx,
-                        found_nw->nlist->n_value, fxnlen, NAMED_SYM, NULL);
-
-                //printf("%s: got named symbol '%s' at %#llx\n",
-                  //      __func__, found_nw->str, found_nw->nlist->n_value);
-                //printf("%s: got named symbol at %#llx\n",
-                  //      __func__, found_nw->nlist->n_value);
-            }
-            else{
-                add_symbol_to_entry(entry, 0, vmaddr, fxnlen,
-                        UNNAMED_SYM, NULL);
-            }
-        }
-
-        for(int i=0; i<num_lc_fxn_starts_entries; i++)
-            free(lc_fxn_starts_entries[i]);
-        free(lc_fxn_starts_entries);
-        lc_fxn_starts_entries = NULL;
-
-        for(int i=0; i<num_nlists; i++){
-            free(nlists[i]->nlist);
-            free(nlists[i]);
-        }
-
-        free(nlists);
-        nlists = NULL;
+        entry = create_sym_entry(strtab_vmaddr, symtab_cmd->stroff, from_dsc);
     }
+
+    unsigned int lc_fxn_starts_capacity =
+        CALC_ENTRIES_CAPACITY(STARTING_CAPACITY);
+    int num_lc_fxn_starts_entries = 0;
+    struct lc_fxn_starts_entry **lc_fxn_starts_entries =
+        malloc(lc_fxn_starts_capacity);
+
+    if(read_lc_fxn_starts(imagename, image_load_addr, &lc_fxn_starts_entries,
+            &num_lc_fxn_starts_entries, &lc_fxn_starts_capacity,
+            aslr_slide, dsc_image ? DSC : NON_DSC)){
+        free(entry);
+        free(symtab_cmd);
+        free(__text_seg_cmd);
+
+        return NULL;
+    }
+
+    unsigned long real_entries_arr_sz =
+        num_lc_fxn_starts_entries * sizeof(struct lc_fxn_starts_entry *);
+    struct lc_fxn_starts_entry **lc_fxn_starts_entries_rea =
+        realloc(lc_fxn_starts_entries, real_entries_arr_sz);
+    lc_fxn_starts_entries = lc_fxn_starts_entries_rea;
+
+    unsigned int nlists_capacity = CALC_NLISTS_ARR_CAPACITY(STARTING_CAPACITY);
+    int num_nlists = 0;
+    struct nlist_64_wrapper **nlists = malloc(nlists_capacity);
+
+    if(read_nlists(imagename, image_load_addr, &nlists, &num_nlists,
+            &nlists_capacity, mappings, mappingcnt, dsc_image,
+            symtab_cmd, __text_seg_cmd, __text_segment_nsect)){
+        free(entry);
+        free(symtab_cmd);
+        free(__text_seg_cmd);
+
+        return NULL;
+    }
+
+    unsigned long real_nlists_arr_sz = num_nlists * sizeof(struct nlist_64 *);
+    struct nlist_64_wrapper **nlists_rea = realloc(nlists, real_nlists_arr_sz);
+    nlists = nlists_rea;
+
+    /* prep nlist array for binary searches */
+    qsort(nlists, num_nlists, sizeof(struct nlist_64_wrapper *), nlistwcmp);
+
+    /* add the symbols for the current entry */
+    for(int i=0; i<num_lc_fxn_starts_entries; i++){
+        unsigned long vmaddr = lc_fxn_starts_entries[i]->vmaddr;
+
+        struct nlist_64 nlist_for_wrapper = {0};
+        nlist_for_wrapper.n_value = vmaddr;
+
+        struct nlist_64_wrapper nwkey = {0};
+        nwkey.nlist = &nlist_for_wrapper;
+
+        struct nlist_64_wrapper *nwkey_p = &nwkey;
+
+        struct nlist_64_wrapper **found_nw_dp = bsearch(&nwkey_p, nlists,
+                num_nlists, sizeof(struct nlist_64_wrapper *), nlistwcmp);
+
+        int fxnlen = lc_fxn_starts_entries[i]->len;
+
+        /* this symbol is named */
+        if(found_nw_dp){
+            struct nlist_64_wrapper *found_nw = *found_nw_dp;
+
+            add_symbol_to_entry(entry,
+                    dsc_image ? 0 : found_nw->nlist->n_un.n_strx,
+                    found_nw->nlist->n_value, fxnlen, NAMED_SYM,
+                    dsc_image ? found_nw->str : NULL);
+        }
+        else{
+            add_symbol_to_entry(entry, 0, vmaddr, fxnlen, UNNAMED_SYM, NULL);
+        }
+    }
+
+    for(int i=0; i<num_lc_fxn_starts_entries; i++)
+        free(lc_fxn_starts_entries[i]);
+    free(lc_fxn_starts_entries);
+    lc_fxn_starts_entries = NULL;
+
+    for(int i=0; i<num_nlists; i++){
+        free(nlists[i]->nlist);
+        free(nlists[i]);
+    }
+
+    free(nlists);
+    nlists = NULL;
 
     return entry;
 }
 
-int initialize_debuggee_dyld_all_image_infos(void *dscdata){
+int initialize_debuggee_dyld_all_image_infos(void){
     struct task_dyld_info dyld_info = {0};
     mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
 
@@ -850,7 +587,8 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
             &debuggee->dyld_all_image_infos,
             sizeof(struct dyld_all_image_infos));
 
-    struct dyld_all_image_infos dyld_all_image_infos = debuggee->dyld_all_image_infos;
+    struct dyld_all_image_infos dyld_all_image_infos =
+        debuggee->dyld_all_image_infos;
 
     count = sizeof(struct dyld_image_info) *
         debuggee->dyld_all_image_infos.infoArrayCount;
@@ -869,7 +607,7 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
      */
     int num_dsc_mappings = 0;
     struct my_dsc_mapping *dsc_mappings =
-        get_dsc_mappings(dscdata, &num_dsc_mappings);
+        get_dsc_mappings(DSCDATA, &num_dsc_mappings);
 
     debuggee->symbols = linkedlist_new();
 
@@ -885,9 +623,6 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
          * causes errors.
          */
         while(read_byte && bytes_read < maxlen && kret == KERN_SUCCESS){
-         //   if(i==0)
-           //     PM = 1;
-
             unsigned long imgpath =
                 (unsigned long)debuggee->dyld_info_array[i].imageFilePath;
             kret = read_memory_at_location(imgpath + bytes_read,
@@ -897,19 +632,6 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
 
             bytes_read++;
         }
-        
-        /*
-        if(i==0){
-            printf("%s: imgpath %#lx infoarray.imageFilePath %p\n",
-                    __func__, imgpath, debuggee->dyld_info_array[i].imageFilePath);
-            printf("%s: kret %s\n", __func__, mach_error_string(kret));
-            char *buf = NULL;
-            //PM = 1;
-            dump_memory(imgpath, 0x50, &buf);
-            printf("%s: imgname:\n%s\n", __func__, buf);
-            free(buf);
-        }
-        */
 
         unsigned long image_load_address =
             (unsigned long)debuggee->dyld_info_array[i].imageLoadAddress;
@@ -918,7 +640,7 @@ int initialize_debuggee_dyld_all_image_infos(void *dscdata){
         struct segment_command_64 *__text_seg_cmd = NULL;
         int __text_seg_nsect = 0;
 
-        struct dbg_sym_entry *entry = create_sym_entry_for_image(dscdata, fpath,
+        struct dbg_sym_entry *entry = create_sym_entry_for_image(fpath,
                 image_load_address, dsc_mappings, num_dsc_mappings,
                 &symtab_cmd, &__text_seg_cmd, &__text_seg_nsect);
 
