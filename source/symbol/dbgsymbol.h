@@ -39,6 +39,8 @@ struct dsc_mapping_info {
 #define CALC_SYM_CAPACITY(x) (sizeof(struct sym *) * FAST_POW_TWO(x))
 #define CALC_ENTRIES_CAPACITY(x) (sizeof(struct lc_fxn_starts_entry *) * FAST_POW_TWO(x))
 #define CALC_NLISTS_ARR_CAPACITY(x) (sizeof(struct nlist_64_wrapper) * FAST_POW_TWO(x))
+#define CALC_DSC_LOCAL_SYM_ENTRIES_ARR_CAPACITY(x) \
+    (sizeof(struct dsc_local_symentry_wrapper *) * FAST_POW_TWO(x))
 
 #define FIRST_FXN_NO_LEN (-1)
 
