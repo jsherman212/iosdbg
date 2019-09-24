@@ -166,7 +166,7 @@ kern_return_t get_threads(thread_act_port_array_t *threads,
     return err;
 }
 
-int has_debug_info(void){
+int has_dwarf_debug_info(void){
     return debuggee->dwarfinfo != NULL;
 }
 

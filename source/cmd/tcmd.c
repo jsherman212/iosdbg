@@ -8,14 +8,21 @@
 #include "../strext.h"
 #include "../thread.h"
 
+#include "../symbol/dbgsymbol.h"
+
 enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args, 
         int arg1, char **outbuffer, char **error){
     TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
 
-        concat(outbuffer, "\t%sthread #%d, tid = %#llx, name = '%s', where = %#llx\n", 
-                t->focused ? "* " : "", t->ID, t->tid, t->tname, 
-                t->thread_state.__pc);
+        concat(outbuffer, "%4sthread %d, tid = %#llx, where = 0x%-16.16llx",
+                t->focused ? "* " : "", t->ID, t->tid, t->thread_state.__pc);
+
+        char *frstr = NULL;
+        create_frame_string(t->thread_state.__pc, &frstr);
+
+        concat(outbuffer, " %s, name = '%s'\n", frstr, t->tname);
+        free(frstr);
     }
     TH_END_LOCKED_FOREACH;
 

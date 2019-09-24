@@ -98,7 +98,7 @@ struct debuggee {
             mach_msg_type_number_t *, char **);
 
     /* The function pointer to figure out if source level debugging is available. */
-    int (*has_debug_info)(void);
+    int (*has_dwarf_debug_info)(void);
 
     /* The function pointer to figure out if the debuggee is currently suspended. */
     int (*suspended)(void);

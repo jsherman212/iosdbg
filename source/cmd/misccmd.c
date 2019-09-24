@@ -204,9 +204,6 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     concat(outbuffer, "Attached to %s (pid: %d), slide: %#lx.\n",
             debuggee->debuggee_name, debuggee->pid, debuggee->aslr_slide);
 
-    /* Have Unix signals be sent as Mach exceptions. */
-    ptrace(PT_ATTACHEXC, debuggee->pid, 0, 0);
-
     void_convvar("$_exitcode");
     void_convvar("$_exitsignal");
 
@@ -249,7 +246,8 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     if(initialize_debuggee_dyld_all_image_infos())
         concat(outbuffer, "%s", dscwarnmsg);
 
-    //munmap(dscdata, st.st_size);
+    /* Have Unix signals be sent as Mach exceptions. */
+    ptrace(PT_ATTACHEXC, debuggee->pid, 0, 0);
 
     return CMD_SUCCESS;
 }
@@ -264,83 +262,38 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     struct machthread *focused = get_focused_thread();
 
     get_thread_state(focused);
-    
-    char *pc_srcfile = NULL, *pc_srcfunc = NULL, *lr_srcfile = NULL,
-         *lr_srcfunc = NULL;
-    uint64_t pc_srcfileline = 0, lr_srcfileline = 0;
-    void *root_die = NULL;
 
-    int has_debug_info = debuggee->has_debug_info();
-        
     concat(outbuffer, "  * frame #0: 0x%16.16llx", focused->thread_state.__pc);
 
-    char *imgname = NULL, *symname = NULL;
-    unsigned int symdist = 0;
-
-    if(get_symbol_info_from_address(debuggee->symbols,
-            focused->thread_state.__pc, &imgname, &symname, &symdist)){
-        concat(outbuffer, "\n");
-    }
-    else{
-        concat(outbuffer, " %s`%s + %#lx\n", imgname, symname, symdist);
+    char *frstr = NULL;
+    create_frame_string(focused->thread_state.__pc, &frstr);
+        
+    if(frstr){
+        concat(outbuffer, " %s", frstr);
+        free(frstr);
+        frstr = NULL;
     }
 
-    free(imgname);
-    free(symname);
-    imgname = NULL;
-    symname = NULL;
-    symdist = 0;
+    concat(outbuffer, "\n");
+    concat(outbuffer, "%4sframe #1: 0x%16.16llx", "", focused->thread_state.__lr);
 
-    /*
-    if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
-                focused->thread_state.__pc - debuggee->aslr_slide,
-                &pc_srcfile, &pc_srcfunc, &pc_srcfileline, &root_die, NULL)){
-        concat(outbuffer, "\n");
-    }
-    else{
-        concat(outbuffer, " %s at %s:%lld\n", pc_srcfunc, pc_srcfile,
-                pc_srcfileline);
-        free(pc_srcfile);
-        free(pc_srcfunc);
-    }
-    */
+    create_frame_string(focused->thread_state.__lr, &frstr);
 
-    concat(outbuffer, "    frame #1: 0x%16.16llx", focused->thread_state.__lr);
-
-    if(get_symbol_info_from_address(debuggee->symbols,
-            focused->thread_state.__lr, &imgname, &symname, &symdist)){
-        concat(outbuffer, "\n");
-    }
-    else{
-        concat(outbuffer, " %s`%s + %#lx\n", imgname, symname, symdist);
+    if(frstr){
+        concat(outbuffer, " %s", frstr);
+        free(frstr);
+        frstr = NULL;
     }
 
-    free(imgname);
-    free(symname);
-    imgname = NULL;
-    symname = NULL;
-    symdist = 0;
-    /*
-    if(!has_debug_info || sym_get_line_info_from_pc(debuggee->dwarfinfo,
-                focused->thread_state.__lr - debuggee->aslr_slide,
-                &lr_srcfile, &lr_srcfunc, &lr_srcfileline, &root_die, NULL)){
-        concat(outbuffer, "\n");
-    }
-    else{
-        concat(outbuffer, " %s at %s:%lld\n", lr_srcfunc, lr_srcfile,
-                lr_srcfileline);
-        free(lr_srcfile);
-        free(lr_srcfunc);
-    }*/
+    concat(outbuffer, "\n");
 
-    struct frame_t {
-        struct frame_t *next;
-        unsigned long frame;
-    };
+    struct frame {
+        struct frame *next;
+        unsigned long vmaddr;
+    } frame;
 
-    struct frame_t *current_frame = malloc(sizeof(struct frame_t));
     kern_return_t err = read_memory_at_location(focused->thread_state.__fp,
-            current_frame, sizeof(struct frame_t));
+            &frame, sizeof(frame));
     
     if(err){
         concat(error, "backtrace failed: %s", mach_error_string(err));
@@ -349,32 +302,24 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
 
     int frame_counter = 2;
 
-    while(current_frame->next){
-        concat(outbuffer, "%4sframe #%d: 0x%16.16lx", "", frame_counter,
-                current_frame->frame);
+    while(frame.next){
+        concat(outbuffer, "%4sframe #%d: 0x%16.16lx", "", frame_counter, frame.vmaddr);
 
-        char *imgname = NULL, *symname = NULL;
-        unsigned int symdist = 0;
+        create_frame_string(frame.vmaddr, &frstr);
 
-        if(get_symbol_info_from_address(debuggee->symbols,
-                    current_frame->frame, &imgname, &symname, &symdist)){
-            concat(outbuffer, "\n");
-        }
-        else{
-            concat(outbuffer, " %s`%s + %#lx\n", imgname, symname, symdist);
+        if(frstr){
+            concat(outbuffer, " %s", frstr);
+            free(frstr);
+            frstr = NULL;
         }
 
-        free(imgname);
-        free(symname);
+        concat(outbuffer, "\n");
 
-        read_memory_at_location((uintptr_t)current_frame->next, 
-                (void *)current_frame, sizeof(struct frame_t)); 
+        read_memory_at_location((uintptr_t)frame.next, &frame, sizeof(frame)); 
         frame_counter++;
     }
 
     concat(outbuffer, " - cannot unwind past frame %d -\n", frame_counter - 1);
-
-    free(current_frame);
 
     return CMD_SUCCESS;
 }

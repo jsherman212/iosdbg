@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "dbgsymbol.h"
+#include "sym.h"
 
 #include "../debuggee.h"
 #include "../memutils.h"
@@ -39,6 +40,62 @@ void add_symbol_to_entry(struct dbg_sym_entry *entry, int arg1,
     entry->syms[entry->cursymarrsz]->sym_func_len = fxnlen;
 
     entry->cursymarrsz++;
+}
+
+void create_frame_string(unsigned long vmaddr, char **frstr){
+    /* first, get symbol name */
+    char *imgname = NULL, *symname = NULL;
+    unsigned int symdist = 0;
+
+    /* If we can't get the symbol name, there's no need to continue
+     * and try to get line of the source file we're at.
+     */
+    if(get_symbol_info_from_address(debuggee->symbols,
+            vmaddr, &imgname, &symname, &symdist)){
+        return;
+    }
+
+    concat(frstr, "%s`%s", imgname, symname);
+
+    free(imgname);
+    free(symname);
+
+    /* second, see if we can figure out the line number we're at */
+    /* if we can't, then we substitute that for how far we are into the fxn */
+    if(!debuggee->has_dwarf_debug_info()){
+        if(symdist > 0)
+            concat(frstr, " + %#lx", symdist);
+
+        return;
+    }
+
+    char *pc_srcfile = NULL, *pc_srcfunc = NULL;
+    uint64_t pc_srcfileline = 0;
+    void *root_die = NULL;
+
+    if(sym_get_line_info_from_pc(debuggee->dwarfinfo,
+                vmaddr - debuggee->aslr_slide, &pc_srcfile, &pc_srcfunc,
+                &pc_srcfileline, &root_die, NULL)){
+        if(symdist > 0)
+            concat(frstr, " + %#lx", symdist);
+
+        return;
+    }
+
+    if(!pc_srcfile)
+        return;
+
+    /* we only care about what's after the last slash */
+    char *pcsf = pc_srcfile;
+    char *lastslash = strrchr(pc_srcfile, '/');
+
+    if(lastslash)
+        pcsf = lastslash + 1;
+
+    concat(frstr, " at %s:%lld", pcsf, pc_srcfileline);
+
+    free(pc_srcfile);
+    free(pc_srcfunc);
 }
 
 struct dbg_sym_entry *create_sym_entry(unsigned long strtab_vmaddr,
@@ -224,9 +281,16 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
 
     free(good_combos);
 
-    *imgnameout = strdup(best_entry->imagename);
-    *symnameout = symname;
-    *distfromsymstartout = vmaddr - best_sym->sym_func_start;
+    if(imgnameout)
+        *imgnameout = strdup(best_entry->imagename);
+    
+    if(symnameout)
+        *symnameout = symname;
+    else
+        free(symname);
+
+    if(distfromsymstartout)
+        *distfromsymstartout = vmaddr - best_sym->sym_func_start;
 
     return 0;
 }

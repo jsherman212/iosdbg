@@ -50,7 +50,7 @@ static void install_handlers(void){
     debuggee->deallocate_ports = &deallocate_ports;
     debuggee->suspend = &suspend;
     debuggee->get_threads = &get_threads;
-    debuggee->has_debug_info = &has_debug_info;
+    debuggee->has_dwarf_debug_info = &has_dwarf_debug_info;
     debuggee->suspended = &suspended;
 }
 

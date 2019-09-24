@@ -13,7 +13,7 @@ kern_return_t suspend(void);
 kern_return_t get_threads(thread_act_port_array_t *,
         mach_msg_type_number_t *, char **);
 
-int has_debug_info(void);
+int has_dwarf_debug_info(void);
 int suspended(void);
 
 #endif

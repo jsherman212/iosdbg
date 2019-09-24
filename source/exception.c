@@ -16,6 +16,8 @@
 #include "trace.h"
 #include "watchpoint.h"
 
+#include "symbol/dbgsymbol.h"
+
 static const char *exc_str(exception_type_t exception){
     switch(exception){
         case EXC_BAD_ACCESS:
@@ -312,8 +314,9 @@ void handle_exception(Request *request, int *should_auto_resume,
         else if(notify && stop){
             /* should print, should not auto resume */
             *should_auto_resume = 0;
+            
+            concat(desc, "\n");
 
-            concat(desc, "%#llx in debuggee.\n", focused->thread_state.__pc);
             disassemble_at_location(focused->thread_state.__pc, 4, desc);
         }
     }
@@ -385,7 +388,7 @@ void handle_exception(Request *request, int *should_auto_resume,
     else{
         concat(desc, ": '%s': stop reason: %s (code = %#lx, subcode = %#lx)\n",
                 focused->tname, exc, code, subcode);
-        
+
         disassemble_at_location(focused->thread_state.__pc, 4, desc);
 
         /* should print, should not auto resume */

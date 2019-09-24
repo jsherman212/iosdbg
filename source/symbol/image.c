@@ -530,7 +530,7 @@ static struct dbg_sym_entry *create_sym_entry_for_image(char *imagename,
         return NULL;
     }
 
-    unsigned long real_nlists_arr_sz = num_nlists * sizeof(struct nlist_64 *);
+    unsigned long real_nlists_arr_sz = num_nlists * sizeof(struct nlist_64_wrapper *);
     struct nlist_64_wrapper **nlists_rea = realloc(nlists, real_nlists_arr_sz);
     nlists = nlists_rea;
 
@@ -688,8 +688,6 @@ int initialize_debuggee_dyld_all_image_infos(void){
     qsort(wrappers, dsc_local_sym_entries_cnt,
             sizeof(struct dsc_local_symentry_wrapper *), wrappercmp_q);
 
-    //clock_t start = clock(), end;
-
     for(int i=0; i<debuggee->dyld_all_image_infos.infoArrayCount; i++){
         int maxlen = PATH_MAX;
         char fpath[maxlen];
@@ -742,14 +740,6 @@ int initialize_debuggee_dyld_all_image_infos(void){
         free(__text_seg_cmd);
     }
 
-    /*
-    end = clock();
-
-    double seconds = ((double)(end - start)) / CLOCKS_PER_SEC;
-
-    printf("%s: took %f seconds to create all the entries\n",
-            __func__, seconds);
-    */
     free(dsc_mappings);
 
     for(int i=0; i<dsc_local_sym_entries_cnt; i++)

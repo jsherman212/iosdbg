@@ -12,6 +12,8 @@
 #include "strext.h"
 #include "thread.h"
 
+#include "symbol/dbgsymbol.h"
+
 /* Thanks https://opensource.apple.com/source/CF/CF-299/Base.subproj/CFByteOrder.h */
 unsigned int CFSwapInt32(unsigned int arg){
     unsigned int result;
@@ -46,9 +48,18 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
     free(locstr);
     free(error);
 
+    char *current_fxn = NULL;
+
+    get_symbol_info_from_address(debuggee->symbols, location,
+            NULL, &current_fxn, NULL);
+
+    char *previous_fxn = NULL;
+
     enum { data_size = 4 };
 
-    while(current_location < (location + (num_instrs * data_size))){
+    unsigned long lim = location + (num_instrs * data_size);
+
+    while(current_location < lim){
         uint8_t data[data_size];
 
         kern_return_t err = read_memory_at_location(current_location,
@@ -61,6 +72,19 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
             }
 
             return err;
+        }
+
+        if(!previous_fxn || (previous_fxn && strcmp(previous_fxn, current_fxn) != 0)){
+            char *frstr = NULL;
+            create_frame_string(current_location, &frstr);
+
+            if(frstr){
+                concat(outbuffer, "\033[1m%s\033[0m:\n", frstr);
+                free(frstr);
+            }
+            else{
+                concat(outbuffer, "\n");
+            }
         }
 
         unsigned long instr = 0;
@@ -103,8 +127,19 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
 
         free(disassembled);
 
+        free(previous_fxn);
+        get_symbol_info_from_address(debuggee->symbols, current_location,
+                NULL, &previous_fxn, NULL);
+
         current_location += data_size;
+
+        free(current_fxn);
+        get_symbol_info_from_address(debuggee->symbols, current_location,
+                NULL, &current_fxn, NULL);
     }
+
+    free(current_fxn);
+    free(previous_fxn);
 
     return KERN_SUCCESS;
 }
