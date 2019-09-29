@@ -4,6 +4,13 @@
 
 #include "branch.h"
 
+static unsigned int sign_extend(unsigned int number, int numbits){
+    if(number & (1 << (numbits - 1)))
+        return number | ~((1 << numbits) - 1);
+
+    return number;
+}
+
 static enum bikind figure_kind(unsigned int opcode){
     unsigned int op0 = opcode >> 29;
     unsigned int op1 = (opcode & 0x3fff000) >> 25;
@@ -43,7 +50,6 @@ enum bicond figure_cond(unsigned int opcode){
     else
         snprintf(decoded, 3, "%s", cond_table[shifted]);
 
-    // XXX find a pattern later
     if(strcmp(decoded, "eq") == 0)
         return EQ;
     else if(strcmp(decoded, "ne") == 0)
@@ -87,6 +93,11 @@ int is_branch(unsigned int opcode, struct branchinfo *binfo){
         return 0;
 
     binfo->kind = figure_kind(opcode);
+
+    /* We're only interested in the types of branches described in the kind enum */
+    if(binfo->kind == UNKNOWN_KIND)
+        return 0;
+
     binfo->is_subroutine_call = 0;
     binfo->conditional = 0;
     binfo->cond = UNKNOWN_COND;
@@ -101,14 +112,14 @@ int is_branch(unsigned int opcode, struct branchinfo *binfo){
     /* Both have 19 bit immediates */
     if(binfo->kind == COND_BRANCH_IMMEDIATE ||
             binfo->kind == COMP_AND_BRANCH_IMMEDIATE){
-        binfo->imm = ((opcode & 0xffffe0) >> 5) * 4;
+        binfo->imm = sign_extend(((opcode & 0xffffe0) >> 5) << 2, 21);
     }
     else if(binfo->kind == UNCOND_BRANCH_IMMEDIATE){
-        binfo->imm = (opcode & 0x3ffffff) * 4;
+        binfo->imm = sign_extend((opcode & 0x3ffffff) << 2, 28);
         binfo->is_subroutine_call = opcode >> 31;
     }
     else if(binfo->kind == TEST_AND_BRANCH_IMMEDIATE){
-        binfo->imm = ((opcode & 0x3fff) >> 5) * 4;
+        binfo->imm = sign_extend(((opcode & 0x3fff) >> 5) << 2, 16);
     }
 
     if(binfo->kind == UNCOND_BRANCH_REGISTER){

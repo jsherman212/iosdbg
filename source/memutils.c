@@ -12,6 +12,8 @@
 #include "strext.h"
 #include "thread.h"
 
+#include "disas/branch.h"
+
 #include "symbol/dbgsymbol.h"
 
 /* Thanks https://opensource.apple.com/source/CF/CF-299/Base.subproj/CFByteOrder.h */
@@ -58,6 +60,10 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
     enum { data_size = 4 };
 
     unsigned long lim = location + (num_instrs * data_size);
+    
+    int still_in_starting_fxn = 1;
+
+    const int max_instr_line_len = 40;
 
     while(current_location < lim){
         uint8_t data[data_size];
@@ -74,7 +80,11 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
             return err;
         }
 
-        if(!previous_fxn || (previous_fxn && strcmp(previous_fxn, current_fxn) != 0)){
+        if(!previous_fxn ||
+                (previous_fxn && strcmp(previous_fxn, current_fxn) != 0)){
+            if(previous_fxn)
+                still_in_starting_fxn = 0;
+
             char *frstr = NULL;
             create_frame_string(current_location, &frstr);
 
@@ -95,9 +105,9 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
         struct breakpoint *active = find_bp_with_address(current_location);
 
         if(active)
-            instr = CFSwapInt32(active->old_instruction);
+            instr = active->old_instruction;
         else
-            instr = CFSwapInt32(*(unsigned long *)data);
+            instr = *(unsigned long *)data;
 
         char *val = NULL;
         concat(&val, "%#lx", instr);
@@ -110,7 +120,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
         free(val);
         free(error);
 
-        char *disassembled = ArmadilloDisassembleB(instr, current_location);
+        char *disassembled = ArmadilloDisassemble(instr, current_location);
 
         struct machthread *focused = get_focused_thread();
 
@@ -121,11 +131,51 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
             return KERN_FAILURE;
         }
 
-        concat(outbuffer, "%s%#lx:  %s\n",
+        concat(outbuffer, "%s%#lx:  %-*s",
                 focused->thread_state.__pc == current_location
-                ? "->  " : "    ", current_location, disassembled);
+                ? "->  " : "    ", current_location, max_instr_line_len, disassembled);
 
         free(disassembled);
+
+        struct branchinfo bi = {0};
+        
+        if(is_branch(instr, &bi)){
+            long btarget = 0;
+
+            if(bi.kind != UNCOND_BRANCH_REGISTER)
+                btarget = bi.imm + current_location;
+            else{
+                /* This gets tricky because we cannot make assumptions about
+                 * what registers hold...
+                 * If we are at an unconditional register branch, we can only
+                 * be confident about the target register if we are stopped
+                 * at it.
+                 * Same goes for the link register.
+                 */
+                if(focused->thread_state.__pc == current_location){
+                    if(bi.rn == X30)
+                        btarget = focused->thread_state.__lr;
+                    else
+                        btarget = focused->thread_state.__x[bi.rn];
+                }
+            }
+
+            /* continue if we were able to determine the branch target */
+            if(btarget != 0){
+                char *frstr = NULL;
+                create_frame_string(btarget, &frstr);
+
+                concat(outbuffer, "\033[1m ; ");
+
+                if(bi.kind == UNCOND_BRANCH_REGISTER)
+                    concat(outbuffer, "%s = ", BIRN_TABLE[bi.rn]);
+
+                concat(outbuffer, "%s\033[0m", frstr);
+                free(frstr);
+            }
+        }
+
+        concat(outbuffer, "\n");
 
         free(previous_fxn);
         get_symbol_info_from_address(debuggee->symbols, current_location,

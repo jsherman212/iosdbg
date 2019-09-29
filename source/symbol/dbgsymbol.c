@@ -247,6 +247,11 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
 
     /* out of all the candidates we have, which is the closest to vmaddr? */
     int bestcomboidx = bsearch_lc(good_combos, vmaddr, 0, num_good_combos - 1, GC);
+
+    /* could happen if a thread is stopped at a bad address */
+    if(bestcomboidx == -1)
+        return 1;
+
     struct goodcombo *bestcombo = good_combos[bestcomboidx];
 
     struct dbg_sym_entry *best_entry = bestcombo->entry;
