@@ -18,7 +18,7 @@
 #include "trace.h"
 
 pthread_mutex_t EXCEPTION_QUEUE_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-struct queue_t *EXCEPTION_QUEUE = NULL;
+queue_t *EXCEPTION_QUEUE = NULL;
 int NEED_REPLY = 0;
 
 struct req {
@@ -32,7 +32,7 @@ static void *exception_server(void *arg){
     int will_auto_resume = 1;
 
     EXCEPTION_QUEUE = queue_new();
-    struct queue_t *exc_queue_internal = queue_new();
+    queue_t *exc_queue_internal = queue_new();
 
     while(MACH_PORT_VALID(debuggee->exception_port)){ 
         struct req *req = malloc(sizeof(struct req));

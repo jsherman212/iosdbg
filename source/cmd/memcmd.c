@@ -9,7 +9,7 @@
 #include "../memutils.h"
 #include "../strext.h"
 
-enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_disassemble(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char *location_str = argcopy(args, DISASSEMBLE_COMMAND_REGEX_GROUPS[0]);
     long location = eval_expr(location_str, error);
@@ -43,7 +43,7 @@ enum cmd_error_t cmdfunc_disassemble(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_examine(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char *location_str = argcopy(args, EXAMINE_COMMAND_REGEX_GROUPS[0]);
     long location = eval_expr(location_str, error);
@@ -78,7 +78,7 @@ enum cmd_error_t cmdfunc_examine(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_memory_find(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     char *start_str = argcopy(args, MEMORY_FIND_COMMAND_REGEX_GROUPS[0]);
     long start = eval_expr(start_str, error);
@@ -226,7 +226,7 @@ enum cmd_error_t cmdfunc_memory_find(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_memory_write(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_memory_write(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char *location_str = argcopy(args, MEMORY_WRITE_COMMAND_REGEX_GROUPS[0]);
     long location = eval_expr(location_str, error);

@@ -41,7 +41,7 @@ static int find_ready_bp_reg(void){
 
     free(bp_map);
 
-    /* No available hardware watchpoint registers found. */
+    /* No available hardware breakpoint registers found. */
     return -1;
 }
 
@@ -458,7 +458,7 @@ int breakpoint_disabled(int bp_id){
 
 void breakpoint_delete_all(void){
     pthread_mutex_lock(&BREAKPOINT_LOCK);
-    struct node_t *current = debuggee->breakpoints->front;
+    struct node *current = debuggee->breakpoints->front;
     while(current){
         struct breakpoint *bp = current->data;
         current = current->next;

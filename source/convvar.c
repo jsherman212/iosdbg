@@ -224,7 +224,7 @@ struct convvar *lookup_convvar(char *name){
     if(invalid_name(name))
         return NULL;
 
-    struct node_t *current = vars->front;
+    struct node *current = vars->front;
     
     while(current){
         struct convvar *var = current->data;
@@ -342,7 +342,7 @@ void show_all_cvars(char **outbuffer){
     if(!vars)
         return;
 
-    struct node_t *current = vars->front;
+    struct node *current = vars->front;
     
     while(current){
         struct convvar *var = current->data;

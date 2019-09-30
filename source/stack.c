@@ -5,8 +5,8 @@
 
 #define STACK_ERR (void *)LONG_MIN
 
-struct stack_t *stack_new(void){
-    struct stack_t *stack = malloc(sizeof(struct stack_t));
+_stack_t *stack_new(void){
+    _stack_t *stack = malloc(sizeof(_stack_t));
 
     stack->data = NULL;
     stack->top = -1;
@@ -14,7 +14,7 @@ struct stack_t *stack_new(void){
     return stack;
 }
 
-void stack_push(struct stack_t *stack, void *data){
+void stack_push(_stack_t *stack, void *data){
     if(!stack)
         return;
 
@@ -24,21 +24,21 @@ void stack_push(struct stack_t *stack, void *data){
     stack->data[stack->top] = data;
 }
 
-void *stack_pop(struct stack_t *stack){
+void *stack_pop(_stack_t *stack){
     if(stack_empty(stack))
         return STACK_ERR;
 
     return stack->data[stack->top--];
 }
 
-void *stack_peek(struct stack_t *stack){
+void *stack_peek(_stack_t *stack){
     if(stack_empty(stack))
         return STACK_ERR;
     
     return stack->data[stack->top];
 }
 
-int stack_empty(struct stack_t *stack){
+int stack_empty(_stack_t *stack){
     if(!stack)
         return 1;
 
@@ -48,7 +48,7 @@ int stack_empty(struct stack_t *stack){
     return stack->top == -1;
 }
 
-void stack_free(struct stack_t *stack){
+void stack_free(_stack_t *stack){
     if(!stack)
         return;
 

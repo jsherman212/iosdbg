@@ -1,16 +1,18 @@
 #ifndef _STACK_H_
 #define _STACK_H_
 
-struct stack_t {
+struct stack {
     void **data;
     int top;
 };
 
-struct stack_t *stack_new(void);
-void stack_push(struct stack_t *, void *);
-void *stack_pop(struct stack_t *);
-void *stack_peek(struct stack_t *);
-int stack_empty(struct stack_t *);
-void stack_free(struct stack_t *);
+typedef struct stack _stack_t;
+
+_stack_t *stack_new(void);
+void stack_push(_stack_t *, void *);
+void *stack_pop(_stack_t *);
+void *stack_peek(_stack_t *);
+int stack_empty(_stack_t *);
+void stack_free(_stack_t *);
 
 #endif

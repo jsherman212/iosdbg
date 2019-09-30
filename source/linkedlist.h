@@ -1,13 +1,13 @@
 #ifndef _LINKEDLIST_H_
 #define _LINKEDLIST_H_
 
-struct node_t {
+struct node {
     void *data;
-    struct node_t *next;
+    struct node *next;
 };
 
 struct linkedlist {
-    struct node_t *front;
+    struct node *front;
 };
 
 struct linkedlist *linkedlist_new(void);

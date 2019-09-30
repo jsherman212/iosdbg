@@ -1,3 +1,4 @@
+![alt text](https://raw.githubusercontent.com/jsherman212/iosdbg/master/iosdbg-symbols.png)
 ![alt text](https://raw.githubusercontent.com/jsherman212/iosdbg/master/iosdbg9.png)
 
 # iosdbg

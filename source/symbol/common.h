@@ -14,7 +14,7 @@ typedef struct {
 } dwarfinfo_t;
 
 #define LL_FOREACH(list, var) \
-    for(struct node_t *var = list->front; \
+    for(struct node *var = list->front; \
             var; \
             var = var->next)
 

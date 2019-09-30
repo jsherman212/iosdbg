@@ -61,7 +61,7 @@ static void prepare(int kind){
     }
 }
 
-enum cmd_error_t cmdfunc_step_inst_into(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_step_inst_into(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     prepare(INST_STEP_INTO);
 
@@ -70,7 +70,7 @@ enum cmd_error_t cmdfunc_step_inst_into(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_step_inst_over(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_step_inst_over(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     prepare(INST_STEP_OVER);
 

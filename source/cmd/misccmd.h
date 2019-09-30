@@ -6,17 +6,17 @@
 /* When --waitfor is included as an argument for 'attach'. */
 extern int KEEP_CHECKING_FOR_PROCESS;
 
-enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_attach(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_continue(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_detach(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_evaluate(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_help(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_kill(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_quit(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_trace(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_aslr(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_attach(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_backtrace(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_continue(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_detach(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_evaluate(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_help(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_interrupt(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_kill(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_quit(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_trace(struct cmd_args *, int, char **, char **);
 
 static const char *ASLR_COMMAND_DOCUMENTATION = 
     "Show debuggee's ASLR slide.\n"

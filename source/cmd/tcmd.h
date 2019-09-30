@@ -3,8 +3,8 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_thread_list(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_thread_select(struct cmd_args *, int, char **, char **);
 
 static const char *THREAD_COMMAND_DOCUMENTATION =
     "'thread' describes the group of commmands which deal with "

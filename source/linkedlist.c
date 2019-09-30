@@ -11,10 +11,20 @@ struct linkedlist *linkedlist_new(void){
 
 void linkedlist_add_front(struct linkedlist *list, void *data){
     if(!list->front){
-        list->front = malloc(sizeof(struct node_t));
-        list->front->next = NULL;
+        list->front = malloc(sizeof(struct node));
         list->front->data = data;
+        list->front->next = NULL;
+
+        return;
     }
+
+    struct node *old_front = list->front;
+
+    struct node *new_front = malloc(sizeof(struct node));
+    new_front->data = data;
+    new_front->next = old_front;
+
+    list->front = new_front;
 }
 
 void linkedlist_add(struct linkedlist *list, void *data_to_add){
@@ -26,12 +36,12 @@ void linkedlist_add(struct linkedlist *list, void *data_to_add){
     if(!data_to_add)
         return;
 
-    struct node_t *current = list->front;
+    struct node *current = list->front;
 
     while(current->next)
         current = current->next;
 
-    struct node_t *add = malloc(sizeof(struct node_t));
+    struct node *add = malloc(sizeof(struct node));
     add->data = data_to_add;
     add->next = NULL;
 
@@ -42,7 +52,7 @@ int linkedlist_contains(struct linkedlist *list, void *data){
     if(!list->front)
         return 0;
 
-    struct node_t *current = list->front;
+    struct node *current = list->front;
 
     while(current->next){
         if(current->data == data)
@@ -62,14 +72,12 @@ void linkedlist_delete(struct linkedlist *list, void *data_to_remove){
         return;
 
     if(list->front->data == data_to_remove){
-        struct node_t *freenode = list->front;
         list->front = list->front->next;
-        free(freenode);
         return;
     }
 
-    struct node_t *current = list->front;
-    struct node_t *previous = NULL;
+    struct node *current = list->front;
+    struct node *previous = NULL;
 
     while(current->next){
         previous = current;
@@ -93,3 +101,4 @@ void linkedlist_free(struct linkedlist *list){
     free(list);
     list = NULL;
 }
+

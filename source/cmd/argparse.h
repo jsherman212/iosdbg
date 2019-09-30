@@ -14,20 +14,20 @@ enum cmd_error_t {
 
 struct argmap {
     char *arggroup;
-    struct queue_t *argvals;
+    queue_t *argvals;
     int argvalcnt;
 };
 
-struct cmd_args_t {
+struct cmd_args {
     int num_args;
     struct linkedlist *argmaps;
 };
 
-struct cmd_args_t *parse_and_create_args(char *, const char *, const char **,
+struct cmd_args *parse_and_create_args(char *, const char *, const char **,
         int, int, char **);
-struct cmd_args_t *argdup(struct cmd_args_t *);
-char *argcopy(struct cmd_args_t *, const char *);
-void argins(struct cmd_args_t *, const char *, char *);
-void argfree(struct cmd_args_t *);
+struct cmd_args *argdup(struct cmd_args *);
+char *argcopy(struct cmd_args *, const char *);
+void argins(struct cmd_args *, const char *, char *);
+void argfree(struct cmd_args *);
 
 #endif

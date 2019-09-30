@@ -3,8 +3,8 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_step_inst_into(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_step_inst_over(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_step_inst_into(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_step_inst_over(struct cmd_args *, int, char **, char **);
 
 static const char *STEP_COMMAND_DOCUMENTATION =
     "'step' describes the group of commands which deal with stepping.\n";

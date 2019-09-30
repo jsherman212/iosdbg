@@ -3,7 +3,7 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_symbols_add(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_symbols_add(struct cmd_args *, int, char **, char **);
 
 static const char *SYMBOLS_COMMAND_DOCUMENTATION =
     "'symbols' describes the group of commands which deal with DWARF"

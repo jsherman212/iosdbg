@@ -9,7 +9,7 @@ void show_all_top_level_cmds(char **);
  * documentation. Only called from
  * prepare_and_call_cmdfunc.
  */
-void documentation_for_cmd(struct dbg_cmd_t *, char **);
+void documentation_for_cmd(struct dbg_cmd *, char **);
 
 /* Receives a string, denoting the command name,
  * and shows documentation. Only called by

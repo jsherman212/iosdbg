@@ -47,7 +47,7 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args,
 
     const char **groupnames = (const char **)(CURRENT_MATCH_INFO.rinfo.groupnames);
 
-    struct cmd_args_t *parsed_args = parse_and_create_args(args,
+    struct cmd_args *parsed_args = parse_and_create_args(args,
             CURRENT_MATCH_INFO.rinfo.argregex,
             groupnames,
             CURRENT_MATCH_INFO.rinfo.num_groups,
@@ -64,11 +64,11 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args,
     /* These audit functions perform checks that don't need to be inside
      * of their corresponding cmdfuncs.
      */
-    void (*audit_function)(struct cmd_args_t *, const char **, char **) =
+    void (*audit_function)(struct cmd_args *, const char **, char **) =
         CURRENT_MATCH_INFO.audit_function;
     
     if(audit_function){
-        struct cmd_args_t *duped_args = argdup(parsed_args);
+        struct cmd_args *duped_args = argdup(parsed_args);
         audit_function(duped_args, groupnames, error);
         argfree(duped_args);
     }
@@ -81,7 +81,7 @@ enum cmd_error_t prepare_and_call_cmdfunc(char *args,
         goto out;
     }
 
-    enum cmd_error_t (*cmdfunc)(struct cmd_args_t *, int, char **, char **) =
+    enum cmd_error_t (*cmdfunc)(struct cmd_args *, int, char **, char **) =
         CURRENT_MATCH_INFO.cmd_function;
 
     result = cmdfunc(parsed_args, 0, outbuffer, error);
@@ -96,7 +96,7 @@ out1:;
      return result;
 }
 
-static inline void copy_groupnames(struct dbg_cmd_t *from){
+static inline void copy_groupnames(struct dbg_cmd *from){
     for(int idx=0; idx<MAX_GROUPS; idx++)
         CURRENT_MATCH_INFO.rinfo.groupnames[idx] = 
             from->rinfo.groupnames[idx];
@@ -200,20 +200,20 @@ static char *word_before(char *text){
  */
 static void match_at_level(const char *text, int target_level,
         int *num_matches, char ***matches){
-    struct queue_t *parentcmd_queue = queue_new();
+    queue_t *parentcmd_queue = queue_new();
     int subcmdidx = 0, idx = 0;
     size_t len = strlen(text);
 
     while(idx < NUM_TOP_LEVEL_COMMANDS){
-        struct dbg_cmd_t *current = COMMANDS[idx++];
+        struct dbg_cmd *current = COMMANDS[idx++];
 
         if(target_level >= 1){
             if(current->parentcmd){
                 enqueue(parentcmd_queue, current);
 
                 while(parentcmd_queue->capacity != -1){
-                    struct dbg_cmd_t *curparent = queue_peek(parentcmd_queue);
-                    struct dbg_cmd_t *cursubcmd = curparent->subcmds[subcmdidx++];
+                    struct dbg_cmd *curparent = queue_peek(parentcmd_queue);
+                    struct dbg_cmd *cursubcmd = curparent->subcmds[subcmdidx++];
 
                     if(!cursubcmd){
                         dequeue(parentcmd_queue);

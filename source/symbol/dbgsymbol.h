@@ -75,6 +75,8 @@ struct dbg_sym_entry {
     char *imagename;
     struct sym **syms;
 
+    unsigned long load_addr;
+
     /* pointer into debuggee's address space */
     unsigned long strtab_vmaddr;
 

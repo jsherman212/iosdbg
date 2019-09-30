@@ -325,7 +325,7 @@ void watchpoint_disable_all(void){
 
 void watchpoint_delete_all(void){
     pthread_mutex_lock(&WATCHPOINT_LOCK);
-    struct node_t *current = debuggee->watchpoints->front;
+    struct node *current = debuggee->watchpoints->front;
     while(current){
         struct watchpoint *wp = current->data;
         current = current->next;

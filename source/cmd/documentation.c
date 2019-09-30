@@ -49,7 +49,7 @@ void show_all_top_level_cmds(char **outbuffer){
     int largest_cmd_len = 0;
 
     while(idx < NUM_TOP_LEVEL_COMMANDS){
-        struct dbg_cmd_t *cmd = COMMANDS[idx++];
+        struct dbg_cmd *cmd = COMMANDS[idx++];
 
         if(cmd->level == 0){
             char **cmds_rea = realloc(cmds, sizeof(char *) * (++len + 1));
@@ -69,7 +69,7 @@ void show_all_top_level_cmds(char **outbuffer){
     token_array_free(cmds, len);
 }
 
-void documentation_for_cmd(struct dbg_cmd_t *cmd, char **outbuffer){
+void documentation_for_cmd(struct dbg_cmd *cmd, char **outbuffer){
     /* Traverse level order to print out the sub-commands
      * for this command. Parent commands do not have accompanying
      * "cmdfuncs".
@@ -83,15 +83,15 @@ void documentation_for_cmd(struct dbg_cmd_t *cmd, char **outbuffer){
 
         subcmds[0] = strdup("");
 
-        struct queue_t *cmdqueue = queue_new();
+        queue_t *cmdqueue = queue_new();
         enqueue(cmdqueue, cmd);
 
         int subcmdidx = 0;
         int largest_subcmd_len = strlen(subcmds[0]);
 
         while(cmdqueue->capacity != -1){
-            struct dbg_cmd_t *curparent = queue_peek(cmdqueue);
-            struct dbg_cmd_t *cursubcmd = curparent->subcmds[subcmdidx++];
+            struct dbg_cmd *curparent = queue_peek(cmdqueue);
+            struct dbg_cmd *cursubcmd = curparent->subcmds[subcmdidx++];
 
             if(!cursubcmd){
                 dequeue(cmdqueue);
@@ -146,7 +146,7 @@ void documentation_for_cmdname(char *_name, char **outbuffer, char **error){
      */
     if(num_tokens == 1){
         while(idx < NUM_TOP_LEVEL_COMMANDS){
-            struct dbg_cmd_t *current = COMMANDS[idx++];
+            struct dbg_cmd *current = COMMANDS[idx++];
 
             if(strcmp(current->name, tokens[0]) == 0){
                 documentation_for_cmd(current, outbuffer);
@@ -158,17 +158,17 @@ void documentation_for_cmdname(char *_name, char **outbuffer, char **error){
         goto out;
     }
 
-    struct queue_t *cmdqueue = queue_new();
+    queue_t *cmdqueue = queue_new();
 
     while(idx < NUM_TOP_LEVEL_COMMANDS){
-        struct dbg_cmd_t *cmd = COMMANDS[idx++];
+        struct dbg_cmd *cmd = COMMANDS[idx++];
         enqueue(cmdqueue, cmd);
 
         int subcmdidx = 0;
 
         while(cmdqueue->capacity != -1){
-            struct dbg_cmd_t *curparent = queue_peek(cmdqueue);
-            struct dbg_cmd_t *cursubcmd = curparent->subcmds[subcmdidx++];
+            struct dbg_cmd *curparent = queue_peek(cmdqueue);
+            struct dbg_cmd *cursubcmd = curparent->subcmds[subcmdidx++];
 
             if(!cursubcmd){
                 dequeue(cmdqueue);

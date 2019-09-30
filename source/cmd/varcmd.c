@@ -5,7 +5,7 @@
 
 #include "../convvar.h"
 
-enum cmd_error_t cmdfunc_variable_print(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_variable_print(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     /* If there were no arguments, print everything. */
     if(args->num_args == 0){
@@ -24,7 +24,7 @@ enum cmd_error_t cmdfunc_variable_print(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_variable_set(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_variable_set(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     char *var = argcopy(args, VARIABLE_SET_COMMAND_REGEX_GROUPS[0]);
     char *value = argcopy(args, VARIABLE_SET_COMMAND_REGEX_GROUPS[1]);
@@ -37,7 +37,7 @@ enum cmd_error_t cmdfunc_variable_set(struct cmd_args_t *args,
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_variable_unset(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_variable_unset(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     char *var = argcopy(args, VARIABLE_UNSET_COMMAND_REGEX_GROUPS[0]);
 

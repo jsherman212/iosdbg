@@ -8,7 +8,7 @@
 #include "../debuggee.h"
 #include "../strext.h"
 
-enum cmd_error_t cmdfunc_symbols_add(struct cmd_args_t *args, int arg1,
+enum cmd_error_t cmdfunc_symbols_add(struct cmd_args *args, int arg1,
         char **outbuffer, char **error){
     char *filepath = argcopy(args, SYMBOLS_ADD_COMMAND_REGEX_GROUPS[0]);
 

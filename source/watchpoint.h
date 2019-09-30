@@ -7,7 +7,7 @@ extern pthread_mutex_t WATCHPOINT_LOCK;
 
 #define WP_LOCKED_FOREACH(var) \
     pthread_mutex_lock(&WATCHPOINT_LOCK); \
-    for(struct node_t *var = debuggee->watchpoints->front; \
+    for(struct node *var = debuggee->watchpoints->front; \
             var; \
             var = var->next) \
 

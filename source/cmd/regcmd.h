@@ -3,8 +3,8 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_register_view(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_register_view(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_register_write(struct cmd_args *, int, char **, char **);
 
 static const char *REGISTER_COMMAND_DOCUMENTATION =
     "'register' describes the group of commands which deal with registers.\n";

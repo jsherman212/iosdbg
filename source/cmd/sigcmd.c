@@ -54,7 +54,7 @@ static int preference(char *str){
     return strstr(str, "true") || strstr(str, "1");
 }
 
-enum cmd_error_t cmdfunc_signal_deliver(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_signal_deliver(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char *sigstr = argcopy(args, SIGNAL_DELIVER_COMMAND_REGEX_GROUPS[0]);
     int signum = sigstr_to_signum(sigstr);
@@ -72,7 +72,7 @@ enum cmd_error_t cmdfunc_signal_deliver(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_signal_handle(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_signal_handle(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char *signals = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[0]);
     char *notify_str = argcopy(args, SIGNAL_HANDLE_COMMAND_REGEX_GROUPS[1]);

@@ -51,7 +51,7 @@ void sym_end(dwarfinfo_t **_dwarfinfo){
 
     dwarfinfo_t *dwarfinfo = *_dwarfinfo;
 
-    struct node_t *current = dwarfinfo->di_compunits->front;
+    struct node *current = dwarfinfo->di_compunits->front;
 
     while(current){
         void *cu = current->data;

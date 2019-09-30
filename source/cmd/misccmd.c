@@ -45,13 +45,13 @@ static pid_t parse_pid(char *pidstr, char **error){
         : pid_of_program(pidstr, error);
 }
 
-enum cmd_error_t cmdfunc_aslr(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_aslr(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     concat(outbuffer, "%4s%#lx\n", "", debuggee->aslr_slide);
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_attach(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char *waitfor = argcopy(args, ATTACH_COMMAND_REGEX_GROUPS[0]);
     char *target = argcopy(args, ATTACH_COMMAND_REGEX_GROUPS[1]);
@@ -145,6 +145,8 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
+    debuggee->suspend();
+
     debuggee->aslr_slide = debuggee->find_slide();
 
     if(debuggee->aslr_slide == -1)
@@ -220,7 +222,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     free(aslr);
     free(target);
 
-    // XXX no hardcode on master
+    /* iosdbg only supports arm64, so we don't have to construct the string */
     const char *dscp = "/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64";
 
     const char *dscwarnmsg = "warning: could not properly examine"
@@ -252,7 +254,7 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_backtrace(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     if(!debuggee->suspended()){
         concat(error, "debuggee must be suspended");
@@ -324,7 +326,7 @@ enum cmd_error_t cmdfunc_backtrace(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_continue(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     if(!debuggee->suspended())
         return CMD_FAILURE;
@@ -344,7 +346,7 @@ enum cmd_error_t cmdfunc_continue(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_detach(struct cmd_args *args, 
         int from_death, char **outbuffer, char **error){
     if(!debuggee->tracing_disabled)
         stop_trace();
@@ -354,7 +356,7 @@ enum cmd_error_t cmdfunc_detach(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_evaluate(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_evaluate(struct cmd_args *args, 
         int from_death, char **outbuffer, char **error){
     char *expr = argcopy(args, EVALUATE_COMMAND_REGEX_GROUPS[0]);
 
@@ -395,7 +397,7 @@ enum cmd_error_t cmdfunc_evaluate(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_help(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_help(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     if(args->num_args == 0){
         show_all_top_level_cmds(outbuffer);
@@ -410,7 +412,7 @@ enum cmd_error_t cmdfunc_help(struct cmd_args_t *args,
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_interrupt(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     if(debuggee->pid == -1)
         return CMD_FAILURE;
@@ -429,7 +431,7 @@ enum cmd_error_t cmdfunc_interrupt(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_kill(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char ans = answer("Do you really want to kill %s? (y/n) ", 
             debuggee->debuggee_name);
@@ -466,7 +468,7 @@ enum cmd_error_t cmdfunc_kill(struct cmd_args_t *args,
     return *error ? CMD_FAILURE : CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_quit(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     if(debuggee->pid != -1)
         ops_detach(0, outbuffer);
@@ -491,12 +493,25 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args_t *args,
         free(mach_traps2);
     }
 
+    for(int i=0; i<NUM_TOP_LEVEL_COMMANDS; i++){
+        struct dbg_cmd *cmd = COMMANDS[i];
+
+        free(cmd->name);
+        free(cmd->alias);
+        free(cmd->documentation);
+
+        free(cmd->rinfo.argregex);
+
+        for(int j=0; j<cmd->rinfo.num_groups; j++)
+            free(cmd->rinfo.groupnames[j]);
+    }
+
     free(debuggee);
     
     return CMD_QUIT;
 }
 
-enum cmd_error_t cmdfunc_trace(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_trace(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     if(debuggee->tracing_disabled){
         concat(error, "tracing is not supported on this host");

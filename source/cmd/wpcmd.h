@@ -3,9 +3,9 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args *, int, char **, char **);
 
 static const char *WATCHPOINT_COMMAND_DOCUMENTATION =
     "'watchpoint' describes the group of commands which deal with watchpoints.\n";

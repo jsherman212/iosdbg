@@ -112,7 +112,7 @@ struct dbg_sym_entry *create_sym_entry(unsigned long strtab_vmaddr,
 }
 
 void destroy_all_symbol_entries(void){
-    struct node_t *current = debuggee->symbols->front;
+    struct node *current = debuggee->symbols->front;
 
     while(current){
         struct dbg_sym_entry *entry = current->data;
@@ -209,12 +209,12 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
     struct goodcombo **good_combos = malloc(sizeof(struct goodcombo *));
     good_combos[num_good_combos] = NULL;
 
-    for(struct node_t *current = symlist->front;
+    for(struct node *current = symlist->front;
             current;
             current = current->next){
         struct dbg_sym_entry *entry = current->data;
 
-        if(entry->cursymarrsz == 0)
+        if(entry->cursymarrsz == 0 || vmaddr < entry->load_addr)
             continue;
 
         if(entry->cursymarrsz == 1){
@@ -242,15 +242,15 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
         }
     }
 
+    /* could happen if a thread is stopped at a bad address */
+    if(num_good_combos == 0)
+        return 1;
+
     /* Prep good combo array for binary search */
     qsort(good_combos, num_good_combos, sizeof(struct goodcombo *), goodcombocmp);
 
     /* out of all the candidates we have, which is the closest to vmaddr? */
     int bestcomboidx = bsearch_lc(good_combos, vmaddr, 0, num_good_combos - 1, GC);
-
-    /* could happen if a thread is stopped at a bad address */
-    if(bestcomboidx == -1)
-        return 1;
 
     struct goodcombo *bestcombo = good_combos[bestcomboidx];
 

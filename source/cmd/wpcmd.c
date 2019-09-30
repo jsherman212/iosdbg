@@ -11,7 +11,7 @@
 #include "../strext.h"
 #include "../watchpoint.h"
 
-enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     if(debuggee->num_watchpoints == 0){
         concat(error, "no watchpoints");
@@ -64,7 +64,7 @@ enum cmd_error_t cmdfunc_watchpoint_delete(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     if(debuggee->num_watchpoints == 0){
         concat(error, "no watchpoints");
@@ -91,7 +91,7 @@ enum cmd_error_t cmdfunc_watchpoint_list(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_watchpoint_set(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char *thread_str = argcopy(args, WATCHPOINT_SET_COMMAND_REGEX_GROUPS[0]);
     int thread = WP_ALL_THREADS;

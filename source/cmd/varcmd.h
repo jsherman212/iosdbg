@@ -3,9 +3,9 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_variable_print(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_variable_set(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_variable_unset(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_variable_print(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_variable_set(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_variable_unset(struct cmd_args *, int, char **, char **);
 
 static const char *VARIABLE_COMMAND_DOCUMENTATION =
     "'variable' describes the group of commands which deal with convenience variables.\n";

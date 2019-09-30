@@ -1,3 +1,9 @@
+9-30-19
+- fixed a couple segfaults that occured when compiled without ASan
+- renamed some structs
+- free COMMAND array when quitting
+- nicer thread select output
+
 9-28-19
 - in disassembly, symbolicate branch targets
 

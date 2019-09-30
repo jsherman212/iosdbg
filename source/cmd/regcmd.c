@@ -9,7 +9,7 @@
 #include "../strext.h"
 #include "../thread.h"
 
-enum cmd_error_t cmdfunc_register_view(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_register_view(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     struct machthread *focused = get_focused_thread();
 
@@ -69,7 +69,7 @@ enum cmd_error_t cmdfunc_register_view(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_register_write(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_register_write(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     char *target_str = argcopy(args, REGISTER_WRITE_COMMAND_REGEX_GROUPS[0]);
     char *value_str = argcopy(args, REGISTER_WRITE_COMMAND_REGEX_GROUPS[1]);

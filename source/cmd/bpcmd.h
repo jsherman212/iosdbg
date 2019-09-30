@@ -3,9 +3,9 @@
 
 #include "argparse.h"
 
-enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *, int, char **, char **);
-enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *, int, char **, char **);
+enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args *, int, char **, char **);
+enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args *, int, char **, char **);
 
 static const char *BREAKPOINT_COMMAND_DOCUMENTATION =
     "'breakpoint' describes the group of commands which deal with breakpoints.\n";

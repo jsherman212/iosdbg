@@ -24,13 +24,13 @@ static void nfree(int n, ...){
     va_end(args);
 }
 
-void audit_aslr(struct cmd_args_t *args, const char **groupnames,
+void audit_aslr(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_attach(struct cmd_args_t *args, const char **groupnames,
+void audit_attach(struct cmd_args *args, const char **groupnames,
         char **error){
     char *target = argcopy(args, groupnames[1]);
 
@@ -65,13 +65,13 @@ void audit_attach(struct cmd_args_t *args, const char **groupnames,
     nfree(2, waitfor, target);
 }
 
-void audit_backtrace(struct cmd_args_t *args, const char **groupnames,
+void audit_backtrace(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_breakpoint_set(struct cmd_args_t *args, const char **groupnames,
+void audit_breakpoint_set(struct cmd_args *args, const char **groupnames,
         char **error){
     // XXX if I allow setting breakpoints before attaching and resolving them
     // later, this will cause problems
@@ -90,19 +90,19 @@ void audit_breakpoint_set(struct cmd_args_t *args, const char **groupnames,
     nfree(2, tidstr, locations);
 }
 
-void audit_continue(struct cmd_args_t *args, const char **groupnames,
+void audit_continue(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_detach(struct cmd_args_t *args, const char **groupnames,
+void audit_detach(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_disassemble(struct cmd_args_t *args, const char **groupnames,
+void audit_disassemble(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
@@ -135,7 +135,7 @@ void audit_disassemble(struct cmd_args_t *args, const char **groupnames,
     nfree(2, location, count);
 }
 
-void audit_evaluate(struct cmd_args_t *args, const char **groupnames,
+void audit_evaluate(struct cmd_args *args, const char **groupnames,
         char **error){
     char *expr = argcopy(args, groupnames[0]);
 
@@ -145,7 +145,7 @@ void audit_evaluate(struct cmd_args_t *args, const char **groupnames,
     nfree(1, expr);
 }
 
-void audit_examine(struct cmd_args_t *args, const char **groupnames,
+void audit_examine(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
@@ -171,13 +171,13 @@ void audit_examine(struct cmd_args_t *args, const char **groupnames,
     nfree(2, location, count);
 }
 
-void audit_kill(struct cmd_args_t *args, const char **groupnames,
+void audit_kill(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_memory_find(struct cmd_args_t *args, const char **groupnames,
+void audit_memory_find(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
@@ -216,25 +216,25 @@ void audit_memory_find(struct cmd_args_t *args, const char **groupnames,
     nfree(4, start, count, type, target);
 }
 
-void audit_memory_write(struct cmd_args_t *args, const char **groupnames,
+void audit_memory_write(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_register_view(struct cmd_args_t *args, const char **groupnames,
+void audit_register_view(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_register_write(struct cmd_args_t *args, const char **groupnames,
+void audit_register_write(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_signal_deliver(struct cmd_args_t *args, const char **groupnames,
+void audit_signal_deliver(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
@@ -252,19 +252,19 @@ void audit_signal_deliver(struct cmd_args_t *args, const char **groupnames,
     nfree(1, sigstr);
 }
 
-void audit_step_inst_into(struct cmd_args_t *args, const char **groupnames,
+void audit_step_inst_into(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_step_inst_over(struct cmd_args_t *args, const char **groupnames,
+void audit_step_inst_over(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1)
         concat(error, "no debuggee");
 }
 
-void audit_symbols_add(struct cmd_args_t *args, const char **groupnames,
+void audit_symbols_add(struct cmd_args *args, const char **groupnames,
         char **error){
     char *filepath = argcopy(args, groupnames[0]);
     
@@ -276,7 +276,7 @@ void audit_symbols_add(struct cmd_args_t *args, const char **groupnames,
     free(filepath);
 }
 
-void audit_thread_list(struct cmd_args_t *args, const char **groupnames,
+void audit_thread_list(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
@@ -289,7 +289,7 @@ void audit_thread_list(struct cmd_args_t *args, const char **groupnames,
     TH_UNLOCK;
 }
 
-void audit_thread_select(struct cmd_args_t *args, const char **groupnames,
+void audit_thread_select(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");
@@ -315,7 +315,7 @@ void audit_thread_select(struct cmd_args_t *args, const char **groupnames,
     nfree(1, tid);
 }
 
-void audit_watchpoint_set(struct cmd_args_t *args, const char **groupnames,
+void audit_watchpoint_set(struct cmd_args *args, const char **groupnames,
         char **error){
     if(debuggee->pid == -1){
         concat(error, "no debuggee");

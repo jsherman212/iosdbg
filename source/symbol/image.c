@@ -493,6 +493,8 @@ static struct dbg_sym_entry *create_sym_entry_for_image(char *imagename,
         entry = create_sym_entry(strtab_vmaddr, symtab_cmd->stroff, from_dsc);
     }
 
+    entry->load_addr = image_load_addr;
+
     unsigned int lc_fxn_starts_capacity =
         CALC_ENTRIES_CAPACITY(STARTING_CAPACITY);
     int num_lc_fxn_starts_entries = 0;

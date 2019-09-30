@@ -37,35 +37,34 @@ struct regexinfo {
     char *groupnames[MAX_GROUPS];
 };
 
-struct dbg_cmd_t {
+struct dbg_cmd {
     char *name;
     char *alias;
     char *documentation;
     
     struct regexinfo rinfo;
 
-    /*
-     * The array of subcmds can be thought as a tree,
+    /* The array of subcmds can be thought as a tree,
      * which can be traversed level-order via queues.
      */
-    struct dbg_cmd_t **subcmds;
+    struct dbg_cmd **subcmds;
 
     int level;
     int parentcmd;
 
-    enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **, char **);
-    void (*audit_function)(struct cmd_args_t *, const char **, char **);
+    enum cmd_error_t (*cmd_function)(struct cmd_args *, int, char **, char **);
+    void (*audit_function)(struct cmd_args *, const char **, char **);
 };
 
 struct matchedcmdinfo_t {
     char *args;
     struct regexinfo rinfo;
-    struct dbg_cmd_t *cmd;
-    enum cmd_error_t (*cmd_function)(struct cmd_args_t *, int, char **, char **);
-    void (*audit_function)(struct cmd_args_t *, const char **, char **);
+    struct dbg_cmd *cmd;
+    enum cmd_error_t (*cmd_function)(struct cmd_args *, int, char **, char **);
+    void (*audit_function)(struct cmd_args *, const char **, char **);
 };
 
-struct dbg_cmd_t *COMMANDS[NUM_TOP_LEVEL_COMMANDS];
+struct dbg_cmd *COMMANDS[NUM_TOP_LEVEL_COMMANDS];
 
 static const char *NO_ARGUMENT_REGEX = "";
 static const char *NO_GROUPS[MAX_GROUPS] = {0};

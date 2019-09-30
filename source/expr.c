@@ -244,7 +244,7 @@ static void add_mults(char **expr){
  * If we encounter an 'N', we have to negate what we just popped,
  * and continue the loop when we return.
  */
-static long process_stacks(struct stack_t *operators, struct stack_t *operands,
+static long process_stacks(_stack_t *operators, _stack_t *operands,
         int *negative, char **error){
     char operator = (char)stack_pop(operators);
 
@@ -285,8 +285,8 @@ static long evaluate(char *expr, char **error){
         }
     }
     
-    struct stack_t *operators = stack_new();
-    struct stack_t *operands = stack_new();
+    _stack_t *operators = stack_new();
+    _stack_t *operands = stack_new();
 
     const size_t zeroXlen = 2;
 

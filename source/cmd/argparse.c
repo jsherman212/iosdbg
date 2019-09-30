@@ -11,13 +11,13 @@
 
 #include "../strext.h"
 
-struct cmd_args_t *parse_and_create_args(char *_args, 
+struct cmd_args *parse_and_create_args(char *_args, 
         const char *pattern,
         const char **groupnames,
         int num_groups,
         int unk_amount_of_args,
         char **error){
-    struct cmd_args_t *arguments = malloc(sizeof(struct cmd_args_t));
+    struct cmd_args *arguments = malloc(sizeof(struct cmd_args));
 
     arguments->num_args = 0;
     arguments->argmaps = linkedlist_new();
@@ -187,12 +187,12 @@ struct cmd_args_t *parse_and_create_args(char *_args,
     return arguments;
 }
 
-struct cmd_args_t *argdup(struct cmd_args_t *with){
-    struct cmd_args_t *duped = malloc(sizeof(struct cmd_args_t));
+struct cmd_args *argdup(struct cmd_args *with){
+    struct cmd_args *duped = malloc(sizeof(struct cmd_args));
     duped->argmaps = linkedlist_new();
     duped->num_args = with->num_args;
     
-    for(struct node_t *current = with->argmaps->front;
+    for(struct node *current = with->argmaps->front;
             current;
             current = current->next){
         struct argmap *with_map = current->data;
@@ -222,11 +222,11 @@ struct cmd_args_t *argdup(struct cmd_args_t *with){
     return duped;
 }
 
-void argins(struct cmd_args_t *args, const char *arggroup, char *argval){
+void argins(struct cmd_args *args, const char *arggroup, char *argval){
     if(!args || !arggroup)
         return;
 
-    for(struct node_t *current = args->argmaps->front;
+    for(struct node *current = args->argmaps->front;
             current;
             current = current->next){
         struct argmap *map = current->data;
@@ -249,14 +249,14 @@ void argins(struct cmd_args_t *args, const char *arggroup, char *argval){
     linkedlist_add(args->argmaps, map);
 }
 
-char *argcopy(struct cmd_args_t *args, const char *group){
+char *argcopy(struct cmd_args *args, const char *group){
     if(!args || !group)
         return NULL;
 
     if(!args->argmaps)
         return NULL;
 
-    for(struct node_t *current = args->argmaps->front;
+    for(struct node *current = args->argmaps->front;
             current;
             current = current->next){
         struct argmap *map = current->data;
@@ -268,11 +268,11 @@ char *argcopy(struct cmd_args_t *args, const char *group){
     return NULL;
 }
 
-void argfree(struct cmd_args_t *args){
+void argfree(struct cmd_args *args){
     if(!args)
         return;
 
-    struct node_t *current = args->argmaps->front;
+    struct node *current = args->argmaps->front;
 
     while(current){
         struct argmap *map = current->data;

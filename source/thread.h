@@ -13,7 +13,7 @@ enum {
 };
 
 #define TH_FOREACH(var) \
-    for(struct node_t *var = debuggee->threads->front; \
+    for(struct node *var = debuggee->threads->front; \
             var; \
             var = var->next) \
 
@@ -21,7 +21,7 @@ extern pthread_mutex_t THREAD_LOCK;
 
 #define TH_LOCKED_FOREACH(var) \
     pthread_mutex_lock(&THREAD_LOCK); \
-    for(struct node_t *var = debuggee->threads->front; \
+    for(struct node *var = debuggee->threads->front; \
             var; \
             var = var->next) \
 

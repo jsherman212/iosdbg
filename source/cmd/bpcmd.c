@@ -10,7 +10,7 @@
 #include "../linkedlist.h"
 #include "../strext.h"
 
-enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     if(debuggee->num_breakpoints == 0){
         concat(error, "no breakpoints");
@@ -64,7 +64,7 @@ enum cmd_error_t cmdfunc_breakpoint_delete(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
+enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args *args,
         int arg1, char **outbuffer, char **error){
     if(debuggee->num_breakpoints == 0){
         concat(error, "no breakpoints");
@@ -95,7 +95,7 @@ enum cmd_error_t cmdfunc_breakpoint_list(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_breakpoint_set(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char *thread_str = argcopy(args, BREAKPOINT_SET_COMMAND_REGEX_GROUPS[0]);
     int thread = BP_ALL_THREADS;

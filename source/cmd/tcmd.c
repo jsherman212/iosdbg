@@ -5,12 +5,13 @@
 
 #include "../debuggee.h"
 #include "../linkedlist.h"
+#include "../memutils.h"
 #include "../strext.h"
 #include "../thread.h"
 
 #include "../symbol/dbgsymbol.h"
 
-enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_thread_list(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     TH_LOCKED_FOREACH(current){
         struct machthread *t = current->data;
@@ -29,7 +30,7 @@ enum cmd_error_t cmdfunc_thread_list(struct cmd_args_t *args,
     return CMD_SUCCESS;
 }
 
-enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args, 
+enum cmd_error_t cmdfunc_thread_select(struct cmd_args *args, 
         int arg1, char **outbuffer, char **error){
     char *thread_id_str = argcopy(args, THREAD_SELECT_COMMAND_REGEX_GROUPS[0]);
     int thread_id = (int)strtol_err(thread_id_str, error);
@@ -40,7 +41,7 @@ enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args,
         return CMD_FAILURE;
 
     if(thread_id < 1 || thread_id > debuggee->thread_count){
-        concat(error, "out of bounds, must be in [1, %d]", 
+        concat(error, "out of bounds, must be [1, %d]", 
                 debuggee->thread_count);
         return CMD_FAILURE;
     }
@@ -52,7 +53,12 @@ enum cmd_error_t cmdfunc_thread_select(struct cmd_args_t *args,
         return CMD_FAILURE;
     }
 
-    concat(outbuffer, "Selected thread #%d\n", thread_id);
-    
+    struct machthread *f = get_focused_thread();
+
+    concat(outbuffer, "Selected thread %d, tid = %#llx, '%s'\n",
+            f->ID, f->tid, f->tname);
+
+    disassemble_at_location(f->thread_state.__pc, 4, outbuffer);
+
     return CMD_SUCCESS;
 }

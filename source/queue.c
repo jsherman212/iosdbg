@@ -4,8 +4,8 @@
 
 #include "queue.h"
 
-struct queue_t *queue_new(void){
-    struct queue_t *queue = malloc(sizeof(struct queue_t));
+queue_t *queue_new(void){
+    queue_t *queue = malloc(sizeof(queue_t));
 
     queue->data = NULL;
     queue->capacity = -1;
@@ -13,7 +13,7 @@ struct queue_t *queue_new(void){
     return queue;
 }
 
-void enqueue(struct queue_t *queue, void *data){
+void enqueue(queue_t *queue, void *data){
     if(!queue)
         return;
 
@@ -24,7 +24,7 @@ void enqueue(struct queue_t *queue, void *data){
     queue->data[queue->capacity] = data;
 }
 
-void *dequeue(struct queue_t *queue){
+void *dequeue(queue_t *queue){
     if(!queue)
         return NULL;
 
@@ -42,7 +42,7 @@ void *dequeue(struct queue_t *queue){
     return ret;
 }
 
-void *queue_peek(struct queue_t *queue){
+void *queue_peek(queue_t *queue){
     if(!queue)
         return NULL;
 
@@ -55,7 +55,7 @@ void *queue_peek(struct queue_t *queue){
     return queue->data[0];
 }
 
-void queue_free(struct queue_t *queue){
+void queue_free(queue_t *queue){
     if(!queue)
         return;
 

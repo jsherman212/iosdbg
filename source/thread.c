@@ -386,6 +386,10 @@ void update_thread_list(thread_act_port_array_t threads,
             if(add){
                 debuggee->thread_count = i+1;
                 linkedlist_add(debuggee->threads, add);
+
+                get_thread_state(add);
+                get_debug_state(add);
+                get_neon_state(add);
             }
         }
 
@@ -414,7 +418,9 @@ void update_thread_list(thread_act_port_array_t threads,
     int infos_cnt = 0;
     struct th_excinfo **infos = malloc(infos_cnt);
     
-    TH_FOREACH(current){
+    struct node *current = debuggee->threads->front;
+
+    while(current){
         struct machthread *t = current->data;
 
         if(t->focused)
@@ -441,8 +447,11 @@ void update_thread_list(thread_act_port_array_t threads,
 
         infos[infos_cnt - 1] = info;
 
+        current = current->next;
+
         linkedlist_delete(debuggee->threads, t);
         free(t);
+        t = NULL;
     }
 
     resetmtid();
