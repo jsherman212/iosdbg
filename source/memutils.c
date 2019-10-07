@@ -251,8 +251,29 @@ kern_return_t dump_memory(unsigned long location, vm_size_t amount,
 
 kern_return_t read_memory_at_location(unsigned long location, void *buffer,
         vm_size_t length){
-    return vm_read_overwrite(debuggee->task, (vm_address_t)location,
-            length, (vm_address_t)buffer, &length);
+    vm_address_t current_loc = location;
+    vm_address_t end = location + length;
+
+    vm_size_t bytes_read = 0;
+    vm_size_t bytes_left = length;
+
+    kern_return_t kret = KERN_SUCCESS;
+
+    while(current_loc < end && kret == KERN_SUCCESS){
+        vm_size_t chunk = 0x100;
+
+        if(chunk > bytes_left)
+            chunk = bytes_left;
+
+        kret = vm_read_overwrite(debuggee->task, current_loc, chunk,
+                (vm_address_t)((uint8_t *)buffer + bytes_read), &chunk);
+
+        bytes_read += chunk;
+        current_loc += chunk;
+        bytes_left -= chunk;
+    }
+    
+    return KERN_SUCCESS;
 }
 
 kern_return_t write_memory_to_location(vm_address_t location,
@@ -266,13 +287,9 @@ kern_return_t write_memory_to_location(vm_address_t location,
     mach_port_t object_name;
     mach_msg_type_number_t info_count = VM_REGION_BASIC_INFO_COUNT_64;
     
-    kern_return_t ret = vm_region_64(debuggee->task,
-            &region_location,
-            &region_size,
-            VM_REGION_BASIC_INFO,
-            (vm_region_info_t)&info,
-            &info_count,
-            &object_name);
+    kern_return_t ret = vm_region_64(debuggee->task, &region_location,
+            &region_size, VM_REGION_BASIC_INFO, (vm_region_info_t)&info,
+            &info_count, &object_name);
     
     if(ret)
         return ret;

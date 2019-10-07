@@ -450,6 +450,7 @@ void update_thread_list(thread_act_port_array_t threads,
         current = current->next;
 
         linkedlist_delete(debuggee->threads, t);
+
         free(t);
         t = NULL;
     }

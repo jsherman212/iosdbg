@@ -504,6 +504,8 @@ enum cmd_error_t cmdfunc_quit(struct cmd_args *args,
 
         for(int j=0; j<cmd->rinfo.num_groups; j++)
             free(cmd->rinfo.groupnames[j]);
+
+        free(cmd->subcmds);
     }
 
     free(debuggee);

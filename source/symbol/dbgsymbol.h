@@ -1,6 +1,7 @@
 #ifndef _DBGSYMBOL_H_
 #define _DBGSYMBOL_H_
 
+#include "../array.h"
 #include "../linkedlist.h"
 
 struct dsc_hdr {
@@ -34,16 +35,6 @@ struct dsc_mapping_info {
     char pad[8];
 };
 
-#define STARTING_CAPACITY (9)
-#define FAST_POW_TWO(x) (1 << (x))
-#define CALC_SYM_CAPACITY(x) (sizeof(struct sym *) * FAST_POW_TWO(x))
-#define CALC_ENTRIES_CAPACITY(x) (sizeof(struct lc_fxn_starts_entry *) * FAST_POW_TWO(x))
-#define CALC_NLISTS_ARR_CAPACITY(x) (sizeof(struct nlist_64_wrapper *) * FAST_POW_TWO(x))
-#define CALC_DSC_LOCAL_SYM_ENTRIES_ARR_CAPACITY(x) \
-    (sizeof(struct dsc_local_symentry_wrapper *) * FAST_POW_TWO(x))
-
-#define FIRST_FXN_NO_LEN (-1)
-
 /* If the symbol isn't named, we'll make dsc_symname a special value to save
  * memory. This applies for non-DSC symbols as well. The following macro
  * serves to ease confusion that will come about from implementing it
@@ -73,17 +64,15 @@ struct sym {
 
 struct dbg_sym_entry {
     char *imagename;
-    struct sym **syms;
+
+    struct array *syms;
 
     unsigned long load_addr;
 
     /* pointer into debuggee's address space */
     unsigned long strtab_vmaddr;
 
-    unsigned int cursymarrsz;
-
-    /* which power of 2 the symbol array's capacity equals */
-    char symarr_capacity_pow;
+    /* unfortunate... */
     char from_dsc;
 };
 

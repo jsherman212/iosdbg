@@ -8,6 +8,7 @@
 #include "dbgsymbol.h"
 #include "scache.h"
 
+#include "../array.h"
 #include "../dbgio.h"
 #include "../debuggee.h"
 #include "../linkedlist.h"
@@ -146,13 +147,13 @@ enum { DSC = 0, NON_DSC };
 struct lc_fxn_starts_entry {
     /* function start address */
     unsigned long vmaddr;
+
     /* length of function, -1 if first entry in LC_FUNCTION_STARTS */
     int len;
 };
 
 static int read_lc_fxn_starts(char *imagename, unsigned long image_load_addr,
-        struct lc_fxn_starts_entry ***entries, int *entriescnt,
-        unsigned int *entriescapa, unsigned long aslr_slide, int kind){
+        struct array *fxn_starts, unsigned long aslr_slide, int kind){
     struct segment_command_64 *__text = NULL;
     struct linkedit_data_command *lidc = NULL;
 
@@ -170,6 +171,7 @@ static int read_lc_fxn_starts(char *imagename, unsigned long image_load_addr,
 
         if(copy_file_contents(imagename, lidc->dataoff, lcfxnstart_start,
                     lidc->datasize) == -1){
+            free(lcfxnstart_start);
             return 1;
         }
         
@@ -195,30 +197,28 @@ static int read_lc_fxn_starts(char *imagename, unsigned long image_load_addr,
         total_fxn_len += prevfxnlen;
         nextfxnstartaddr += prevfxnlen;
 
-        if(fxncnt >= FAST_POW_TWO(*entriescapa) - 1){
-            (*entriescapa)++;
-            struct lc_fxn_starts_entry **entries_rea = realloc(*entries,
-                    CALC_ENTRIES_CAPACITY(*entriescapa));
-            *entries = entries_rea;
+        struct lc_fxn_starts_entry *e = malloc(sizeof(struct lc_fxn_starts_entry));
+        struct lc_fxn_starts_entry *prev_e = NULL;
+
+        e->vmaddr = nextfxnstartaddr + aslr_slide;
+
+        if(fxn_starts->len > 0){
+            prev_e =
+                (struct lc_fxn_starts_entry *)fxn_starts->items[fxn_starts->len - 1];
+
+            prev_e->len = prevfxnlen;
         }
 
-        struct lc_fxn_starts_entry **e = *entries;
-        e[fxncnt] = malloc(sizeof(struct lc_fxn_starts_entry));
-        e[fxncnt]->vmaddr = nextfxnstartaddr + aslr_slide;
-
-        if(fxncnt == 0)
-            e[fxncnt]->len = FIRST_FXN_NO_LEN;
-        else
-            e[fxncnt - 1]->len = prevfxnlen;
-
-        fxncnt++;
+        array_insert(fxn_starts, e);
     }
 
-    if(fxncnt > 0)
-        (*entries)[fxncnt - 1]->len = __text->vmsize - total_fxn_len;
+    if(fxn_starts->len > 0){
+        struct lc_fxn_starts_entry *last_e =
+            (struct lc_fxn_starts_entry *)fxn_starts->items[fxn_starts->len - 1];
 
-    *entriescnt = fxncnt;
-
+        last_e->len = __text->vmsize - total_fxn_len;
+    }
+    
     if(kind == NON_DSC)
         free(lcfxnstart_start);
 
@@ -270,33 +270,30 @@ struct nlist_64_wrapper {
     char *str;
 };
 
-static void add_nlist_wrapper(struct nlist_64_wrapper ***nlist_wrappers,
-        struct nlist_64 *nlist, unsigned int *nlists_wrapper_capa, int idx,
+static struct nlist_64_wrapper *create_nlist64_wrapper(struct nlist_64 *nlist,
         unsigned long aslr_slide, char *str){
-    if(idx >= FAST_POW_TWO(*nlists_wrapper_capa) - 1){
-        (*nlists_wrapper_capa)++;
-        struct nlist_64_wrapper **nlists_rea =
-            realloc(*nlist_wrappers, CALC_NLISTS_ARR_CAPACITY(*nlists_wrapper_capa));
-        *nlist_wrappers = nlists_rea;
-    }
+    struct nlist_64_wrapper *nw = malloc(sizeof(struct nlist_64_wrapper));
 
-    (*nlist_wrappers)[idx] = malloc(sizeof(struct nlist_64_wrapper));
-    (*nlist_wrappers)[idx]->nlist = malloc(sizeof(struct nlist_64));
-    memcpy((*nlist_wrappers)[idx]->nlist, nlist, sizeof(*nlist));
-    (*nlist_wrappers)[idx]->nlist->n_value += aslr_slide;
-    (*nlist_wrappers)[idx]->str = str;
+    nw->nlist = malloc(sizeof(struct nlist_64));
+    memcpy(nw->nlist, nlist, sizeof(*nlist));
+
+    nw->nlist->n_value += aslr_slide;
+
+    nw->str = str;
+
+    return nw;
 }
 
-struct dsc_local_symentry_wrapper {
+struct dsc_local_syms_entry_wrapper {
     struct dsc_local_syms_entry *entry;
     char *dylib_path;
 };
 
-static int wrappercmp_q(const void *a, const void *b){
-    struct dsc_local_symentry_wrapper *wa
-        = *(struct dsc_local_symentry_wrapper **)a;
-    struct dsc_local_symentry_wrapper *wb
-        = *(struct dsc_local_symentry_wrapper **)b;
+static int wrappercmp(const void *a, const void *b){
+    struct dsc_local_syms_entry_wrapper *wa
+        = *(struct dsc_local_syms_entry_wrapper **)a;
+    struct dsc_local_syms_entry_wrapper *wb
+        = *(struct dsc_local_syms_entry_wrapper **)b;
 
     if(!wa || !wb)
         return 0;
@@ -305,17 +302,11 @@ static int wrappercmp_q(const void *a, const void *b){
 }
 
 static int read_nlists(char *imagename, unsigned long image_load_addr,
-        struct nlist_64_wrapper ***nlist_wrappers,
-        int *nlists_wrapper_cnt, unsigned int *nlists_wrapper_capa,
-        struct my_dsc_mapping *mappings, int mappingcnt, int dsc_image,
-        struct symtab_command *symtab_cmd,
-        struct segment_command_64 *__text_seg_cmd,
-        int __text_segment_nsect,
-        struct dsc_local_symentry_wrapper **dsc_local_sym_entries,
-        int num_dsc_local_sym_entries){
+        struct array *nlist_wrappers, struct my_dsc_mapping *mappings,
+        int mappingcnt, int dsc_image, struct symtab_command *symtab_cmd,
+        struct segment_command_64 *__text_seg_cmd, int __text_segment_nsect,
+        struct array *dsc_local_sym_entries_wrappers){
     unsigned long aslr_slide = image_load_addr - __text_seg_cmd->vmaddr;
-
-    int idx = 0;
 
     if(dsc_image){
         struct dsc_hdr *cache_hdr = (struct dsc_hdr *)DSCDATA;
@@ -331,20 +322,20 @@ static int read_nlists(char *imagename, unsigned long image_load_addr,
         unsigned long entries_offset = syminfos->entriesoff +
             cache_hdr->localsymoff;
 
-        struct dsc_local_symentry_wrapper wkey = {0};
+        struct dsc_local_syms_entry_wrapper wkey = {0};
         wkey.dylib_path = imagename;
-        struct dsc_local_symentry_wrapper *wkey_p = &wkey;
-        struct dsc_local_symentry_wrapper **entry_wrapper =
-            bsearch(&wkey_p, dsc_local_sym_entries, num_dsc_local_sym_entries,
-                    sizeof(struct dsc_local_symentry_wrapper *), wrappercmp_q);
+        struct dsc_local_syms_entry_wrapper *wkey_p = &wkey;
+        void *found = NULL;
 
-        if(!entry_wrapper)
+        if(array_bsearch(dsc_local_sym_entries_wrappers, &wkey_p,
+                    wrappercmp, &found) == ARRAY_KEY_NOT_FOUND){
             return 1;
+        }
 
-        struct dsc_local_syms_entry *entry = (*entry_wrapper)->entry;
+        struct dsc_local_syms_entry_wrapper *entry_wrapper =
+            *(struct dsc_local_syms_entry_wrapper **)found;
 
-        if(!entry)
-            return 1;
+        struct dsc_local_syms_entry *entry = entry_wrapper->entry;
 
         unsigned long nlist_start = nlist_offset +
             (entry->nliststartidx * sizeof(struct nlist_64));
@@ -363,10 +354,10 @@ static int read_nlists(char *imagename, unsigned long image_load_addr,
                 unsigned long stroff = strings_offset + nlist->n_un.n_strx;
                 char *symname = (char *)((uint8_t *)DSCDATA + stroff);
 
-                add_nlist_wrapper(nlist_wrappers, nlist,
-                        nlists_wrapper_capa, idx, aslr_slide, symname);
+                struct nlist_64_wrapper *nw = create_nlist64_wrapper(nlist,
+                        aslr_slide, symname);
 
-                idx++;
+                array_insert(nlist_wrappers, nw);
             }
         }
 
@@ -390,11 +381,10 @@ static int read_nlists(char *imagename, unsigned long image_load_addr,
             if(*symname != '<'){
                 if((nlist->n_type & N_TYPE) == N_SECT &&
                         nlist->n_sect == __text_segment_nsect){
+                    struct nlist_64_wrapper *nw = create_nlist64_wrapper(nlist,
+                            aslr_slide, symname);
 
-                    add_nlist_wrapper(nlist_wrappers, nlist,
-                            nlists_wrapper_capa, idx, aslr_slide, symname);
-
-                    idx++;
+                    array_insert(nlist_wrappers, nw);
                 }
             }
         }
@@ -424,16 +414,14 @@ static int read_nlists(char *imagename, unsigned long image_load_addr,
                 continue;
             }
 
-            add_nlist_wrapper(nlist_wrappers, &nlist, nlists_wrapper_capa,
-                    idx, aslr_slide, NULL);
+            struct nlist_64_wrapper *nw = create_nlist64_wrapper(&nlist,
+                    aslr_slide, NULL);
 
-            idx++;
+            array_insert(nlist_wrappers, nw);
         }
 
         free(ns);
     }
-
-    *nlists_wrapper_cnt = idx;
 
     return 0;
 }
@@ -461,11 +449,7 @@ static int nlistwcmp(const void *a, const void *b){
 
 static struct dbg_sym_entry *create_sym_entry_for_image(char *imagename, 
         unsigned long image_load_addr, struct my_dsc_mapping *mappings,
-        int mappingcnt, struct symtab_command **symtab_cmd_out,
-        struct segment_command_64 **__text_seg_cmd_out,
-        int *__text_segment_nsect_out,
-        struct dsc_local_symentry_wrapper **dsc_local_sym_entries,
-        int dsc_local_sym_entries_cnt){
+        int mappingcnt, struct array *dsc_local_sym_entries_wrappers){
     int dsc_image = is_dsc_image(image_load_addr, mappings, mappingcnt);
 
     struct symtab_command *symtab_cmd = NULL;
@@ -480,8 +464,6 @@ static struct dbg_sym_entry *create_sym_entry_for_image(char *imagename,
 
     unsigned long aslr_slide = image_load_addr - __text_seg_cmd->vmaddr;
 
-    *__text_segment_nsect_out = __text_segment_nsect;
-
     struct dbg_sym_entry *entry = NULL;
 
     if(dsc_image)
@@ -495,66 +477,62 @@ static struct dbg_sym_entry *create_sym_entry_for_image(char *imagename,
 
     entry->load_addr = image_load_addr;
 
-    unsigned int lc_fxn_starts_capacity =
-        CALC_ENTRIES_CAPACITY(STARTING_CAPACITY);
-    int num_lc_fxn_starts_entries = 0;
-    struct lc_fxn_starts_entry **lc_fxn_starts_entries =
-        malloc(lc_fxn_starts_capacity);
+    struct array *lc_fxn_starts = array_new();
 
-    if(read_lc_fxn_starts(imagename, image_load_addr, &lc_fxn_starts_entries,
-            &num_lc_fxn_starts_entries, &lc_fxn_starts_capacity,
+    if(read_lc_fxn_starts(imagename, image_load_addr, lc_fxn_starts,
             aslr_slide, dsc_image ? DSC : NON_DSC)){
         free(entry);
         free(symtab_cmd);
         free(__text_seg_cmd);
 
+        array_destroy(&lc_fxn_starts);
+
         return NULL;
     }
 
-    unsigned long real_entries_arr_sz =
-        num_lc_fxn_starts_entries * sizeof(struct lc_fxn_starts_entry *);
-    struct lc_fxn_starts_entry **lc_fxn_starts_entries_rea =
-        realloc(lc_fxn_starts_entries, real_entries_arr_sz);
-    lc_fxn_starts_entries = lc_fxn_starts_entries_rea;
+    array_shrink_to_fit(lc_fxn_starts);
 
-    unsigned int nlists_capacity = CALC_NLISTS_ARR_CAPACITY(STARTING_CAPACITY);
-    int num_nlists = 0;
-    struct nlist_64_wrapper **nlists = malloc(nlists_capacity);
+    struct array *nlist_wrappers = array_new();
 
-    if(read_nlists(imagename, image_load_addr, &nlists, &num_nlists,
-            &nlists_capacity, mappings, mappingcnt, dsc_image,
+    if(read_nlists(imagename, image_load_addr, nlist_wrappers,
+            mappings, mappingcnt, dsc_image,
             symtab_cmd, __text_seg_cmd, __text_segment_nsect,
-            dsc_local_sym_entries, dsc_local_sym_entries_cnt)){
+            dsc_local_sym_entries_wrappers)){
         free(entry);
         free(symtab_cmd);
         free(__text_seg_cmd);
 
+        array_destroy(&nlist_wrappers);
+
         return NULL;
     }
 
-    unsigned long real_nlists_arr_sz = num_nlists * sizeof(struct nlist_64_wrapper *);
-    struct nlist_64_wrapper **nlists_rea = realloc(nlists, real_nlists_arr_sz);
-    nlists = nlists_rea;
+    array_shrink_to_fit(nlist_wrappers);
 
     /* prep nlist array for binary searches */
-    qsort(nlists, num_nlists, sizeof(struct nlist_64_wrapper *), nlistwcmp);
+    array_qsort(nlist_wrappers, nlistwcmp);
 
     /* add the symbols for the current entry */
-    for(int i=0; i<num_lc_fxn_starts_entries; i++){
-        unsigned long vmaddr = lc_fxn_starts_entries[i]->vmaddr;
+    for(int i=0; i<lc_fxn_starts->len; i++){
+        struct lc_fxn_starts_entry *lc_entry =
+            (struct lc_fxn_starts_entry *)lc_fxn_starts->items[i];
 
-        struct nlist_64 nlist_for_wrapper = {0};
-        nlist_for_wrapper.n_value = vmaddr;
+        unsigned long vmaddr = lc_entry->vmaddr;
+
+        struct nlist_64 nlist_for_wrapper_key = {0};
+        nlist_for_wrapper_key.n_value = vmaddr;
 
         struct nlist_64_wrapper nwkey = {0};
-        nwkey.nlist = &nlist_for_wrapper;
+        nwkey.nlist = &nlist_for_wrapper_key;
 
         struct nlist_64_wrapper *nwkey_p = &nwkey;
 
-        struct nlist_64_wrapper **found_nw_dp = bsearch(&nwkey_p, nlists,
-                num_nlists, sizeof(struct nlist_64_wrapper *), nlistwcmp);
+        void *found = NULL;
+        array_bsearch(nlist_wrappers, &nwkey_p, nlistwcmp, &found);
 
-        int fxnlen = lc_fxn_starts_entries[i]->len;
+        struct nlist_64_wrapper **found_nw_dp = (struct nlist_64_wrapper **)found;
+
+        int fxnlen = lc_entry->len;
 
         /* this symbol is named */
         if(found_nw_dp){
@@ -570,25 +548,29 @@ static struct dbg_sym_entry *create_sym_entry_for_image(char *imagename,
         }
     }
 
-    for(int i=0; i<num_lc_fxn_starts_entries; i++)
-        free(lc_fxn_starts_entries[i]);
-    free(lc_fxn_starts_entries);
-    lc_fxn_starts_entries = NULL;
+    int num_lc_fxn_starts = lc_fxn_starts->len;
 
-    for(int i=0; i<num_nlists; i++){
-        free(nlists[i]->nlist);
-        free(nlists[i]);
+    for(int i=0; i<num_lc_fxn_starts; i++)
+        free(lc_fxn_starts->items[i]);
+
+    array_destroy(&lc_fxn_starts);
+
+    int num_nlist_wrappers = nlist_wrappers->len;
+
+    for(int i=0; i<num_nlist_wrappers; i++){
+        free(((struct nlist_64_wrapper *)(nlist_wrappers->items[i]))->nlist);
+        free(nlist_wrappers->items[i]);
     }
+    
+    array_destroy(&nlist_wrappers);
 
-    free(nlists);
-    nlists = NULL;
+    free(symtab_cmd);
+    free(__text_seg_cmd);
 
     return entry;
 }
 
-static int stash_dsc_local_syms_entries(
-        struct dsc_local_symentry_wrapper ***wrappers_out,
-        int *wrapperscnt, unsigned int *wrapperscapa){
+static void stash_dsc_local_syms_entries(struct array *entries){
     struct dsc_hdr *cache_hdr = (struct dsc_hdr *)DSCDATA;
 
     struct dsc_local_syms_info *syminfos =
@@ -613,22 +595,16 @@ static int stash_dsc_local_syms_entries(
         void *nameptr = NULL;
         int result = get_dylib_path(entry->dyliboff, &nameptr);
 
-        if(i >= FAST_POW_TWO(*wrapperscapa) - 1){
-            (*wrapperscapa)++;
-            struct dsc_local_symentry_wrapper **wrappers_rea =
-                realloc(*wrappers_out,
-                        CALC_DSC_LOCAL_SYM_ENTRIES_ARR_CAPACITY(*wrapperscapa));
-            *wrappers_out = wrappers_rea;
-        }
+        if(result != NAME_OK)
+            continue;
 
-        (*wrappers_out)[i] = malloc(sizeof(struct dsc_local_symentry_wrapper));
-        (*wrappers_out)[i]->entry = entry;
-        (*wrappers_out)[i]->dylib_path = nameptr;
+        struct dsc_local_syms_entry_wrapper *w =
+            malloc(sizeof(struct dsc_local_syms_entry_wrapper));
+        w->entry = entry;
+        w->dylib_path = nameptr;
+
+        array_insert(entries, w);
     }
-
-    *wrapperscnt = entriescnt;
-
-    return 0;
 }
 
 int initialize_debuggee_dyld_all_image_infos(void){
@@ -642,11 +618,9 @@ int initialize_debuggee_dyld_all_image_infos(void){
         return 1;
 
     kret = read_memory_at_location(dyld_info.all_image_info_addr,
-            &debuggee->dyld_all_image_infos,
-            sizeof(struct dyld_all_image_infos));
+            &debuggee->dyld_all_image_infos, sizeof(struct dyld_all_image_infos));
 
-    struct dyld_all_image_infos dyld_all_image_infos =
-        debuggee->dyld_all_image_infos;
+    struct dyld_all_image_infos dyld_all_image_infos = debuggee->dyld_all_image_infos;
 
     count = sizeof(struct dyld_image_info) *
         debuggee->dyld_all_image_infos.infoArrayCount;
@@ -664,65 +638,36 @@ int initialize_debuggee_dyld_all_image_infos(void){
      * between cache images and other images.
      */
     int num_dsc_mappings = 0;
-    struct my_dsc_mapping *dsc_mappings =
-        get_dsc_mappings(DSCDATA, &num_dsc_mappings);
+    struct my_dsc_mapping *dsc_mappings = get_dsc_mappings(DSCDATA, &num_dsc_mappings);
 
     debuggee->symbols = linkedlist_new();
 
     /* Stash the local symbols entries from the dyld shared cache
      * so we can bsearch them.
      */
-    unsigned int dsc_local_symentries_wrapper_capa =
-        CALC_DSC_LOCAL_SYM_ENTRIES_ARR_CAPACITY(STARTING_CAPACITY);
-    int dsc_local_sym_entries_cnt = 0;
-    struct dsc_local_symentry_wrapper **wrappers =
-        malloc(dsc_local_symentries_wrapper_capa);
+    struct array *dsc_local_syms_entry_wrappers = array_new();
 
-    stash_dsc_local_syms_entries(&wrappers, &dsc_local_sym_entries_cnt,
-            &dsc_local_symentries_wrapper_capa);
+    stash_dsc_local_syms_entries(dsc_local_syms_entry_wrappers);
 
-    int wrappers_real_sz =
-        sizeof(struct dsc_local_symentry_wrapper *) * dsc_local_sym_entries_cnt;
-    struct dsc_local_symentry_wrapper **wrappers_rea =
-        realloc(wrappers, wrappers_real_sz);
-    wrappers = wrappers_rea;
-
-    qsort(wrappers, dsc_local_sym_entries_cnt,
-            sizeof(struct dsc_local_symentry_wrapper *), wrappercmp_q);
+    array_shrink_to_fit(dsc_local_syms_entry_wrappers);
+    array_qsort(dsc_local_syms_entry_wrappers, wrappercmp);
 
     for(int i=0; i<debuggee->dyld_all_image_infos.infoArrayCount; i++){
         int maxlen = PATH_MAX;
         char fpath[maxlen];
         memset(fpath, 0, maxlen);
 
-        unsigned int bytes_read = 0;
-        char read_byte = '\1';
+        unsigned long imgpath =
+            (unsigned long)debuggee->dyld_info_array[i].imageFilePath;
 
-        /* Read a byte at a time, arbitary large sizes for fpath
-         * causes errors.
-         */
-        while(read_byte && bytes_read < maxlen && kret == KERN_SUCCESS){
-            unsigned long imgpath =
-                (unsigned long)debuggee->dyld_info_array[i].imageFilePath;
-            kret = read_memory_at_location(imgpath + bytes_read,
-                    &read_byte, sizeof(char));
-
-            fpath[bytes_read] = read_byte;
-
-            bytes_read++;
-        }
+        read_memory_at_location(imgpath, fpath, maxlen);
 
         unsigned long image_load_address =
             (unsigned long)debuggee->dyld_info_array[i].imageLoadAddress;
 
-        struct symtab_command *symtab_cmd = NULL;
-        struct segment_command_64 *__text_seg_cmd = NULL;
-        int __text_seg_nsect = 0;
-
         struct dbg_sym_entry *entry = create_sym_entry_for_image(fpath,
                 image_load_address, dsc_mappings, num_dsc_mappings,
-                &symtab_cmd, &__text_seg_cmd, &__text_seg_nsect,
-                wrappers, dsc_local_sym_entries_cnt);
+                dsc_local_syms_entry_wrappers);
 
         if(!entry)
             continue;
@@ -737,17 +682,16 @@ int initialize_debuggee_dyld_all_image_infos(void){
         entry->imagename = strdup(path);
 
         linkedlist_add(debuggee->symbols, entry);
-
-        free(symtab_cmd);
-        free(__text_seg_cmd);
     }
 
     free(dsc_mappings);
 
-    for(int i=0; i<dsc_local_sym_entries_cnt; i++)
-        free(wrappers[i]);
-    
-    free(wrappers);
+    int num_dsc_local_sym_entries_wrappers = dsc_local_syms_entry_wrappers->len;
+
+    for(int i=0; i<num_dsc_local_sym_entries_wrappers; i++)
+        free(dsc_local_syms_entry_wrappers->items[i]);
+
+    array_destroy(&dsc_local_syms_entry_wrappers);
 
     return 0;
 }

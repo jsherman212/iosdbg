@@ -16,30 +16,22 @@ static int UNNAMED_SYM_CNT = 1;
 void add_symbol_to_entry(struct dbg_sym_entry *entry, int arg1,
         unsigned long vmaddr_start, unsigned int fxnlen, int kind,
         char *symname){
-    if(entry->cursymarrsz >= FAST_POW_TWO(entry->symarr_capacity_pow) - 1){
-        entry->symarr_capacity_pow++;
-        struct sym **sym_rea = realloc(entry->syms,
-                CALC_SYM_CAPACITY(entry->symarr_capacity_pow));
-        entry->syms = sym_rea;
-    }
-
-    entry->syms[entry->cursymarrsz] = malloc(sizeof(struct sym));
+    struct sym *sym = malloc(sizeof(struct sym));
 
     if(symname)
-        entry->syms[entry->cursymarrsz]->dsc_symname = symname;
+        sym->dsc_symname = symname;
 
-    if(kind == UNNAMED_SYM){
-        entry->syms[entry->cursymarrsz]->dsc_symname = UNNAMED_SYMBOL;
-        entry->syms[entry->cursymarrsz]->unnamed_sym_num = UNNAMED_SYM_CNT++;
+    if(kind == NAMED_SYM)
+        sym->strtabidx = arg1;
+    else if(kind == UNNAMED_SYM){
+        sym->dsc_symname = UNNAMED_SYMBOL;
+        sym->unnamed_sym_num = UNNAMED_SYM_CNT++;
     }
-    else if(kind == NAMED_SYM){
-        entry->syms[entry->cursymarrsz]->strtabidx = arg1;
-    }
 
-    entry->syms[entry->cursymarrsz]->sym_func_start = vmaddr_start;
-    entry->syms[entry->cursymarrsz]->sym_func_len = fxnlen;
+    sym->sym_func_start = vmaddr_start;
+    sym->sym_func_len = fxnlen;
 
-    entry->cursymarrsz++;
+    array_insert(entry->syms, sym);
 }
 
 void create_frame_string(unsigned long vmaddr, char **frstr){
@@ -102,10 +94,8 @@ struct dbg_sym_entry *create_sym_entry(unsigned long strtab_vmaddr,
         unsigned long strtab_fileaddr, int from_dsc){
     struct dbg_sym_entry *entry = malloc(sizeof(struct dbg_sym_entry));
 
-    entry->symarr_capacity_pow = STARTING_CAPACITY;
-    entry->cursymarrsz = 0;
     entry->strtab_vmaddr = strtab_vmaddr;
-    entry->syms = malloc(CALC_SYM_CAPACITY(STARTING_CAPACITY));
+    entry->syms = array_new();
     entry->from_dsc = from_dsc;
 
     return entry;
@@ -120,13 +110,12 @@ void destroy_all_symbol_entries(void){
         free(entry->imagename);
         entry->imagename = NULL;
 
-        for(int i=0; i<entry->cursymarrsz; i++){
-            free(entry->syms[i]);
-            entry->syms[i] = NULL;
+        for(int i=0; i<entry->syms->len; i++){
+            free(entry->syms->items[i]);
+            entry->syms->items[i] = NULL;
         }
 
-        free(entry->syms);
-        entry->syms = NULL;
+        array_destroy(&entry->syms);
 
         current = current->next;
 
@@ -143,23 +132,23 @@ struct goodcombo {
 };
 
 /* find the symbol with the closest function that starts before vmaddr */
-int bsearch_lc(void *arg0, unsigned long vmaddr, int lo, int hi, int which){
+int bsearch_lc(struct array *arg0, unsigned long vmaddr, int lo, int hi, int which){
     if(lo == hi){
-        unsigned long val = ((struct sym **)arg0)[lo]->sym_func_start;
+        unsigned long val = ((struct sym *)(arg0->items[lo]))->sym_func_start;
 
         if(which == GC)
-            val = ((struct goodcombo **)arg0)[lo]->sym->sym_func_start;
+            val = ((struct goodcombo *)(arg0->items[lo]))->sym->sym_func_start;
 
         return val > vmaddr ? -1 : lo;
     }
 
     if((hi - 1) == lo){
-        unsigned long hival = ((struct sym **)arg0)[hi]->sym_func_start;
-        unsigned long loval = ((struct sym **)arg0)[lo]->sym_func_start;
+        unsigned long hival = ((struct sym *)(arg0->items[hi]))->sym_func_start;
+        unsigned long loval = ((struct sym *)(arg0->items[lo]))->sym_func_start;
 
         if(which == GC){
-            hival = ((struct goodcombo **)arg0)[hi]->sym->sym_func_start;
-            loval = ((struct goodcombo **)arg0)[lo]->sym->sym_func_start;
+            hival = ((struct goodcombo *)(arg0->items[hi]))->sym->sym_func_start;
+            loval = ((struct goodcombo *)(arg0->items[lo]))->sym->sym_func_start;
         }
 
         if(vmaddr >= hival)
@@ -171,16 +160,15 @@ int bsearch_lc(void *arg0, unsigned long vmaddr, int lo, int hi, int which){
     }
 
     int mid = (lo + hi) / 2;
-    unsigned long midval = ((struct sym **)arg0)[mid]->sym_func_start;
+    unsigned long midval = ((struct sym *)(arg0->items[mid]))->sym_func_start;
 
     if(which == GC)
-        midval = ((struct goodcombo **)arg0)[mid]->sym->sym_func_start;
+        midval = ((struct goodcombo *)(arg0->items[mid]))->sym->sym_func_start;
 
     if(vmaddr < midval)
         return bsearch_lc(arg0, vmaddr, lo, mid - 1, which);
 
     return bsearch_lc(arg0, vmaddr, mid, hi, which);
-
 }
 
 static int goodcombocmp(const void *a, const void *b){
@@ -205,54 +193,51 @@ static int goodcombocmp(const void *a, const void *b){
 int get_symbol_info_from_address(struct linkedlist *symlist,
         unsigned long vmaddr, char **imgnameout, char **symnameout,
         unsigned int *distfromsymstartout){
-    int num_good_combos = 0;
-    struct goodcombo **good_combos = malloc(sizeof(struct goodcombo *));
-    good_combos[num_good_combos] = NULL;
+    struct array *good_combos = array_new();
 
     for(struct node *current = symlist->front;
             current;
             current = current->next){
         struct dbg_sym_entry *entry = current->data;
 
-        if(entry->cursymarrsz == 0 || vmaddr < entry->load_addr)
+        if(entry->syms->len == 0 || vmaddr < entry->load_addr)
             continue;
 
-        if(entry->cursymarrsz == 1){
-            struct goodcombo **good_combos_rea = realloc(good_combos,
-                    ++num_good_combos * sizeof(struct goodcombo *));
-            good_combos = good_combos_rea;
-            good_combos[num_good_combos - 1] = malloc(sizeof(struct goodcombo));
-            good_combos[num_good_combos - 1]->entry = entry;
-            good_combos[num_good_combos - 1]->sym = entry->syms[0];
+        if(entry->syms->len == 1){
+            struct goodcombo *gc = malloc(sizeof(struct goodcombo));
+            gc->entry = entry;
+            gc->sym = (struct sym *)entry->syms->items[0];
+
+            array_insert(good_combos, gc);
 
             continue;
         }
 
-        /* Figure out the closest symbol to vmaddr for each entry */
-        int lo = 0, hi = entry->cursymarrsz - 1;
+        /* figure out the closest symbol to vmaddr for each entry */
+        int lo = 0, hi = entry->syms->len - 1;
         int bestsymidx = bsearch_lc(entry->syms, vmaddr, lo, hi, SYM);
 
         if(bestsymidx != -1){
-            struct goodcombo **good_combos_rea = realloc(good_combos,
-                    ++num_good_combos * sizeof(struct goodcombo *));
-            good_combos = good_combos_rea;
-            good_combos[num_good_combos - 1] = malloc(sizeof(struct goodcombo));
-            good_combos[num_good_combos - 1]->entry = entry;
-            good_combos[num_good_combos - 1]->sym = entry->syms[bestsymidx];
+            struct goodcombo *gc = malloc(sizeof(struct goodcombo));
+            gc->entry = entry;
+            gc->sym = (struct sym *)entry->syms->items[bestsymidx];
+
+            array_insert(good_combos, gc);
         }
     }
 
     /* could happen if a thread is stopped at a bad address */
-    if(num_good_combos == 0)
+    if(good_combos->len == 0)
         return 1;
 
     /* Prep good combo array for binary search */
-    qsort(good_combos, num_good_combos, sizeof(struct goodcombo *), goodcombocmp);
+    array_qsort(good_combos, goodcombocmp);
 
     /* out of all the candidates we have, which is the closest to vmaddr? */
-    int bestcomboidx = bsearch_lc(good_combos, vmaddr, 0, num_good_combos - 1, GC);
+    int bestcomboidx = bsearch_lc(good_combos, vmaddr, 0, good_combos->len - 1, GC);
 
-    struct goodcombo *bestcombo = good_combos[bestcomboidx];
+    struct goodcombo *bestcombo =
+        (struct goodcombo *)good_combos->items[bestcomboidx];
 
     struct dbg_sym_entry *best_entry = bestcombo->entry;
     struct sym *best_sym = bestcombo->sym;
@@ -281,10 +266,12 @@ int get_symbol_info_from_address(struct linkedlist *symlist,
         }
     }
 
-    for(int i=0; i<num_good_combos; i++)
-        free(good_combos[i]);
+    int num_good_combos = good_combos->len;
 
-    free(good_combos);
+    for(int i=0; i<num_good_combos; i++)
+        free(good_combos->items[i]);
+
+    array_destroy(&good_combos);
 
     if(imgnameout)
         *imgnameout = strdup(best_entry->imagename);

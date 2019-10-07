@@ -55,7 +55,7 @@ enum cmd_error_t cmdfunc_thread_select(struct cmd_args *args,
 
     struct machthread *f = get_focused_thread();
 
-    concat(outbuffer, "Selected thread %d, tid = %#llx, '%s'\n",
+    concat(outbuffer, "Selected thread %d, tid = %#llx, '%s'\n\n",
             f->ID, f->tid, f->tname);
 
     disassemble_at_location(f->thread_state.__pc, 4, outbuffer);
