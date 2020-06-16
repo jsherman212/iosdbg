@@ -106,18 +106,21 @@ void ops_detach(int from_death, char **outbuffer){
      * bails if this status is SRUN. See bsd/kern/mach_process.c
      */
     if(!from_death){
-        kill(debuggee->pid, SIGSTOP);
-        int ret = ptrace(PT_DETACH, debuggee->pid, (caddr_t)1, 0);
+        /* don't signal launchd */
+        if(debuggee->pid != 1){
+            kill(debuggee->pid, SIGSTOP);
+            int ret = ptrace(PT_DETACH, debuggee->pid, (caddr_t)1, 0);
 
-        /* In some cases, it takes a while for the debuggee to notice the
-         * SIGSTOP.
-         */
-        while(ret == -1){
-            ret = ptrace(PT_DETACH, debuggee->pid, (caddr_t)1, 0);
-            usleep(500);
+            /* In some cases, it takes a while for the debuggee to notice the
+             * SIGSTOP.
+             */
+            while(ret == -1){
+                ret = ptrace(PT_DETACH, debuggee->pid, (caddr_t)1, 0);
+                usleep(500);
+            }
+
+            kill(debuggee->pid, SIGCONT);
         }
-
-        kill(debuggee->pid, SIGCONT);
     }
 
     EXC_QUEUE_LOCK;

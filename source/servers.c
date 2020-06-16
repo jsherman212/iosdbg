@@ -201,7 +201,7 @@ static void *death_server(void *arg){
 }
 
 static void *thread_monitor_server(void *arg){
-    pthread_setname_np("thread monitor");
+    pthread_setname_np("debuggee thread monitor");
 
     while(MACH_PORT_VALID(THREAD_DEATH_NOTIFY_PORT)){
         struct req *req = malloc(sizeof(struct req));

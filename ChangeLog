@@ -1,3 +1,7 @@
+6-16-20
+- iosdbg can debug launchd without it spazzing out
+- support for new libarmadillo api
+
 10-7-19
 - new array data structure to simplify code in source/symbol/image.c
 - better read_memory_at_location

@@ -102,6 +102,9 @@ struct dbg_sym_entry *create_sym_entry(unsigned long strtab_vmaddr,
 }
 
 void destroy_all_symbol_entries(void){
+    if(!debuggee->symbols)
+        return;
+
     struct node *current = debuggee->symbols->front;
 
     while(current){

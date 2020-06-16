@@ -257,6 +257,7 @@ void handle_exception(Request *request, int *should_auto_resume,
     mach_port_t thread = request->thread.name;
     exception_type_t exception = request->exception;
     const char *exc = exc_str(exception);
+    mach_msg_type_number_t codeCnt = request->codeCnt;
     long code = ((long *)request->code)[0];
     long subcode = ((long *)request->code)[1];
 
@@ -284,8 +285,15 @@ void handle_exception(Request *request, int *should_auto_resume,
      *      - software single step exception
      *      - Unix soft signal
      */
+    if(codeCnt == 0x41414141){
+        concat(desc, ", fake SIGSTOP signal for launchd. Disassembly of first thread:\n");
+
+        *should_auto_resume = 0;
+
+        disassemble_at_location(focused->thread_state.__pc, 4, desc);
+    }
     /* Unix soft signal. */
-    if(exception == EXC_SOFTWARE && code == EXC_SOFT_SIGNAL){
+    else if(exception == EXC_SOFTWARE && code == EXC_SOFT_SIGNAL){
         int notify, pass, stop;
         char *e = NULL;
 

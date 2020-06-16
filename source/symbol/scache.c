@@ -15,6 +15,9 @@ struct dbg_sym_entry *create_sym_entry_for_dsc_image(void){
 }
 
 struct my_dsc_mapping *get_dsc_mappings(void *dscdata, int *len){
+    if(!dscdata)
+        return NULL;
+
     struct dsc_hdr *dsc_hdr = (struct dsc_hdr *)dscdata;
     struct my_dsc_mapping *dsc_mappings = calloc(1,
             sizeof(struct my_dsc_mapping) * dsc_hdr->mappingcnt);

@@ -178,9 +178,7 @@ static int read_lc_fxn_starts(char *imagename, unsigned long image_load_addr,
         lcfxnstart_end = lcfxnstart_start + lidc->datasize;
     }
 
-    unsigned long total_fxn_len = 0,
-                  len = 0,
-                  nextfxnstartaddr = __text->vmaddr;
+    unsigned long total_fxn_len = 0, len = 0, nextfxnstartaddr = __text->vmaddr;
 
     uint8_t *p = lcfxnstart_start;
     int fxncnt = 0;

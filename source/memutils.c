@@ -120,20 +120,29 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
         free(val);
         free(error);
 
-        char *disassembled = ArmadilloDisassemble(instr, current_location);
+        /* char *disassembled = ArmadilloDisassemble(instr, current_location); */
+
 
         struct machthread *focused = get_focused_thread();
 
         err = get_thread_state(focused);
 
-        if(err){
-            free(disassembled);
+        if(err)
             return KERN_FAILURE;
-        }
+
+        struct ad_insn *insn = NULL;
+        char *disassembled = NULL;
+
+        if(ArmadilloDisassemble(instr, current_location, &insn))
+            disassembled = strdup("(disas failed)");
+        else
+            disassembled = strdup(insn->decoded);
 
         concat(outbuffer, "%s%#lx:  %-*s",
                 focused->thread_state.__pc == current_location
                 ? "->  " : "    ", current_location, max_instr_line_len, disassembled);
+
+        ArmadilloDone(&insn);
 
         free(disassembled);
 

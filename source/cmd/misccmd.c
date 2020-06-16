@@ -1,4 +1,5 @@
 #include <dlfcn.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
@@ -240,16 +241,31 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args *args,
     }
 
     DSCSZ = st.st_size;
+    DSCDATA = mmap(NULL, DSCSZ, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, dscfd, 0);
 
-    DSCDATA = mmap(NULL, DSCSZ, PROT_READ, MAP_PRIVATE, dscfd, 0);
+    if(DSCDATA == (void *)-1){
+        /* concat(outbuffer, "mmap dyld_shared_cache_arm64 failed: %s" */
+        /*         " we'll crash sooner or later\n", */
+        /*         strerror(errno)); */
+        printf("mmap dyld_shared_cache_arm64 failed: %s"
+                " we'll crash sooner or later\n",
+                strerror(errno));
+        DSCDATA = NULL;
+        DSCSZ = 0;
+    }
 
     close(dscfd);
 
-    if(initialize_debuggee_dyld_all_image_infos())
-        concat(outbuffer, "%s", dscwarnmsg);
+    if(DSCDATA){
+        if(initialize_debuggee_dyld_all_image_infos())
+            concat(outbuffer, "%s", dscwarnmsg);
+    }
 
     /* Have Unix signals be sent as Mach exceptions. */
-    ptrace(PT_ATTACHEXC, debuggee->pid, 0, 0);
+    if(debuggee->pid == 1)
+        concat(outbuffer, "Debugging launchd, not doing ptrace(PT_ATTACHEXC, ...\n");
+    else
+        ptrace(PT_ATTACHEXC, debuggee->pid, 0, 0);
 
     return CMD_SUCCESS;
 }

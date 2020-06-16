@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <mach/mach.h>
 #include <pthread/pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -30,7 +31,7 @@ struct debuggee *debuggee = NULL;
 char **bsd_syscalls = NULL, **mach_traps = NULL, **mach_traps2 = NULL;
 int bsd_syscalls_arr_len = 0, mach_traps_arr_len = 0, mach_traps2_arr_len = 0;
 
-static void interrupt(int x1){
+static void interrupt(int x0){
     if(KEEP_CHECKING_FOR_PROCESS)
         printf("\n");
 
@@ -38,8 +39,88 @@ static void interrupt(int x1){
 
     stop_trace();
 
-    if(debuggee->pid != -1)
-        kill(debuggee->pid, SIGSTOP);
+    if(debuggee->pid != -1){
+        if(debuggee->pid != 1)
+            kill(debuggee->pid, SIGSTOP);
+        else{
+            /* launchd doesn't like SIGSTOP signal, so fake a SIGSTOP mach msg */
+
+            /* sending this message destroys the debuggee->task send right,
+             * so we need to get it again
+             */
+            kern_return_t kret = task_for_pid(mach_task_self(), debuggee->pid,
+                    &debuggee->task);
+
+            if(kret){
+                printf("re-initializing launchd task port after fake sigstop msg: %s\n",
+                        mach_error_string(kret));
+                return;
+            }
+
+            struct fake_sigstop_msg {
+                mach_msg_header_t hdr;
+                mach_msg_body_t msgh_body;
+                mach_msg_port_descriptor_t thread;
+                mach_msg_port_descriptor_t task;
+                /* end of the kernel processed data */
+                NDR_record_t NDR;
+                exception_type_t exception;
+                mach_msg_type_number_t codeCnt;
+                int code[2];
+            } msg = {0};
+
+            msg.hdr.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_MAKE_SEND, 0) |
+                MACH_MSGH_BITS_COMPLEX;
+            msg.hdr.msgh_size = sizeof(struct fake_sigstop_msg);
+            msg.hdr.msgh_remote_port = debuggee->exception_port;
+            msg.hdr.msgh_local_port = MACH_PORT_NULL;
+            msg.hdr.msgh_id = 2405;                 /* SIGSTOP?  or all unix signals? */
+            msg.msgh_body.msgh_descriptor_count = 2;
+
+            /* let's just have the first thread be this */
+            thread_act_port_array_t threads;
+            mach_msg_type_number_t tcnt = 0;
+            kret = task_threads(debuggee->task, &threads, &tcnt);
+
+            if(kret){
+                printf("task_threads failed for fake sigstop msg, bailing: %s\n",
+                        mach_error_string(kret));
+                return;
+            }
+
+            if(tcnt == 0){
+                printf("no threads for fake sigstop msg? bailing\n");
+                return;
+            }
+
+            msg.thread.name = threads[0];
+            msg.thread.disposition = MACH_MSG_TYPE_MOVE_SEND;
+            msg.thread.type = MACH_MSG_PORT_DESCRIPTOR;
+
+            msg.task.name = debuggee->task;
+            msg.task.disposition = MACH_MSG_TYPE_MOVE_SEND;
+            msg.task.type = MACH_MSG_PORT_DESCRIPTOR;
+
+            /* everything but this in NDR is zero for a SIGSTOP msg */
+            msg.NDR.int_rep = 1;
+
+            msg.exception = EXC_SOFTWARE;
+
+            /* indicate this is a fake exception for launchd */
+            msg.codeCnt = 0x41414141;
+
+            msg.code[0] = EXC_SOFT_SIGNAL;
+            msg.code[1] = SIGSTOP;
+
+            kret = mach_msg(&msg.hdr, MACH_SEND_MSG, sizeof(msg), 0,
+                    MACH_PORT_NULL, 0, MACH_PORT_NULL);
+
+            if(kret){
+                printf("mach msg send fake sigstop exception %s\n",
+                        mach_error_string(kret));
+            }
+        }
+    }
 }
 
 static void install_handlers(void){
