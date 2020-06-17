@@ -187,7 +187,7 @@ void initialize_commands(void){
 
     struct dbg_cmd *attach = create_parent_cmd("attach",
             NULL, ATTACH_COMMAND_DOCUMENTATION, _AT_LEVEL(0),
-            ATTACH_COMMAND_REGEX, _NUM_GROUPS(2), _UNK_ARGS(0),
+            ATTACH_COMMAND_REGEX, _NUM_GROUPS(3), _UNK_ARGS(0),
             ATTACH_COMMAND_REGEX_GROUPS, _NUM_SUBCMDS(0), cmdfunc_attach,
             audit_attach);
 

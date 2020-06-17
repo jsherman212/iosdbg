@@ -48,6 +48,9 @@ struct debuggee {
     /* How many hardware watchpoints the device supports. */
     int num_hw_wps;
 
+    /* Should iosdbg send any Unix signals to the debuggee? */
+    int nosigs;
+
     /* Count of threads for the debuggee. */
     mach_msg_type_number_t thread_count;
 

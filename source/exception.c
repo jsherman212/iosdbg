@@ -284,9 +284,13 @@ void handle_exception(Request *request, int *should_auto_resume,
      *      - software breakpoint
      *      - software single step exception
      *      - Unix soft signal
+     *      - Fake unix soft signal
      */
     if(codeCnt == 0x41414141){
-        concat(desc, ", fake SIGSTOP signal for launchd. Disassembly of first thread:\n");
+        if(!debuggee->nosigs)
+            concat(desc, ", got a fake SIGSTOP exception, but we're sending real signals?\n");
+        else
+            concat(desc, ", fake SIGSTOP signal. Disassembly of first thread:\n");
 
         *should_auto_resume = 0;
 

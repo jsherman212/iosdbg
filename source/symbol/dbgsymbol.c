@@ -35,6 +35,9 @@ void add_symbol_to_entry(struct dbg_sym_entry *entry, int arg1,
 }
 
 void create_frame_string(unsigned long vmaddr, char **frstr){
+    if(!debuggee->symbols)
+        return;
+
     /* first, get symbol name */
     char *imgname = NULL, *symname = NULL;
     unsigned int symdist = 0;

@@ -241,15 +241,15 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args *args,
     }
 
     DSCSZ = st.st_size;
-    DSCDATA = mmap(NULL, DSCSZ, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, dscfd, 0);
+    DSCDATA = mmap(NULL, DSCSZ, PROT_READ, MAP_PRIVATE, dscfd, 0);
 
     if(DSCDATA == (void *)-1){
-        /* concat(outbuffer, "mmap dyld_shared_cache_arm64 failed: %s" */
+        concat(outbuffer, "mmap dyld_shared_cache_arm64 failed: %s,"
+                " minimal symbolication.\n",
+                strerror(errno));
+        /* printf("mmap dyld_shared_cache_arm64 failed: %s" */
         /*         " we'll crash sooner or later\n", */
         /*         strerror(errno)); */
-        printf("mmap dyld_shared_cache_arm64 failed: %s"
-                " we'll crash sooner or later\n",
-                strerror(errno));
         DSCDATA = NULL;
         DSCSZ = 0;
     }
@@ -261,11 +261,17 @@ enum cmd_error_t cmdfunc_attach(struct cmd_args *args,
             concat(outbuffer, "%s", dscwarnmsg);
     }
 
+    char *nosigs = argcopy(args, ATTACH_COMMAND_REGEX_GROUPS[2]);
+
     /* Have Unix signals be sent as Mach exceptions. */
-    if(debuggee->pid == 1)
-        concat(outbuffer, "Debugging launchd, not doing ptrace(PT_ATTACHEXC, ...\n");
-    else
+    if(!nosigs)
         ptrace(PT_ATTACHEXC, debuggee->pid, 0, 0);
+    else{
+        concat(outbuffer, "Not sending initial SIGSTOP. Disassembly omitted.\n");
+        debuggee->nosigs = 1;
+    }
+
+    free(nosigs);
 
     return CMD_SUCCESS;
 }

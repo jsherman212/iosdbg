@@ -52,8 +52,10 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
 
     char *current_fxn = NULL;
 
-    get_symbol_info_from_address(debuggee->symbols, location,
-            NULL, &current_fxn, NULL);
+    if(debuggee->symbols){
+        get_symbol_info_from_address(debuggee->symbols, location,
+                NULL, &current_fxn, NULL);
+    }
 
     char *previous_fxn = NULL;
 
@@ -80,8 +82,8 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
             return err;
         }
 
-        if(!previous_fxn ||
-                (previous_fxn && strcmp(previous_fxn, current_fxn) != 0)){
+        if(debuggee->symbols && (!previous_fxn ||
+                (previous_fxn && strcmp(previous_fxn, current_fxn) != 0))){
             if(previous_fxn)
                 still_in_starting_fxn = 0;
 
@@ -119,9 +121,6 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
 
         free(val);
         free(error);
-
-        /* char *disassembled = ArmadilloDisassemble(instr, current_location); */
-
 
         struct machthread *focused = get_focused_thread();
 
@@ -170,7 +169,7 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
             }
 
             /* continue if we were able to determine the branch target */
-            if(btarget != 0){
+            if(btarget != 0 && debuggee->symbols){
                 char *frstr = NULL;
                 create_frame_string(btarget, &frstr);
 
@@ -186,19 +185,25 @@ kern_return_t disassemble_at_location(unsigned long location, int num_instrs,
 
         concat(outbuffer, "\n");
 
-        free(previous_fxn);
-        get_symbol_info_from_address(debuggee->symbols, current_location,
-                NULL, &previous_fxn, NULL);
+        if(debuggee->symbols){
+            free(previous_fxn);
+            get_symbol_info_from_address(debuggee->symbols, current_location,
+                    NULL, &previous_fxn, NULL);
+        }
 
         current_location += data_size;
 
-        free(current_fxn);
-        get_symbol_info_from_address(debuggee->symbols, current_location,
-                NULL, &current_fxn, NULL);
+        if(debuggee->symbols){
+            free(current_fxn);
+            get_symbol_info_from_address(debuggee->symbols, current_location,
+                    NULL, &current_fxn, NULL);
+        }
     }
 
-    free(current_fxn);
-    free(previous_fxn);
+    if(debuggee->symbols){
+        free(current_fxn);
+        free(previous_fxn);
+    }
 
     return KERN_SUCCESS;
 }

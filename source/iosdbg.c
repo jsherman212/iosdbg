@@ -40,10 +40,10 @@ static void interrupt(int x0){
     stop_trace();
 
     if(debuggee->pid != -1){
-        if(debuggee->pid != 1)
+        if(!debuggee->nosigs)
             kill(debuggee->pid, SIGSTOP);
         else{
-            /* launchd doesn't like SIGSTOP signal, so fake a SIGSTOP mach msg */
+            /* for processes we aren't passing signals to, fake a SIGSTOP mach msg */
 
             /* sending this message destroys the debuggee->task send right,
              * so we need to get it again
@@ -106,7 +106,7 @@ static void interrupt(int x0){
 
             msg.exception = EXC_SOFTWARE;
 
-            /* indicate this is a fake exception for launchd */
+            /* indicate this is a fake SIGSTOP exception */
             msg.codeCnt = 0x41414141;
 
             msg.code[0] = EXC_SOFT_SIGNAL;
@@ -354,13 +354,11 @@ static void setup_initial_debuggee(void){
     /* Figure out how many hardware breakpoints/watchpoints are supported. */
     size_t len = sizeof(int);
 
-    sysctlbyname("hw.optional.breakpoint", &debuggee->num_hw_bps,
-            &len, NULL, 0);
+    sysctlbyname("hw.optional.breakpoint", &debuggee->num_hw_bps, &len, NULL, 0);
     
     len = sizeof(int);
 
-    sysctlbyname("hw.optional.watchpoint", &debuggee->num_hw_wps,
-            &len, NULL, 0);
+    sysctlbyname("hw.optional.watchpoint", &debuggee->num_hw_wps, &len, NULL, 0);
 
     /* Create some iosdbg managed convenience variableiables. */
     char *error = NULL;

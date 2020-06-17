@@ -11,11 +11,8 @@
 
 #include "../strext.h"
 
-struct cmd_args *parse_and_create_args(char *_args, 
-        const char *pattern,
-        const char **groupnames,
-        int num_groups,
-        int unk_amount_of_args,
+struct cmd_args *parse_and_create_args(char *_args, const char *pattern,
+        const char **groupnames, int num_groups, int unk_amount_of_args,
         char **error){
     struct cmd_args *arguments = malloc(sizeof(struct cmd_args));
 
@@ -30,12 +27,8 @@ struct cmd_args *parse_and_create_args(char *_args,
     PCRE2_SIZE erroroffset;
     int errornumber;
 
-    pcre2_code *re = pcre2_compile((PCRE2_SPTR)pattern,
-            PCRE2_ZERO_TERMINATED,
-            0,
-            &errornumber,
-            &erroroffset,
-            NULL);
+    pcre2_code *re = pcre2_compile((PCRE2_SPTR)pattern, PCRE2_ZERO_TERMINATED,
+            0, &errornumber, &erroroffset, NULL);
 
     if(!re){
         PCRE2_UCHAR buf[2048];
@@ -53,13 +46,7 @@ struct cmd_args *parse_and_create_args(char *_args,
     pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);
     size_t arglen = strlen(args);
 
-    int rc = pcre2_match(re,
-            (PCRE2_SPTR)args,
-            arglen,
-            0,
-            0,
-            match_data,
-            NULL);
+    int rc = pcre2_match(re, (PCRE2_SPTR)args, arglen, 0, 0, match_data, NULL);
 
     if(rc < 0){
         concat(error, "malformed arguments");
@@ -96,15 +83,11 @@ struct cmd_args *parse_and_create_args(char *_args,
 
         if(substr_idx == PCRE2_ERROR_NOUNIQUESUBSTRING){
             int copybyname_rc = pcre2_substring_get_byname(match_data,
-                    current_group,
-                    &substr_buf,
-                    &substr_buf_len);
+                    current_group, &substr_buf, &substr_buf_len);
         }
         else{
             int substr_rc = pcre2_substring_get_bynumber(match_data,
-                    substr_idx,
-                    &substr_buf,
-                    &substr_buf_len);
+                    substr_idx, &substr_buf, &substr_buf_len);
         }
 
         char *argument = NULL;
@@ -129,8 +112,7 @@ struct cmd_args *parse_and_create_args(char *_args,
     /* Now we have to match the rest of the arguments. */
     for(;;){
         PCRE2_SPTR current_group = (PCRE2_SPTR)groupnames[idx_limit];
-        int substr_idx = pcre2_substring_number_from_name(re,
-                current_group);
+        int substr_idx = pcre2_substring_number_from_name(re, current_group);
         
         if(substr_idx < 0)
             break;
@@ -140,9 +122,7 @@ struct cmd_args *parse_and_create_args(char *_args,
 
         if(substr_idx == PCRE2_ERROR_NOUNIQUESUBSTRING){
             int copybyname_rc = pcre2_substring_get_byname(match_data,
-                    current_group,
-                    &substr_buf,
-                    &substr_buf_len);
+                    current_group, &substr_buf, &substr_buf_len);
 
             /* If there were no more matches for this group, we're done. */
             if(copybyname_rc < 0)
@@ -150,9 +130,7 @@ struct cmd_args *parse_and_create_args(char *_args,
         }
         else{
             int substr_rc = pcre2_substring_get_bynumber(match_data,
-                    substr_idx,
-                    &substr_buf,
-                    &substr_buf_len);
+                    substr_idx, &substr_buf, &substr_buf_len);
 
             if(substr_rc < 0)
                 break;
@@ -170,13 +148,8 @@ struct cmd_args *parse_and_create_args(char *_args,
         PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
         PCRE2_SIZE start_offset = ovector[1];
 
-        rc = pcre2_match(re,
-                (PCRE2_SPTR)args,
-                arglen,
-                start_offset,
-                0,
-                match_data,
-                NULL);
+        rc = pcre2_match(re, (PCRE2_SPTR)args, arglen, start_offset, 0,
+                match_data, NULL);
     }
 
     pcre2_match_data_free(match_data);
@@ -189,6 +162,7 @@ struct cmd_args *parse_and_create_args(char *_args,
 
 struct cmd_args *argdup(struct cmd_args *with){
     struct cmd_args *duped = malloc(sizeof(struct cmd_args));
+
     duped->argmaps = linkedlist_new();
     duped->num_args = with->num_args;
     

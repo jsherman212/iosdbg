@@ -28,16 +28,19 @@ static const char *ASLR_COMMAND_DOCUMENTATION =
 static const char *ATTACH_COMMAND_DOCUMENTATION =
     "Attach to a program via its PID or name.\n"
     "To attach upon launch, give '--waitfor' before the program's name.\n"
-    "This command has one mandatory argument and one optional argument.\n"
+    "This command has one mandatory argument and two optional arguments.\n"
     "\nMandatory arguments:\n"
     "\ttarget\n"
-    "\t\tWhat you want to attach to. It can be a PID or a program name.\n"
+    "\t\tWhat you want to attach to. It can be a PID or a process name.\n"
     "\n"
     "\nOptional arguments:\n"
     "\t--waitfor\n"
     "\t\t'--waitfor' tells iosdbg to wait for process launch.\n"
+    "\t--ns\n"
+    "\t\t'--ns' tells iosdbg not to send a real SIGSTOP to the debuggee,\n"
+    "\t\t    but instead fake it. Useful for debugging some daemons.\n"
     "\nSyntax:\n"
-    "\tattach --waitfor? target\n"
+    "\tattach --waitfor? target --ns?\n"
     "\n";
 
 static const char *BACKTRACE_COMMAND_DOCUMENTATION =
@@ -116,10 +119,10 @@ static const char *TRACE_COMMAND_DOCUMENTATION =
  * Regexes
  */
 static const char *ATTACH_COMMAND_REGEX =
-    "(?J)((?<waitfor>--waitfor)\\s+"
+    "(?J)(((?<waitfor>--waitfor)\\s+"
     "(\"(?<target>.*)\"|(?!.*\")(?<target>\\w+)))|"
     "^\\s*((\"(?<target>.*)\")|"
-    "(?!.*\")(?<target>\\w+))";
+    "(?!.*\")(?<target>\\w+)))(\\s+(?<nosigs>--ns))?";
 
 static const char *EVALUATE_COMMAND_REGEX =
     "(?<expr>[^\\s]+)";
@@ -131,7 +134,7 @@ static const char *HELP_COMMAND_REGEX =
  * Regex groups
  */
 static const char *ATTACH_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
-    { "waitfor", "target" };
+    { "waitfor", "target", "nosigs" };
 
 static const char *EVALUATE_COMMAND_REGEX_GROUPS[MAX_GROUPS] =
     { "expr" };

@@ -16,7 +16,7 @@ static const char *DISASSEMBLE_COMMAND_DOCUMENTATION =
     "\t\tThis expression will be evaluated and used as where iosdbg"
     " will start disassembling.\n"
     "\tcount\n"
-    "\t\tHow many bytes iosdbg will disassemble.\n"
+    "\t\tHow many instructions iosdbg will disassemble.\n"
     "\nSyntax:\n"
     "\tdisassemble location count\n"
     "\n";

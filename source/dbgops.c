@@ -106,8 +106,7 @@ void ops_detach(int from_death, char **outbuffer){
      * bails if this status is SRUN. See bsd/kern/mach_process.c
      */
     if(!from_death){
-        /* don't signal launchd */
-        if(debuggee->pid != 1){
+        if(!debuggee->nosigs){
             kill(debuggee->pid, SIGSTOP);
             int ret = ptrace(PT_DETACH, debuggee->pid, (caddr_t)1, 0);
 
@@ -122,6 +121,8 @@ void ops_detach(int from_death, char **outbuffer){
             kill(debuggee->pid, SIGCONT);
         }
     }
+
+    debuggee->nosigs = 0;
 
     EXC_QUEUE_LOCK;
     queue_free(EXCEPTION_QUEUE);
@@ -159,8 +160,10 @@ void ops_detach(int from_death, char **outbuffer){
 
     destroy_all_symbol_entries();
 
-    linkedlist_free(debuggee->symbols);
-    debuggee->symbols = NULL;
+    if(debuggee->symbols){
+        linkedlist_free(debuggee->symbols);
+        debuggee->symbols = NULL;
+    }
 
     sym_end(debuggee->dwarfinfo);
     free(debuggee->dwarfinfo);
